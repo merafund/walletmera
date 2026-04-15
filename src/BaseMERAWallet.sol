@@ -21,6 +21,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     mapping(bytes4 selector => bool enabled) public backupBypassSelector;
     mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) public operations;
 
+    /// @dev Emergency may call directly; the wallet may call itself (e.g. batched executeTransaction) for gated config.
+    modifier onlyEmergencyOrSelf() {
+        require(msg.sender == emergency || msg.sender == address(this), NotEmergency());
+        _;
+    }
+
     constructor(address initialPrimary, address initialBackup, address initialEmergency, address initialSigner) {
         require(
             initialPrimary != address(0) && initialBackup != address(0) && initialEmergency != address(0),
@@ -65,35 +71,30 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit EmergencyUpdated(previousEmergency, newEmergency, msg.sender);
     }
 
-    function setGlobalTimelock(uint256 delay) external override {
-        _onlyEmergency();
+    function setGlobalTimelock(uint256 delay) external override onlyEmergencyOrSelf {
         uint256 previousDelay = globalTimelock;
         globalTimelock = delay;
         emit GlobalTimelockUpdated(previousDelay, delay, msg.sender);
     }
 
-    function setTargetTimelock(address target, uint256 delay) external override {
-        _onlyEmergency();
+    function setTargetTimelock(address target, uint256 delay) external override onlyEmergencyOrSelf {
         uint256 previousDelay = timelockByTarget[target];
         timelockByTarget[target] = delay;
         emit TargetTimelockUpdated(target, previousDelay, delay, msg.sender);
     }
 
-    function setSelectorTimelock(bytes4 selector, uint256 delay) external override {
-        _onlyEmergency();
+    function setSelectorTimelock(bytes4 selector, uint256 delay) external override onlyEmergencyOrSelf {
         uint256 previousDelay = timelockBySelector[selector];
         timelockBySelector[selector] = delay;
         emit SelectorTimelockUpdated(selector, previousDelay, delay, msg.sender);
     }
 
-    function setBackupTargetBypass(address target, bool enabled) external override {
-        _onlyEmergency();
+    function setBackupTargetBypass(address target, bool enabled) external override onlyEmergencyOrSelf {
         backupBypassTarget[target] = enabled;
         emit BackupTargetBypassUpdated(target, enabled, msg.sender);
     }
 
-    function setBackupSelectorBypass(bytes4 selector, bool enabled) external override {
-        _onlyEmergency();
+    function setBackupSelectorBypass(bytes4 selector, bool enabled) external override onlyEmergencyOrSelf {
         backupBypassSelector[selector] = enabled;
         emit BackupSelectorBypassUpdated(selector, enabled, msg.sender);
     }
@@ -204,8 +205,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return _getRequiredDelay(callerRole, memoryCalls);
     }
 
-    function set1271Signer(address signer) external override {
-        _onlyEmergency();
+    function set1271Signer(address signer) external override onlyEmergencyOrSelf {
         _set1271Signer(signer);
     }
 
