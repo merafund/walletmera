@@ -6,9 +6,7 @@ import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
-import {
-    MERAWalletTargetWhitelistChecker
-} from "../src/whitelist/checkers/MERAWalletTargetWhitelistChecker.sol";
+import {MERAWalletTargetWhitelistChecker} from "../src/whitelist/checkers/MERAWalletTargetWhitelistChecker.sol";
 import {IMERAWalletWhitelistErrors} from "../src/whitelist/errors/IMERAWalletWhitelistErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
