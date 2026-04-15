@@ -5,7 +5,7 @@ import {BaseMERAWallet} from "../BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {MERAWalletNative} from "./MERAWalletNative.sol";
 import {MERAWalletERC20} from "./token/ERC20/MERAWalletERC20.sol";
-import {MERAWalletTransactionChecks} from "./checks/MERAWalletTransactionChecks.sol";
+import {MERAWalletTransactionChecks} from "../whitelist/MERAWalletTransactionChecks.sol";
 
 contract MERAWalletFull is MERAWalletNative, MERAWalletERC20, MERAWalletTransactionChecks {
     constructor(address initialPrimary, address initialBackup, address initialEmergency, address initialSigner)

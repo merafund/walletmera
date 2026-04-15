@@ -8,7 +8,8 @@ import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
 import {
     MERAWalletTargetWhitelistChecker
-} from "../src/extensions/checks/whitelist/MERAWalletTargetWhitelistChecker.sol";
+} from "../src/whitelist/checkers/MERAWalletTargetWhitelistChecker.sol";
+import {IMERAWalletWhitelistErrors} from "../src/whitelist/errors/IMERAWalletWhitelistErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";
@@ -250,7 +251,7 @@ contract BaseMERAWalletTest is Test {
 
         vm.prank(primary);
         vm.expectRevert(
-            abi.encodeWithSelector(MERAWalletTargetWhitelistChecker.TargetNotAllowed.selector, address(receiver), 0)
+            abi.encodeWithSelector(IMERAWalletWhitelistErrors.TargetNotAllowed.selector, address(receiver), 0)
         );
         walletWithExtensions.executeTransaction(calls, 1);
     }
@@ -274,7 +275,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(token.balanceOf(outsider), 250);
 
         vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(MERAWalletTargetWhitelistChecker.TargetNotAllowed.selector, outsider, 0));
+        vm.expectRevert(abi.encodeWithSelector(IMERAWalletWhitelistErrors.TargetNotAllowed.selector, outsider, 0));
         walletWithExtensions.callExternal(outsider, 0, "", 3);
     }
 
@@ -297,7 +298,7 @@ contract BaseMERAWalletTest is Test {
         vm.warp(executeAfter);
         vm.prank(primary);
         vm.expectRevert(
-            abi.encodeWithSelector(MERAWalletTargetWhitelistChecker.TargetNotAllowed.selector, address(receiver), 0)
+            abi.encodeWithSelector(IMERAWalletWhitelistErrors.TargetNotAllowed.selector, address(receiver), 0)
         );
         walletWithExtensions.executePending(calls, 1);
     }

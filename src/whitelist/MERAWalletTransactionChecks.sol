@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
-import {BaseMERAWallet} from "../../BaseMERAWallet.sol";
-import {MERAWalletTypes} from "../../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {BaseMERAWallet} from "../BaseMERAWallet.sol";
+import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
 
 abstract contract MERAWalletTransactionChecks is BaseMERAWallet {
     error InvalidCheckerAddress();
