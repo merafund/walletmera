@@ -10,10 +10,20 @@ interface IBaseMERAWalletEvents {
     event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
     event GlobalTimelockUpdated(uint256 previousDelay, uint256 newDelay, address indexed caller);
     event TargetTimelockUpdated(
-        address indexed target, uint256 previousDelay, uint256 newDelay, address indexed caller
+        address indexed target,
+        uint248 previousDelay,
+        uint8 previousLevel,
+        uint248 newDelay,
+        uint8 newLevel,
+        address indexed caller
     );
     event SelectorTimelockUpdated(
-        bytes4 indexed selector, uint256 previousDelay, uint256 newDelay, address indexed caller
+        bytes4 indexed selector,
+        uint248 previousDelay,
+        uint8 previousLevel,
+        uint248 newDelay,
+        uint8 newLevel,
+        address indexed caller
     );
     event BackupTargetBypassUpdated(address indexed target, bool enabled, address indexed caller);
     event BackupSelectorBypassUpdated(bytes4 indexed selector, bool enabled, address indexed caller);

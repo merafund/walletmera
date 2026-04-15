@@ -12,8 +12,8 @@ interface IBaseMERAWallet {
     function emergency() external view returns (address);
     function eip1271Signer() external view returns (address);
     function globalTimelock() external view returns (uint256);
-    function timelockByTarget(address target) external view returns (uint256 delay);
-    function timelockBySelector(bytes4 selector) external view returns (uint256 delay);
+    function timelockByTarget(address target) external view returns (uint248 delay, uint8 level);
+    function timelockBySelector(bytes4 selector) external view returns (uint248 delay, uint8 level);
     function backupBypassTarget(address target) external view returns (bool enabled);
     function backupBypassSelector(bytes4 selector) external view returns (bool enabled);
     function operations(bytes32 operationId)
@@ -32,8 +32,8 @@ interface IBaseMERAWallet {
     function setBackup(address newBackup) external;
     function setEmergency(address newEmergency) external;
     function setGlobalTimelock(uint256 delay) external;
-    function setTargetTimelock(address target, uint256 delay) external;
-    function setSelectorTimelock(bytes4 selector, uint256 delay) external;
+    function setTargetTimelock(address target, uint248 delay, uint8 level) external;
+    function setSelectorTimelock(bytes4 selector, uint248 delay, uint8 level) external;
     function setBackupTargetBypass(address target, bool enabled) external;
     function setBackupSelectorBypass(bytes4 selector, bool enabled) external;
 

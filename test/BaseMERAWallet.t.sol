@@ -72,7 +72,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.emergency(), newEmergency);
     }
 
-    function test_ExecuteTransaction_ImmediateWhenDelayIsZero() public {
+    function test_ExecuteTransaction_ImmediateWhenNoTimelockConfigured() public {
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 77));
 
@@ -92,6 +92,95 @@ contract BaseMERAWalletTest is Test {
         vm.prank(primary);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.TimelockRequired.selector, 1 days));
         wallet.executeTransaction(calls, 1);
+    }
+
+    function test_GetRequiredDelay_UsesGlobalWhenRulesHaveZeroLevel() public {
+        vm.startPrank(emergency);
+        wallet.setGlobalTimelock(1 days);
+        wallet.setTargetTimelock(address(receiver), uint248(4 days), 0);
+        wallet.setSelectorTimelock(ReceiverMock.setValue.selector, uint248(5 days), 0);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 42));
+
+        vm.prank(primary);
+        uint256 delay = wallet.getRequiredDelay(calls);
+        assertEq(delay, 1 days);
+    }
+
+    function test_GetRequiredDelay_TargetRuleAppliesWhenLevelIsActive() public {
+        vm.startPrank(emergency);
+        wallet.setGlobalTimelock(1 days);
+        wallet.setTargetTimelock(address(receiver), uint248(2 days), 4);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 101));
+
+        vm.prank(primary);
+        uint256 delay = wallet.getRequiredDelay(calls);
+        assertEq(delay, 2 days);
+    }
+
+    function test_GetRequiredDelay_SelectorRuleWinsWhenLevelHigher() public {
+        vm.startPrank(emergency);
+        wallet.setGlobalTimelock(1 days);
+        wallet.setTargetTimelock(address(receiver), uint248(5 days), 10);
+        wallet.setSelectorTimelock(ReceiverMock.setValue.selector, uint248(2 days), 11);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 303));
+
+        vm.prank(primary);
+        uint256 delay = wallet.getRequiredDelay(calls);
+        assertEq(delay, 2 days);
+    }
+
+    function test_GetRequiredDelay_TargetRuleWinsWhenLevelHigher() public {
+        vm.startPrank(emergency);
+        wallet.setGlobalTimelock(1 days);
+        wallet.setTargetTimelock(address(receiver), uint248(2 days), 200);
+        wallet.setSelectorTimelock(ReceiverMock.setValue.selector, uint248(5 days), 199);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 404));
+
+        vm.prank(primary);
+        uint256 delay = wallet.getRequiredDelay(calls);
+        assertEq(delay, 2 days);
+    }
+
+    function test_GetRequiredDelay_UsesMaxDelayWhenLevelsAreEqual() public {
+        vm.startPrank(emergency);
+        wallet.setGlobalTimelock(1 days);
+        wallet.setTargetTimelock(address(receiver), uint248(2 days), 7);
+        wallet.setSelectorTimelock(ReceiverMock.setValue.selector, uint248(3 days), 7);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 505));
+
+        vm.prank(primary);
+        uint256 delay = wallet.getRequiredDelay(calls);
+        assertEq(delay, 3 days);
+    }
+
+    function test_TimelockRuleGetters_ReturnDelayAndLevel() public {
+        vm.startPrank(emergency);
+        wallet.setTargetTimelock(address(receiver), uint248(123), 9);
+        wallet.setSelectorTimelock(ReceiverMock.setValue.selector, uint248(456), 12);
+        vm.stopPrank();
+
+        (uint248 targetDelay, uint8 targetLevel) = wallet.timelockByTarget(address(receiver));
+        assertEq(targetDelay, 123);
+        assertEq(targetLevel, 9);
+
+        (uint248 selectorDelay, uint8 selectorLevel) = wallet.timelockBySelector(ReceiverMock.setValue.selector);
+        assertEq(selectorDelay, 456);
+        assertEq(selectorLevel, 12);
     }
 
     function test_BackupBypassAllowsImmediateExecution() public {

@@ -15,8 +15,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     address public eip1271Signer;
 
     uint256 public globalTimelock;
-    mapping(address target => uint256 delay) public timelockByTarget;
-    mapping(bytes4 selector => uint256 delay) public timelockBySelector;
+    mapping(address target => MERAWalletTypes.TimelockRule rule) public timelockByTarget;
+    mapping(bytes4 selector => MERAWalletTypes.TimelockRule rule) public timelockBySelector;
     mapping(address target => bool enabled) public backupBypassTarget;
     mapping(bytes4 selector => bool enabled) public backupBypassSelector;
     mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) public operations;
@@ -77,16 +77,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit GlobalTimelockUpdated(previousDelay, delay, msg.sender);
     }
 
-    function setTargetTimelock(address target, uint256 delay) external override onlyEmergencyOrSelf {
-        uint256 previousDelay = timelockByTarget[target];
-        timelockByTarget[target] = delay;
-        emit TargetTimelockUpdated(target, previousDelay, delay, msg.sender);
+    function setTargetTimelock(address target, uint248 delay, uint8 level) external override onlyEmergencyOrSelf {
+        MERAWalletTypes.TimelockRule memory previousRule = timelockByTarget[target];
+        timelockByTarget[target] = MERAWalletTypes.TimelockRule({delay: delay, level: level});
+        emit TargetTimelockUpdated(target, previousRule.delay, previousRule.level, delay, level, msg.sender);
     }
 
-    function setSelectorTimelock(bytes4 selector, uint256 delay) external override onlyEmergencyOrSelf {
-        uint256 previousDelay = timelockBySelector[selector];
-        timelockBySelector[selector] = delay;
-        emit SelectorTimelockUpdated(selector, previousDelay, delay, msg.sender);
+    function setSelectorTimelock(bytes4 selector, uint248 delay, uint8 level) external override onlyEmergencyOrSelf {
+        MERAWalletTypes.TimelockRule memory previousRule = timelockBySelector[selector];
+        timelockBySelector[selector] = MERAWalletTypes.TimelockRule({delay: delay, level: level});
+        emit SelectorTimelockUpdated(selector, previousRule.delay, previousRule.level, delay, level, msg.sender);
     }
 
     function setBackupTargetBypass(address target, bool enabled) external override onlyEmergencyOrSelf {
@@ -275,15 +275,24 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function _getCallDelay(MERAWalletTypes.Call memory callData) internal view returns (uint256) {
         uint256 delay = globalTimelock;
-        uint256 targetDelay = timelockByTarget[callData.target];
-        if (targetDelay > delay) {
-            delay = targetDelay;
-        }
+        MERAWalletTypes.TimelockRule memory targetRule = timelockByTarget[callData.target];
 
         bytes4 selector = _extractSelector(callData.data);
-        uint256 selectorDelay = timelockBySelector[selector];
-        if (selectorDelay > delay) {
-            delay = selectorDelay;
+        MERAWalletTypes.TimelockRule memory selectorRule = timelockBySelector[selector];
+
+        if (targetRule.level == 0 && selectorRule.level == 0) {
+            return delay;
+        }
+
+        if (targetRule.level > selectorRule.level) {
+            return targetRule.delay;
+        }
+        if (selectorRule.level > targetRule.level) {
+            return selectorRule.delay;
+        }
+
+        if (targetRule.level > 0) {
+            return targetRule.delay >= selectorRule.delay ? targetRule.delay : selectorRule.delay;
         }
 
         return delay;

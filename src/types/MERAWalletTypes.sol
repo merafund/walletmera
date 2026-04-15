@@ -3,6 +3,11 @@ pragma solidity 0.8.34;
 
 /// @notice Shared structs and enums for MERA wallet contracts.
 library MERAWalletTypes {
+    struct TimelockRule {
+        uint248 delay;
+        uint8 level;
+    }
+
     struct Call {
         address target;
         uint256 value;
