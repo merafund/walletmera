@@ -28,6 +28,7 @@ library MERAWalletTypes {
         Role creatorRole;
         uint64 createdAt;
         uint64 executeAfter;
+        uint256 nonce;
         OperationStatus status;
     }
 }

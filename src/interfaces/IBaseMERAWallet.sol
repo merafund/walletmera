@@ -24,6 +24,7 @@ interface IBaseMERAWallet {
             MERAWalletTypes.Role creatorRole,
             uint64 createdAt,
             uint64 executeAfter,
+            uint256 nonce,
             MERAWalletTypes.OperationStatus status
         );
 
@@ -36,12 +37,14 @@ interface IBaseMERAWallet {
     function setBackupTargetBypass(address target, bool enabled) external;
     function setBackupSelectorBypass(bytes4 selector, bool enabled) external;
 
-    function executeTransaction(MERAWalletTypes.Call[] calldata calls) external payable;
-    function proposeTransaction(MERAWalletTypes.Call[] calldata calls) external returns (bytes32 operationId);
-    function executePending(MERAWalletTypes.Call[] calldata calls) external payable;
+    function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
+    function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
+        external
+        returns (bytes32 operationId);
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
     function cancelPending(bytes32 operationId) external;
 
-    function getOperationId(MERAWalletTypes.Call[] calldata calls) external view returns (bytes32);
+    function getOperationId(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external view returns (bytes32);
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view returns (uint256);
 
     function set1271Signer(address signer) external;
