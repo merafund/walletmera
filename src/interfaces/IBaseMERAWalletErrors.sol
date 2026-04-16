@@ -23,4 +23,8 @@ interface IBaseMERAWalletErrors {
     error CallExecutionFailed(uint256 index, bytes revertData);
     error CheckerNotWhitelisted(address checker, uint256 callIndex);
     error NoopCheckerConfig();
+    error NotCoreController();
+    error InvalidControllerAgent();
+    error AgentRemovalNotAuthorized();
+    error NoopControllerAgent();
 }

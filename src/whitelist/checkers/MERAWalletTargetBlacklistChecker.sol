@@ -55,12 +55,12 @@ contract MERAWalletTargetBlacklistChecker is IMERAWalletTransactionChecker, IMER
         return (true, false);
     }
 
-    function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external view override {
+    function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external override {
         address target = call.target;
         require(!blockedTarget[target], TargetBlocked(target, callId));
     }
 
-    function checkAfter(MERAWalletTypes.Call calldata, bytes32, uint256) external pure override {}
+    function checkAfter(MERAWalletTypes.Call calldata, bytes32, uint256) external override {}
 
     function _onlyEmergency() internal view {
         require(msg.sender == emergency, BlacklistNotEmergency());

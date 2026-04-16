@@ -39,4 +39,11 @@ interface IBaseMERAWalletEvents {
     event PendingTransactionCancelled(bytes32 indexed operationId, uint256 indexed nonce, address indexed cancelledBy);
     event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed nonce, address indexed executor);
     event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner, address indexed caller);
+    event ControllerAgentUpdated(
+        address indexed agent,
+        bool enabled,
+        MERAWalletTypes.Role executionRole,
+        MERAWalletTypes.Role removalMinRole,
+        address indexed caller
+    );
 }

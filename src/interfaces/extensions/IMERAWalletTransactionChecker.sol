@@ -9,8 +9,8 @@ interface IMERAWalletTransactionChecker {
     function hookModes() external view returns (bool enableBefore, bool enableAfter);
 
     /// @param callId 0-based index of `call` in the batch being executed (same for before/after hooks).
-    function checkBefore(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external view;
+    function checkBefore(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external;
 
     /// @param callId 0-based index of `call` in the batch being executed (same for before/after hooks).
-    function checkAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external view;
+    function checkAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external;
 }

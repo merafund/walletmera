@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.34;
+
+import {Test} from "forge-std/Test.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
+import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
+import {
+    MERAWalletUniswapV2OracleSlippageChecker
+} from "../src/whitelist/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
+import {IMERAWalletUniswapV2SlippageErrors} from "../src/whitelist/errors/IMERAWalletUniswapV2SlippageErrors.sol";
+import {ERC20Mock} from "./mocks/ERC20Mock.sol";
+import {MockUniV2Router02} from "./mocks/MockUniV2Router02.sol";
+import {MockAggregatorV3} from "./mocks/MockAggregatorV3.sol";
+
+contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
+    uint256 internal primaryPk = 0xA11CE;
+    address internal primary = vm.addr(primaryPk);
+    address internal emergency = vm.addr(0xE911);
+    address internal pauseAgent = address(0xBEEF);
+    address internal outsider = address(0xCAFE);
+
+    BaseMERAWallet internal wallet;
+    MERAWalletUniswapV2OracleSlippageChecker internal checker;
+    ERC20Mock internal tokenA;
+    ERC20Mock internal tokenB;
+    ERC20Mock internal weth;
+    MockUniV2Router02 internal router;
+    MockAggregatorV3 internal feedA;
+    MockAggregatorV3 internal feedB;
+
+    function setUp() public {
+        vm.warp(1_000_000);
+
+        wallet = new BaseMERAWallet(primary, vm.addr(0xB0B), emergency, address(0));
+        checker = new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
+        tokenA = new ERC20Mock();
+        tokenB = new ERC20Mock();
+        weth = new ERC20Mock();
+        router = new MockUniV2Router02(address(weth));
+        feedA = new MockAggregatorV3(1e8, 8);
+        feedB = new MockAggregatorV3(1e8, 8);
+
+        vm.startPrank(emergency);
+        wallet.setWhitelistedChecker(address(0), true);
+        wallet.setWhitelistedChecker(address(checker), true);
+        checker.setAllowedRouter(address(router), true);
+        checker.setTokenPriceFeed(address(tokenA), address(feedA));
+        checker.setTokenPriceFeed(address(tokenB), address(feedB));
+        checker.setPauseAgent(pauseAgent, true);
+        vm.stopPrank();
+
+        tokenA.mint(address(wallet), 10 ether);
+        tokenB.mint(address(router), 1000 ether);
+    }
+
+    function _approveAndSwapCalls() internal view returns (MERAWalletTypes.Call[] memory calls) {
+        calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+    }
+
+    function _swapCallData(uint256 amountIn, uint256 amountOutMin) internal view returns (bytes memory) {
+        address[] memory path = new address[](2);
+        path[0] = address(tokenA);
+        path[1] = address(tokenB);
+        return abi.encodeWithSelector(
+            MockUniV2Router02.swapExactTokensForTokens.selector,
+            amountIn,
+            amountOutMin,
+            path,
+            address(wallet),
+            block.timestamp + 1
+        );
+    }
+
+    function test_SwapWithinOracleTolerance_Succeeds() public {
+        router.setBadRate(false);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        wallet.executeTransaction(calls, 1);
+    }
+
+    function test_SwapWorseThanOracle_Reverts() public {
+        router.setBadRate(true);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SwapWorseThanOracle.selector);
+        wallet.executeTransaction(calls, 1);
+    }
+
+    function test_RouterNotAllowed_Reverts() public {
+        vm.prank(emergency);
+        checker.setAllowedRouter(address(router), false);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMERAWalletUniswapV2SlippageErrors.RouterNotAllowed.selector, address(router), uint256(0)
+            )
+        );
+        wallet.executeTransaction(calls, 1);
+    }
+
+    function test_UnsupportedSelector_Reverts() public {
+        bytes4 badSel = 0xdeadbeef;
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: abi.encodeWithSelector(badSel),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(IMERAWalletUniswapV2SlippageErrors.UnsupportedRouterCall.selector, badSel)
+        );
+        wallet.executeTransaction(calls, 1);
+    }
+
+    function test_StaleOracle_Reverts() public {
+        router.setBadRate(false);
+        vm.prank(emergency);
+        feedA.setUpdatedAt(block.timestamp - 4000);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMERAWalletUniswapV2SlippageErrors.StaleOraclePrice.selector, address(tokenA), block.timestamp - 4000
+            )
+        );
+        wallet.executeTransaction(calls, 1);
+    }
+
+    function test_PauseAgent_Pause_BlocksHooksWithEnforcedPause() public {
+        vm.prank(pauseAgent);
+        checker.pause();
+
+        vm.prank(primary);
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        wallet.executeTransaction(_approveAndSwapCalls(), 42);
+    }
+
+    function test_Outsider_CannotPause() public {
+        vm.prank(outsider);
+        vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SlippageNotPauseAuthorized.selector);
+        checker.pause();
+    }
+
+    function test_PauseAgent_CannotUnpause() public {
+        vm.prank(pauseAgent);
+        checker.pause();
+
+        vm.prank(pauseAgent);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, pauseAgent));
+        checker.unpause();
+    }
+
+    function test_Owner_Unpause_AfterAgentPause_SwapSucceeds() public {
+        vm.prank(pauseAgent);
+        checker.pause();
+
+        vm.prank(emergency);
+        checker.unpause();
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCalls(), 42);
+    }
+}

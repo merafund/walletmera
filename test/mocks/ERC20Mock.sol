@@ -20,4 +20,25 @@ contract ERC20Mock {
         allowance[msg.sender][spender] = amount;
         return true;
     }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 a = allowance[from][msg.sender];
+        require(a >= amount, "allowance");
+        allowance[from][msg.sender] = a - amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function name() external pure returns (string memory) {
+        return "Mock";
+    }
+
+    function symbol() external pure returns (string memory) {
+        return "MCK";
+    }
+
+    function decimals() external pure returns (uint8) {
+        return 18;
+    }
 }
