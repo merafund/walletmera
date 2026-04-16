@@ -45,10 +45,25 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         vm.startPrank(emergency);
         wallet.setWhitelistedChecker(address(0), true);
         wallet.setWhitelistedChecker(address(checker), true);
-        checker.setAllowedRouter(address(router), true);
-        checker.setTokenPriceFeed(address(tokenA), address(feedA));
-        checker.setTokenPriceFeed(address(tokenB), address(feedB));
-        checker.setPauseAgent(pauseAgent, true);
+        address[] memory routers = new address[](1);
+        routers[0] = address(router);
+        bool[] memory routerAllowed = new bool[](1);
+        routerAllowed[0] = true;
+        checker.setAllowedRouters(routers, routerAllowed);
+
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(tokenA);
+        tokens[1] = address(tokenB);
+        address[] memory feeds = new address[](2);
+        feeds[0] = address(feedA);
+        feeds[1] = address(feedB);
+        checker.setTokenPriceFeeds(tokens, feeds);
+
+        address[] memory agents = new address[](1);
+        agents[0] = pauseAgent;
+        bool[] memory agentAllowed = new bool[](1);
+        agentAllowed[0] = true;
+        checker.setPauseAgents(agents, agentAllowed);
         vm.stopPrank();
 
         tokenA.mint(address(wallet), 10 ether);
@@ -135,8 +150,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function test_RouterNotAllowed_Reverts() public {
+        address[] memory routers = new address[](1);
+        routers[0] = address(router);
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = false;
         vm.prank(emergency);
-        checker.setAllowedRouter(address(router), false);
+        checker.setAllowedRouters(routers, allowed);
 
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         calls[0] = MERAWalletTypes.Call({

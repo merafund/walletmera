@@ -47,7 +47,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         bool ethOut;
         bool active;
     }
-
+    // to do use tload tstore
     mapping(bytes32 key => Snapshot) private _snapshots;
 
     /// @param initialOwner Admin for router allowlist and token price feeds (see {Ownable}).
@@ -70,29 +70,61 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         return (true, true);
     }
 
-    function setAllowedRouter(address router, bool allowed) external onlyOwner {
-        allowedRouter[router] = allowed;
-        emit AllowedRouterUpdated(router, allowed, msg.sender);
-    }
-
-    function setTokenPriceFeed(address token, address feed) external onlyOwner {
-        if (token == address(0) || feed == address(0)) {
-            revert SlippageInvalidAddress();
+    /// @notice Batch-update router allowlist; `routers[i]` paired with `allowed[i]`.
+    function setAllowedRouters(address[] calldata routers, bool[] calldata allowed) external onlyOwner {
+        uint256 n = routers.length;
+        if (n != allowed.length) {
+            revert SlippageArrayLengthMismatch();
         }
-        tokenPriceFeed[token] = feed;
-        emit TokenPriceFeedUpdated(token, feed, msg.sender);
-    }
-
-    /// @notice Grant or revoke the right to call {pause}. Only the owner may configure agents.
-    function setPauseAgent(address agent, bool allowed) external onlyOwner {
-        if (agent == address(0)) {
-            revert SlippageInvalidAddress();
+        for (uint256 i = 0; i < n;) {
+            allowedRouter[routers[i]] = allowed[i];
+            emit AllowedRouterUpdated(routers[i], allowed[i], msg.sender);
+            unchecked {
+                ++i;
+            }
         }
-        isPauseAgent[agent] = allowed;
-        emit PauseAgentUpdated(agent, allowed, msg.sender);
     }
 
-    /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgent}. Uses {Pausable-_pause}.
+    /// @notice Batch-set Chainlink feeds; `tokens[i]` paired with `feeds[i]`.
+    function setTokenPriceFeeds(address[] calldata tokens, address[] calldata feeds) external onlyOwner {
+        uint256 n = tokens.length;
+        if (n != feeds.length) {
+            revert SlippageArrayLengthMismatch();
+        }
+        for (uint256 i = 0; i < n;) {
+            address token = tokens[i];
+            address feed = feeds[i];
+            if (token == address(0) || feed == address(0)) {
+                revert SlippageInvalidAddress();
+            }
+            tokenPriceFeed[token] = feed;
+            emit TokenPriceFeedUpdated(token, feed, msg.sender);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @notice Batch grant or revoke the right to call {pause}. Only the owner may configure agents.
+    function setPauseAgents(address[] calldata agents, bool[] calldata allowed) external onlyOwner {
+        uint256 n = agents.length;
+        if (n != allowed.length) {
+            revert SlippageArrayLengthMismatch();
+        }
+        for (uint256 i = 0; i < n;) {
+            address agent = agents[i];
+            if (agent == address(0)) {
+                revert SlippageInvalidAddress();
+            }
+            isPauseAgent[agent] = allowed[i];
+            emit PauseAgentUpdated(agent, allowed[i], msg.sender);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgents}. Uses {Pausable-_pause}.
     function pause() external {
         if (msg.sender != owner() && !isPauseAgent[msg.sender]) {
             revert SlippageNotPauseAuthorized();

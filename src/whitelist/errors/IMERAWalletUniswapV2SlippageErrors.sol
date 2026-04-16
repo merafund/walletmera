@@ -15,4 +15,5 @@ interface IMERAWalletUniswapV2SlippageErrors {
     error InvalidMeasuredAmounts();
     error SwapWorseThanOracle();
     error SlippageNotPauseAuthorized();
+    error SlippageArrayLengthMismatch();
 }
