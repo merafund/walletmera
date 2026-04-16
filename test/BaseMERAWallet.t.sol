@@ -7,7 +7,9 @@ import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
 import {MERAWalletTargetWhitelistChecker} from "../src/whitelist/checkers/MERAWalletTargetWhitelistChecker.sol";
+import {MERAWalletTargetBlacklistChecker} from "../src/whitelist/checkers/MERAWalletTargetBlacklistChecker.sol";
 import {IMERAWalletWhitelistErrors} from "../src/whitelist/errors/IMERAWalletWhitelistErrors.sol";
+import {IMERAWalletBlacklistErrors} from "../src/whitelist/errors/IMERAWalletBlacklistErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";
@@ -27,6 +29,7 @@ contract BaseMERAWalletTest is Test {
     ReceiverMock internal receiver;
     ERC20Mock internal token;
     MERAWalletTargetWhitelistChecker internal targetWhitelistChecker;
+    MERAWalletTargetBlacklistChecker internal targetBlacklistChecker;
     ConfigurableTransactionChecker internal checkerBothHooks;
     ConfigurableTransactionChecker internal checkerAfterOnly;
     ConfigurableTransactionChecker internal checkerBeforeOnly;
@@ -38,6 +41,7 @@ contract BaseMERAWalletTest is Test {
         receiver = new ReceiverMock();
         token = new ERC20Mock();
         targetWhitelistChecker = new MERAWalletTargetWhitelistChecker(emergency);
+        targetBlacklistChecker = new MERAWalletTargetBlacklistChecker(emergency);
         checkerBothHooks = new ConfigurableTransactionChecker(true, true);
         checkerAfterOnly = new ConfigurableTransactionChecker(false, true);
         checkerBeforeOnly = new ConfigurableTransactionChecker(true, false);
@@ -428,6 +432,73 @@ contract BaseMERAWalletTest is Test {
             abi.encodeWithSelector(IMERAWalletWhitelistErrors.TargetNotAllowed.selector, address(receiver), 0)
         );
         walletWithExtensions.executePending(calls, 1);
+    }
+
+    function test_TargetBlacklistChecker_BlocksListedTarget() public {
+        vm.startPrank(emergency);
+        targetBlacklistChecker.setBlockedTarget(address(receiver), true);
+        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 888));
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IMERAWalletBlacklistErrors.TargetBlocked.selector, address(receiver), 0));
+        walletWithExtensions.executeTransaction(calls, 1);
+    }
+
+    function test_TargetBlacklistChecker_AllowsNonBlockedTargets() public {
+        vm.startPrank(emergency);
+        targetBlacklistChecker.setBlockedTarget(outsider, true);
+        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 42));
+
+        vm.prank(primary);
+        walletWithExtensions.executeTransaction(calls, 1);
+        assertEq(receiver.value(), 42);
+    }
+
+    function test_TargetBlacklistChecker_IsCheckedWhenExecutePending() public {
+        vm.prank(emergency);
+        walletWithExtensions.setGlobalTimelock(1 days);
+
+        vm.startPrank(emergency);
+        targetBlacklistChecker.setBlockedTarget(address(receiver), true);
+        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
+
+        vm.prank(primary);
+        bytes32 operationId = walletWithExtensions.proposeTransaction(calls, 1);
+
+        (,, uint64 createdAt, uint64 executeAfter,,) = walletWithExtensions.operations(operationId);
+        assertEq(uint256(executeAfter), uint256(createdAt) + 1 days);
+
+        vm.warp(executeAfter);
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IMERAWalletBlacklistErrors.TargetBlocked.selector, address(receiver), 0));
+        walletWithExtensions.executePending(calls, 1);
+    }
+
+    function test_TargetBlacklistChecker_UnblockAllowsAgain() public {
+        vm.startPrank(emergency);
+        targetBlacklistChecker.setBlockedTarget(address(receiver), true);
+        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        targetBlacklistChecker.setBlockedTarget(address(receiver), false);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 100));
+
+        vm.prank(primary);
+        walletWithExtensions.executeTransaction(calls, 1);
+        assertEq(receiver.value(), 100);
     }
 
     function test_AfterChecker_RevertsAndRollsBackExecution() public {
