@@ -5,7 +5,12 @@ import {MERAWalletTypes} from "../../types/MERAWalletTypes.sol";
 
 /// @notice External checker invoked by wallet execution hooks.
 interface IMERAWalletTransactionChecker {
-    function checkBefore(MERAWalletTypes.Call[] memory calls, bytes32 operationId) external view;
+    /// @notice Which hooks this checker participates in; fixed per implementation (wallet reads at registration).
+    function hookModes() external view returns (bool enableBefore, bool enableAfter);
 
-    function checkAfter(MERAWalletTypes.Call[] memory calls, bytes32 operationId) external view;
+    /// @param callId 0-based index of `call` in the batch being executed (same for before/after hooks).
+    function checkBefore(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external view;
+
+    /// @param callId 0-based index of `call` in the batch being executed (same for before/after hooks).
+    function checkAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external view;
 }

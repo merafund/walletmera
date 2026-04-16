@@ -8,11 +8,11 @@ import {BaseMERAWallet} from "../../../BaseMERAWallet.sol";
 abstract contract MERAWalletERC20 is BaseMERAWallet {
     function transferERC20(address token, address to, uint256 amount, uint256 nonce) external {
         bytes memory data = abi.encodeWithSelector(IERC20.transfer.selector, to, amount);
-        _executeSingleCall(token, 0, data, nonce);
+        _executeSingleCall(token, 0, data, address(0), "", nonce);
     }
 
     function approveERC20(address token, address spender, uint256 amount, uint256 nonce) external {
         bytes memory data = abi.encodeWithSelector(IERC20.approve.selector, spender, amount);
-        _executeSingleCall(token, 0, data, nonce);
+        _executeSingleCall(token, 0, data, address(0), "", nonce);
     }
 }

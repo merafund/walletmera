@@ -9,24 +9,24 @@ interface IBaseMERAWalletEvents {
     event BackupUpdated(address indexed previousBackup, address indexed newBackup, address indexed caller);
     event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
     event GlobalTimelockUpdated(uint256 previousDelay, uint256 newDelay, address indexed caller);
-    event TargetTimelockUpdated(
+    event TargetCallPolicyUpdated(
         address indexed target,
-        uint248 previousDelay,
-        uint8 previousLevel,
-        uint248 newDelay,
-        uint8 newLevel,
+        MERAWalletTypes.CallPathPolicy previousPolicy,
+        MERAWalletTypes.CallPathPolicy newPolicy,
         address indexed caller
     );
-    event SelectorTimelockUpdated(
+    event SelectorCallPolicyUpdated(
         bytes4 indexed selector,
-        uint248 previousDelay,
-        uint8 previousLevel,
-        uint248 newDelay,
-        uint8 newLevel,
+        MERAWalletTypes.CallPathPolicy previousPolicy,
+        MERAWalletTypes.CallPathPolicy newPolicy,
         address indexed caller
     );
-    event BackupTargetBypassUpdated(address indexed target, bool enabled, address indexed caller);
-    event BackupSelectorBypassUpdated(bytes4 indexed selector, bool enabled, address indexed caller);
+    event RequiredCheckerUpdated(
+        address indexed checker, bool beforeEnabled, bool afterEnabled, address indexed caller
+    );
+    event WhitelistCheckerUpdated(
+        address indexed checker, bool allowed, bool beforeEnabled, bool afterEnabled, address indexed caller
+    );
     event TransactionProposed(
         bytes32 indexed operationId,
         uint256 indexed nonce,

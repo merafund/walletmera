@@ -47,18 +47,16 @@ contract MERAWalletTargetWhitelistChecker is IMERAWalletTransactionChecker, IMER
         }
     }
 
-    function checkBefore(MERAWalletTypes.Call[] memory calls, bytes32) external view override {
-        uint256 callsLength = calls.length;
-        for (uint256 i = 0; i < callsLength;) {
-            address target = calls[i].target;
-            require(allowedTarget[target], TargetNotAllowed(target, i));
-            unchecked {
-                ++i;
-            }
-        }
+    function hookModes() external pure override returns (bool enableBefore, bool enableAfter) {
+        return (true, false);
     }
 
-    function checkAfter(MERAWalletTypes.Call[] memory, bytes32) external pure override {}
+    function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external view override {
+        address target = call.target;
+        require(allowedTarget[target], TargetNotAllowed(target, callId));
+    }
+
+    function checkAfter(MERAWalletTypes.Call calldata, bytes32, uint256) external pure override {}
 
     function _onlyEmergency() internal view {
         require(msg.sender == emergency, WhitelistNotEmergency());
