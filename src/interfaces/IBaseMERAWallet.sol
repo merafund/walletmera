@@ -27,10 +27,7 @@ interface IBaseMERAWallet {
             uint256 nonce,
             MERAWalletTypes.OperationStatus status
         );
-    function controllerAgents(address agent)
-        external
-        view
-        returns (bool enabled, MERAWalletTypes.Role executionRole, MERAWalletTypes.Role removalMinRole);
+    function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role removalMinRole);
 
     function setPrimary(address newPrimary) external;
     function setBackup(address newBackup) external;
@@ -41,8 +38,8 @@ interface IBaseMERAWallet {
     /// @param enabled If true, registers or syncs required checkers from `checker.hookModes()`. If false, removes `checker` from required lists.
     function setRequiredChecker(address checker, bool enabled) external;
     function setWhitelistedChecker(address checker, bool allowed) external;
-    /// @notice Assign or update a delegate controller, or disable one (`config.enabled == false`). Calldata `removalMinRole` is ignored on enable; it is set from the caller's core role.
-    function setControllerAgent(address agent, MERAWalletTypes.ControllerAgent calldata config) external;
+    /// @notice Enable or disable a veto agent. On enable, minimum removal rank is derived from the caller's core role (primary / backup / emergency).
+    function setControllerAgent(address agent, bool enabled) external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)

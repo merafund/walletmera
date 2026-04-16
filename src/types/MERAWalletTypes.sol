@@ -56,11 +56,10 @@ library MERAWalletTypes {
         OperationStatus status;
     }
 
-    /// @notice Optional delegate that executes with `executionRole` timelock/cancel rules.
+    /// @notice Optional veto delegate: may cancel any pending operation via {cancelPending}.
     /// @dev `removalMinRole` is set by the wallet on assign: only core controllers at or above this rank may disable the agent.
     struct ControllerAgent {
         bool enabled;
-        Role executionRole;
         Role removalMinRole;
     }
 }

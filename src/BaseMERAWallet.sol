@@ -148,35 +148,28 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit WhitelistCheckerUpdated(checker, true, enableBefore, enableAfter, msg.sender);
     }
 
-    /// @notice Register a delegate that acts with `executionRole` policy, or disable an existing agent.
-    /// @dev Only `primary` / `backup` / `emergency` may call. On enable, `config.removalMinRole` is ignored; on disable, `config.executionRole` is ignored.
-    function setControllerAgent(address agent, MERAWalletTypes.ControllerAgent calldata config) external override {
+    /// @notice Enable or disable a veto agent (may call {cancelPending} on any pending op). Only core controllers may configure.
+    /// @dev On enable, `removalMinRole` is set to `_coreRole(msg.sender)` so only that role or higher may later disable.
+    function setControllerAgent(address agent, bool enabled) external override {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         require(callerCore != MERAWalletTypes.Role.None, NotCoreController());
 
         MERAWalletTypes.ControllerAgent storage stored = controllerAgents[agent];
 
-        if (!config.enabled) {
+        if (!enabled) {
             require(stored.enabled, NoopControllerAgent());
             require(_roleRank(callerCore) >= _roleRank(stored.removalMinRole), AgentRemovalNotAuthorized());
             delete controllerAgents[agent];
-            emit ControllerAgentUpdated(agent, false, MERAWalletTypes.Role.None, MERAWalletTypes.Role.None, msg.sender);
+            emit ControllerAgentUpdated(agent, false, MERAWalletTypes.Role.None, msg.sender);
             return;
         }
 
         require(agent != address(0), InvalidAddress());
-        require(
-            config.executionRole == MERAWalletTypes.Role.Primary || config.executionRole == MERAWalletTypes.Role.Backup
-                || config.executionRole == MERAWalletTypes.Role.Emergency,
-            InvalidControllerAgent()
-        );
-        require(_roleRank(config.executionRole) <= _roleRank(callerCore), InvalidControllerAgent());
 
         stored.enabled = true;
-        stored.executionRole = config.executionRole;
         stored.removalMinRole = callerCore;
 
-        emit ControllerAgentUpdated(agent, true, stored.executionRole, stored.removalMinRole, msg.sender);
+        emit ControllerAgentUpdated(agent, true, stored.removalMinRole, msg.sender);
     }
 
     function getRequiredBeforeCheckers() external view override returns (address[] memory) {
@@ -256,10 +249,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function cancelPending(bytes32 operationId) external override {
-        MERAWalletTypes.Role callerRole = _requireController();
         MERAWalletTypes.PendingOperation storage operation = operations[operationId];
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
 
+        if (_coreRole(msg.sender) == MERAWalletTypes.Role.None && controllerAgents[msg.sender].enabled) {
+            operation.status = MERAWalletTypes.OperationStatus.Cancelled;
+            emit PendingTransactionCancelled(operationId, operation.nonce, msg.sender);
+            return;
+        }
+
+        MERAWalletTypes.Role callerRole = _requireController();
         bool isCreator = operation.creator == msg.sender;
         require(isCreator || _canOverrideRole(callerRole, operation.creatorRole), CannotCancelOperation(operationId));
 
@@ -279,7 +278,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view override returns (uint256) {
-        MERAWalletTypes.Role callerRole = _roleOf(msg.sender);
+        MERAWalletTypes.Role callerRole = _coreRole(msg.sender);
         require(callerRole != MERAWalletTypes.Role.None, Unauthorized());
 
         MERAWalletTypes.Call[] memory memoryCalls = calls;
@@ -565,7 +564,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _requireController() internal view returns (MERAWalletTypes.Role role) {
-        role = _roleOf(msg.sender);
+        role = _coreRole(msg.sender);
         require(role != MERAWalletTypes.Role.None, Unauthorized());
     }
 
@@ -599,18 +598,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return 3;
         }
         return 0;
-    }
-
-    function _roleOf(address account) internal view returns (MERAWalletTypes.Role) {
-        MERAWalletTypes.Role core = _coreRole(account);
-        if (core != MERAWalletTypes.Role.None) {
-            return core;
-        }
-        MERAWalletTypes.ControllerAgent storage agent = controllerAgents[account];
-        if (agent.enabled) {
-            return agent.executionRole;
-        }
-        return MERAWalletTypes.Role.None;
     }
 
     function _canOverrideRole(MERAWalletTypes.Role callerRole, MERAWalletTypes.Role creatorRole)

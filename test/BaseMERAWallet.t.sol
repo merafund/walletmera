@@ -518,208 +518,109 @@ contract BaseMERAWalletTest is Test {
         assertEq(receiver.value(), 0);
     }
 
-    function test_ControllerAgent_PrimaryAssignsAgent_ExecutesImmediate() public {
+    function test_ControllerAgent_CannotExecute_IsVetoOnly() public {
         vm.prank(primary);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 33));
 
         vm.prank(agentAddr);
+        vm.expectRevert(IBaseMERAWalletErrors.Unauthorized.selector);
         wallet.executeTransaction(calls, 1);
-        assertEq(receiver.value(), 33);
     }
 
-    function test_ControllerAgent_BackupCannotAssignEmergencyRole() public {
+    function test_ControllerAgent_BackupCanAssignVetoAgent() public {
         vm.prank(backup);
-        vm.expectRevert(IBaseMERAWalletErrors.InvalidControllerAgent.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Emergency, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
+        (bool en,) = wallet.controllerAgents(agentAddr);
+        assertTrue(en);
     }
 
     function test_ControllerAgent_OutsiderCannotSetOrRemove() public {
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(primary);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, false);
     }
 
     function test_ControllerAgent_AgentCannotAssignAnotherAgent() public {
         address secondAgent = address(0xA62);
 
         vm.prank(primary);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(agentAddr);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(
-            secondAgent,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(secondAgent, true);
     }
 
     function test_ControllerAgent_PrimaryScoped_RemovedByPrimaryOrHigher() public {
         vm.prank(primary);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, false);
 
         vm.prank(primary);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
-        (bool enAfterPrimary,,) = wallet.controllerAgents(agentAddr);
+        wallet.setControllerAgent(agentAddr, false);
+        (bool enAfterPrimary,) = wallet.controllerAgents(agentAddr);
         assertFalse(enAfterPrimary);
 
         vm.prank(primary);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(backup);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
-        (bool enAfterBackup,,) = wallet.controllerAgents(agentAddr);
+        wallet.setControllerAgent(agentAddr, false);
+        (bool enAfterBackup,) = wallet.controllerAgents(agentAddr);
         assertFalse(enAfterBackup);
     }
 
     function test_ControllerAgent_EmergencyScoped_OnlyEmergencyRemoves() public {
         vm.prank(emergency);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Primary, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.AgentRemovalNotAuthorized.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, false);
 
         vm.prank(backup);
         vm.expectRevert(IBaseMERAWalletErrors.AgentRemovalNotAuthorized.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, false);
 
         vm.prank(emergency);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
-        (bool en,,) = wallet.controllerAgents(agentAddr);
+        wallet.setControllerAgent(agentAddr, false);
+        (bool en,) = wallet.controllerAgents(agentAddr);
         assertFalse(en);
     }
 
     function test_ControllerAgent_BackupAssigned_OnlyBackupOrHigherRemoves() public {
         vm.prank(backup);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Backup, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.AgentRemovalNotAuthorized.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, false);
 
         vm.prank(backup);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
-        (bool en,,) = wallet.controllerAgents(agentAddr);
+        wallet.setControllerAgent(agentAddr, false);
+        (bool en,) = wallet.controllerAgents(agentAddr);
         assertFalse(en);
     }
 
-    function test_ControllerAgent_BackupRoleAgent_CancelsPrimaryPending() public {
+    function test_ControllerAgent_VetoAgent_CancelsAnyPrimaryPending() public {
         vm.prank(emergency);
         wallet.setGlobalTimelock(1 days);
 
         vm.prank(backup);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Backup, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 9));
@@ -734,15 +635,10 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
     }
 
-    function test_ControllerAgent_CoreRoleWinsOverMapping() public {
+    function test_ControllerAgent_CoreRoleUnaffectedByVetoSlotOnPrimaryAddress() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setControllerAgent(
-            primary,
-            MERAWalletTypes.ControllerAgent({
-                enabled: true, executionRole: MERAWalletTypes.Role.Emergency, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(primary, true);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -756,12 +652,7 @@ contract BaseMERAWalletTest is Test {
     function test_ControllerAgent_DisableWhenNotEnabled_Reverts() public {
         vm.prank(backup);
         vm.expectRevert(IBaseMERAWalletErrors.NoopControllerAgent.selector);
-        wallet.setControllerAgent(
-            agentAddr,
-            MERAWalletTypes.ControllerAgent({
-                enabled: false, executionRole: MERAWalletTypes.Role.None, removalMinRole: MERAWalletTypes.Role.None
-            })
-        );
+        wallet.setControllerAgent(agentAddr, false);
     }
 
     function test_SetRequiredChecker_RevertsForNoopConfig() public {
