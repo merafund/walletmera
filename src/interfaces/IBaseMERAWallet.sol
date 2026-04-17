@@ -13,6 +13,9 @@ interface IBaseMERAWallet {
     function guardian() external view returns (address);
     function eip1271Signer() external view returns (address);
     function globalTimelock() external view returns (uint256);
+    function lifeHeartbeatTimeout() external view returns (uint256);
+    function lastLifeHeartbeatAt() external view returns (uint256);
+    function lifeControlEnabled() external view returns (bool);
     function whitelistedChecker(address checker)
         external
         view
@@ -40,6 +43,9 @@ interface IBaseMERAWallet {
     function setBackup(address newBackup) external;
     function setEmergency(address newEmergency) external;
     function setGlobalTimelock(uint256 delay) external;
+    function setLifeControl(bool enabled, uint256 timeout) external;
+    function setLifeControllers(address[] calldata controllers, bool enabled) external;
+    function confirmAlive() external;
     function setTargetCallPolicy(address target, MERAWalletTypes.CallPathPolicy calldata policy) external;
     function setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy) external;
     /// @param enabled If true, registers or syncs required checkers from `checker.hookModes()`. If false, removes `checker` from required lists.
@@ -76,6 +82,8 @@ interface IBaseMERAWallet {
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view returns (uint256);
     function getRequiredBeforeCheckers() external view returns (address[] memory);
     function getRequiredAfterCheckers() external view returns (address[] memory);
+    function isLifeController(address controller) external view returns (bool);
+    function getLifeControllers() external view returns (address[] memory);
 
     function set1271Signer(address signer) external;
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4);

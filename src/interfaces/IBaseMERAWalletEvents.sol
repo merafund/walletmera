@@ -53,4 +53,7 @@ interface IBaseMERAWalletEvents {
     );
     event PrimaryFreezeUpdated(bool frozen, address indexed caller);
     event BackupFreezeUpdated(bool frozen, address indexed caller);
+    event LifeControlUpdated(bool enabled, uint256 timeout, address indexed caller);
+    event LifeControllerUpdated(address indexed controller, bool enabled, address indexed caller);
+    event LifeHeartbeatConfirmed(address indexed controller, uint256 timestamp);
 }

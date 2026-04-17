@@ -105,6 +105,136 @@ contract BaseMERAWalletTest is Test {
         wallet.setEmergency(newEmergency);
     }
 
+    function test_LifeControllers_InitialEmergencyIncluded() public view {
+        assertTrue(wallet.isLifeController(emergency));
+        address[] memory controllers = wallet.getLifeControllers();
+        assertEq(controllers.length, 1);
+        assertEq(controllers[0], emergency);
+    }
+
+    function test_SetLifeControl_EnableRequiresNonZeroTimeout() public {
+        vm.prank(emergency);
+        vm.expectRevert(IBaseMERAWalletErrors.LifeHeartbeatTimeoutZero.selector);
+        wallet.setLifeControl(true, 0);
+    }
+
+    function test_LifeControl_ExpiryBlocksActionsUntilHeartbeatRestores() public {
+        vm.prank(emergency);
+        wallet.setLifeControl(true, 1 days);
+
+        vm.warp(block.timestamp + 2 days);
+
+        uint256 lastHeartbeatAt = wallet.lastLifeHeartbeatAt();
+        uint256 timeout = wallet.lifeHeartbeatTimeout();
+        vm.startPrank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.LifeHeartbeatExpired.selector, lastHeartbeatAt, timeout, block.timestamp
+            )
+        );
+        wallet.setGlobalTimelock(1 days);
+        vm.stopPrank();
+
+        vm.prank(emergency);
+        wallet.confirmAlive();
+
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+        assertEq(wallet.globalTimelock(), 1 days);
+    }
+
+    function test_LifeControl_AnyControllerHeartbeatUnblocksExecution() public {
+        address[] memory controllers = new address[](1);
+        controllers[0] = outsider;
+
+        vm.startPrank(emergency);
+        wallet.setLifeControllers(controllers, true);
+        wallet.setLifeControl(true, 1 days);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 2 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 88));
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.LifeHeartbeatExpired.selector,
+                wallet.lastLifeHeartbeatAt(),
+                wallet.lifeHeartbeatTimeout(),
+                block.timestamp
+            )
+        );
+        wallet.executeTransaction(calls, 1);
+
+        vm.prank(outsider);
+        wallet.confirmAlive();
+
+        vm.prank(primary);
+        wallet.executeTransaction(calls, 1);
+        assertEq(receiver.value(), 88);
+    }
+
+    function test_LifeControl_EmergencyCannotBeRemovedFromControllers() public {
+        address[] memory controllers = new address[](1);
+        controllers[0] = emergency;
+
+        vm.prank(emergency);
+        vm.expectRevert(IBaseMERAWalletErrors.EmergencyMustStayLifeController.selector);
+        wallet.setLifeControllers(controllers, false);
+    }
+
+    function test_SetEmergency_SyncsLifeControllerMembership() public {
+        address newEmergency = address(0xE700);
+
+        vm.prank(emergency);
+        wallet.setEmergency(newEmergency);
+
+        assertFalse(wallet.isLifeController(emergency));
+        assertTrue(wallet.isLifeController(newEmergency));
+    }
+
+    function test_SetEmergency_KeepsPreviousEmergencyWhenManuallyPinnedAsController() public {
+        address[] memory controllers = new address[](1);
+        controllers[0] = emergency;
+        vm.prank(emergency);
+        wallet.setLifeControllers(controllers, true);
+
+        address newEmergency = address(0xE701);
+        vm.prank(emergency);
+        wallet.setEmergency(newEmergency);
+
+        assertTrue(wallet.isLifeController(emergency));
+        assertTrue(wallet.isLifeController(newEmergency));
+    }
+
+    function test_LifeControl_BlocksExtensionCallsUntilHeartbeat() public {
+        vm.prank(emergency);
+        walletWithExtensions.setLifeControl(true, 1 days);
+
+        vm.deal(address(walletWithExtensions), 1 ether);
+        vm.warp(block.timestamp + 2 days);
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.LifeHeartbeatExpired.selector,
+                walletWithExtensions.lastLifeHeartbeatAt(),
+                walletWithExtensions.lifeHeartbeatTimeout(),
+                block.timestamp
+            )
+        );
+        walletWithExtensions.transferNative(payable(outsider), 0.1 ether, 1);
+
+        vm.prank(emergency);
+        walletWithExtensions.confirmAlive();
+
+        uint256 outsiderBalanceBefore = outsider.balance;
+        vm.prank(primary);
+        walletWithExtensions.transferNative(payable(outsider), 0.1 ether, 1);
+        assertEq(outsider.balance, outsiderBalanceBefore + 0.1 ether);
+    }
+
     function test_ExecuteTransaction_ImmediateWhenNoTimelockConfigured() public {
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 77));

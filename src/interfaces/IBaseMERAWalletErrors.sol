@@ -42,4 +42,8 @@ interface IBaseMERAWalletErrors {
     error RoleFrozen(MERAWalletTypes.Role role);
     /// @dev Caller is not allowed to change freeze flags (wrong role for this flag).
     error FreezeActionNotAuthorized();
+    error NotLifeController();
+    error LifeHeartbeatTimeoutZero();
+    error LifeHeartbeatExpired(uint256 lastHeartbeatAt, uint256 timeout, uint256 currentTime);
+    error EmergencyMustStayLifeController();
 }

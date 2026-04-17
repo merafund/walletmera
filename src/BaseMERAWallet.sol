@@ -19,6 +19,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     address public eip1271Signer;
 
     uint256 public globalTimelock;
+    uint256 public lifeHeartbeatTimeout;
+    uint256 public lastLifeHeartbeatAt;
+    bool public lifeControlEnabled;
     bool public frozenPrimary;
     bool public frozenBackup;
     mapping(address target => MERAWalletTypes.CallPathPolicy policy) public callPolicyByTarget;
@@ -33,10 +36,19 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     mapping(address checker => uint256 indexPlusOne) internal _requiredBeforeIndexPlusOne;
     mapping(address checker => uint256 indexPlusOne) internal _requiredAfterIndexPlusOne;
+    mapping(address controller => bool) internal _isLifeController;
+    mapping(address controller => bool) internal _isManualLifeController;
+    mapping(address controller => uint256 indexPlusOne) internal _lifeControllerIndexPlusOne;
+    address[] internal _lifeControllers;
 
     /// @dev Emergency may call directly; the wallet may call itself (e.g. batched executeTransaction) for gated config.
     modifier onlyEmergencyOrSelf() {
         require(msg.sender == emergency || msg.sender == address(this), NotEmergency());
+        _;
+    }
+
+    modifier whenLifeAlive() {
+        _requireLifeAliveForStateChanges();
         _;
     }
 
@@ -57,13 +69,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         primary = initialPrimary;
         backup = initialBackup;
         emergency = initialEmergency;
+        _setLifeController(initialEmergency, true, msg.sender);
+        lastLifeHeartbeatAt = block.timestamp;
 
         _set1271Signer(initialSigner);
     }
 
     receive() external payable override {}
 
-    function setPrimary(address newPrimary) external override {
+    function setPrimary(address newPrimary) external override whenLifeAlive {
         require(newPrimary != address(0), InvalidAddress());
 
         _requireCoreRoleNotFrozen(_coreRole(msg.sender));
@@ -75,7 +89,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PrimaryUpdated(previousPrimary, newPrimary, msg.sender);
     }
 
-    function setBackup(address newBackup) external override {
+    function setBackup(address newBackup) external override whenLifeAlive {
         require(newBackup != address(0), InvalidAddress());
 
         _requireCoreRoleNotFrozen(_coreRole(msg.sender));
@@ -87,25 +101,82 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit BackupUpdated(previousBackup, newBackup, msg.sender);
     }
 
-    function setEmergency(address newEmergency) external override {
+    function setEmergency(address newEmergency) external override whenLifeAlive {
         require(_canSetEmergency(msg.sender), NotEmergency());
         require(newEmergency != address(0), InvalidAddress());
 
         address previousEmergency = emergency;
         emergency = newEmergency;
+        if (previousEmergency != newEmergency) {
+            if (!_isManualLifeController[previousEmergency]) {
+                _setLifeController(previousEmergency, false, msg.sender);
+            }
+            _setLifeController(newEmergency, true, msg.sender);
+        }
         emit EmergencyUpdated(previousEmergency, newEmergency, msg.sender);
     }
 
-    function setGlobalTimelock(uint256 delay) external override onlyEmergencyOrSelf {
+    function setGlobalTimelock(uint256 delay) external override onlyEmergencyOrSelf whenLifeAlive {
         uint256 previousDelay = globalTimelock;
         globalTimelock = delay;
         emit GlobalTimelockUpdated(previousDelay, delay, msg.sender);
+    }
+
+    function setLifeControl(bool enabled, uint256 timeout) external override onlyEmergencyOrSelf whenLifeAlive {
+        require(msg.sender == emergency, NotEmergency());
+        if (enabled) {
+            require(timeout != 0, LifeHeartbeatTimeoutZero());
+            _setLifeController(emergency, true, msg.sender);
+            if (!lifeControlEnabled) {
+                lastLifeHeartbeatAt = block.timestamp;
+            }
+        }
+
+        lifeControlEnabled = enabled;
+        lifeHeartbeatTimeout = timeout;
+        emit LifeControlUpdated(enabled, timeout, msg.sender);
+    }
+
+    function setLifeControllers(address[] calldata controllers, bool enabled)
+        external
+        override
+        onlyEmergencyOrSelf
+        whenLifeAlive
+    {
+        require(msg.sender == emergency, NotEmergency());
+        uint256 controllersLength = controllers.length;
+        for (uint256 i = 0; i < controllersLength;) {
+            address controller = controllers[i];
+            require(controller != address(0), InvalidAddress());
+
+            if (enabled) {
+                _isManualLifeController[controller] = true;
+                _setLifeController(controller, true, msg.sender);
+            } else {
+                if (controller == emergency) {
+                    revert EmergencyMustStayLifeController();
+                }
+                _isManualLifeController[controller] = false;
+                _setLifeController(controller, false, msg.sender);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function confirmAlive() external override {
+        require(_isLifeController[msg.sender], NotLifeController());
+        lastLifeHeartbeatAt = block.timestamp;
+        emit LifeHeartbeatConfirmed(msg.sender, block.timestamp);
     }
 
     function setTargetCallPolicy(address target, MERAWalletTypes.CallPathPolicy calldata policy)
         external
         override
         onlyEmergencyOrSelf
+        whenLifeAlive
     {
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyByTarget[target];
         callPolicyByTarget[target] = policy;
@@ -116,13 +187,14 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         external
         override
         onlyEmergencyOrSelf
+        whenLifeAlive
     {
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyBySelector[selector];
         callPolicyBySelector[selector] = policy;
         emit SelectorCallPolicyUpdated(selector, previousPolicy, policy, msg.sender);
     }
 
-    function setRequiredChecker(address checker, bool enabled) external override onlyEmergencyOrSelf {
+    function setRequiredChecker(address checker, bool enabled) external override onlyEmergencyOrSelf whenLifeAlive {
         require(checker != address(0), InvalidCheckerAddress());
 
         bool wasConfigured = _requiredBeforeIndexPlusOne[checker] != 0 || _requiredAfterIndexPlusOne[checker] != 0;
@@ -144,7 +216,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit RequiredCheckerUpdated(checker, enableBefore, enableAfter, msg.sender);
     }
 
-    function setWhitelistedChecker(address checker, bool allowed) external override onlyEmergencyOrSelf {
+    function setWhitelistedChecker(address checker, bool allowed) external override onlyEmergencyOrSelf whenLifeAlive {
         if (!allowed) {
             delete whitelistedChecker[checker];
             emit WhitelistCheckerUpdated(checker, false, false, false, msg.sender);
@@ -168,7 +240,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     /// @notice Enable or disable a veto agent (may call {vetoPending} on any pending op). Only core controllers may configure.
     /// @dev On enable, `removalMinRole` is set to `_coreRole(msg.sender)` so only that role or higher may later disable.
-    function setControllerAgent(address agent, bool enabled) external override {
+    function setControllerAgent(address agent, bool enabled) external override whenLifeAlive {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         require(callerCore != MERAWalletTypes.Role.None, NotCoreController());
         _requireCoreRoleNotFrozen(callerCore);
@@ -192,7 +264,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Only Backup or Emergency may change primary-level freeze; Primary cannot.
-    function setFrozenPrimary(bool frozen) external override {
+    function setFrozenPrimary(bool frozen) external override whenLifeAlive {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         require(
             callerCore == MERAWalletTypes.Role.Backup || callerCore == MERAWalletTypes.Role.Emergency,
@@ -206,7 +278,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Only Emergency may change backup-level freeze.
-    function setFrozenBackup(bool frozen) external override {
+    function setFrozenBackup(bool frozen) external override whenLifeAlive {
         require(_coreRole(msg.sender) == MERAWalletTypes.Role.Emergency, FreezeActionNotAuthorized());
         if (frozenBackup == frozen) {
             return;
@@ -216,7 +288,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @notice Sets `frozenPrimary` to true; only enabled controller agents; cannot unfreeze.
-    function freezePrimaryByAgent() external override {
+    function freezePrimaryByAgent() external override whenLifeAlive {
         require(controllerAgents[msg.sender].enabled, Unauthorized());
         if (frozenPrimary) {
             return;
@@ -231,6 +303,14 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function getRequiredAfterCheckers() external view override returns (address[] memory) {
         return _requiredAfterList;
+    }
+
+    function isLifeController(address controller) external view override returns (bool) {
+        return _isLifeController[controller];
+    }
+
+    function getLifeControllers() external view override returns (address[] memory) {
+        return _lifeControllers;
     }
 
     function operations(bytes32 operationId)
@@ -266,7 +346,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         );
     }
 
-    function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
+    function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
+        external
+        payable
+        override
+        whenLifeAlive
+    {
         MERAWalletTypes.Role callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
         MERAWalletTypes.Call[] memory memoryCalls = calls;
@@ -286,6 +371,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
         external
         override
+        whenLifeAlive
         returns (bytes32 operationId)
     {
         (operationId,,,) = _proposeTransaction(calls, nonce);
@@ -295,7 +381,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         MERAWalletTypes.Call[] calldata calls,
         uint256 nonce,
         MERAWalletTypes.RelayProposeConfig calldata relayConfig
-    ) external payable override returns (bytes32 operationId) {
+    ) external payable override whenLifeAlive returns (bytes32 operationId) {
         MERAWalletTypes.RelayProposeConfig memory relayConfigMem = relayConfig;
         _validateRelayConfig(relayConfigMem, msg.value);
 
@@ -303,7 +389,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _saveRelayOperation(operationId, relayConfigMem, msg.value);
     }
 
-    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
+        external
+        payable
+        override
+        whenLifeAlive
+    {
         address[] memory emptyWhitelist = new address[](0);
         _executePending(calls, nonce, emptyWhitelist);
     }
@@ -312,6 +403,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         external
         payable
         override
+        whenLifeAlive
     {
         address[] memory whitelist = executorWhitelist;
         _executePending(calls, nonce, whitelist);
@@ -403,7 +495,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionExecuted(operationId, nonce, msg.sender);
     }
 
-    function vetoPending(bytes32 operationId) external override {
+    function vetoPending(bytes32 operationId) external override whenLifeAlive {
         require(controllerAgents[msg.sender].enabled, Unauthorized());
         require(_coreRole(msg.sender) == MERAWalletTypes.Role.None, Unauthorized());
 
@@ -417,7 +509,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoed(operationId, operation.nonce, msg.sender);
     }
 
-    function clearVeto(bytes32 operationId) external override {
+    function clearVeto(bytes32 operationId) external override whenLifeAlive {
         MERAWalletTypes.Role callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
 
@@ -429,7 +521,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @notice Irreversible cancel: only unfrozen Primary; must be the operation creator (proposer). Backup/Emergency/agents cannot call.
-    function cancelPending(bytes32 operationId) external override {
+    function cancelPending(bytes32 operationId) external override whenLifeAlive {
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
         require(
@@ -471,7 +563,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return _getRequiredDelay(callerRole, memoryCalls);
     }
 
-    function set1271Signer(address signer) external override onlyEmergencyOrSelf {
+    function set1271Signer(address signer) external override onlyEmergencyOrSelf whenLifeAlive {
         _set1271Signer(signer);
     }
 
@@ -507,6 +599,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 nonce) internal {
+        _requireLifeAliveForStateChanges();
         MERAWalletTypes.Role callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
         _validateCalls(calls);
@@ -658,6 +751,50 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         checkerList.pop();
         delete indexMap[checker];
+    }
+
+    function _setLifeController(address controller, bool enabled, address caller) internal {
+        bool current = _isLifeController[controller];
+        if (current == enabled) {
+            return;
+        }
+
+        if (enabled) {
+            _lifeControllers.push(controller);
+            _lifeControllerIndexPlusOne[controller] = _lifeControllers.length;
+            _isLifeController[controller] = true;
+            emit LifeControllerUpdated(controller, true, caller);
+            return;
+        }
+
+        uint256 indexPlusOne = _lifeControllerIndexPlusOne[controller];
+        if (indexPlusOne == 0) {
+            return;
+        }
+
+        uint256 index = indexPlusOne - 1;
+        uint256 lastIndex = _lifeControllers.length - 1;
+        if (index != lastIndex) {
+            address lastController = _lifeControllers[lastIndex];
+            _lifeControllers[index] = lastController;
+            _lifeControllerIndexPlusOne[lastController] = index + 1;
+        }
+
+        _lifeControllers.pop();
+        delete _lifeControllerIndexPlusOne[controller];
+        delete _isLifeController[controller];
+        emit LifeControllerUpdated(controller, false, caller);
+    }
+
+    function _requireLifeAliveForStateChanges() internal view {
+        if (!lifeControlEnabled) {
+            return;
+        }
+
+        require(
+            lastLifeHeartbeatAt != 0 && block.timestamp <= lastLifeHeartbeatAt + lifeHeartbeatTimeout,
+            LifeHeartbeatExpired(lastLifeHeartbeatAt, lifeHeartbeatTimeout, block.timestamp)
+        );
     }
 
     function _validateCallWhitelist(MERAWalletTypes.Call[] memory calls) internal view {
