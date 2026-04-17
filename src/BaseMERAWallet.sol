@@ -10,6 +10,9 @@ import {IMERAWalletTransactionChecker} from "./interfaces/extensions/IMERAWallet
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors {
+    /// @dev Optional recovery / multisig; address(0) disables guardian-only path for {setEmergency}.
+    address public immutable guardian;
+
     address public primary;
     address public backup;
     address public emergency;
@@ -36,11 +39,19 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _;
     }
 
-    constructor(address initialPrimary, address initialBackup, address initialEmergency, address initialSigner) {
+    constructor(
+        address initialPrimary,
+        address initialBackup,
+        address initialEmergency,
+        address initialSigner,
+        address initialGuardian
+    ) {
         require(
             initialPrimary != address(0) && initialBackup != address(0) && initialEmergency != address(0),
             InvalidAddress()
         );
+
+        guardian = initialGuardian;
 
         primary = initialPrimary;
         backup = initialBackup;
@@ -76,7 +87,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function setEmergency(address newEmergency) external override {
-        _onlyEmergency();
+        require(_canSetEmergency(msg.sender), NotEmergency());
         require(newEmergency != address(0), InvalidAddress());
 
         address previousEmergency = emergency;
@@ -650,8 +661,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(role != MERAWalletTypes.Role.Backup || !frozenBackup, RoleFrozen(MERAWalletTypes.Role.Backup));
     }
 
-    function _onlyEmergency() internal view {
-        require(msg.sender == emergency, NotEmergency());
+    /// @dev Current emergency or optional guardian may rotate the emergency address.
+    function _canSetEmergency(address caller) internal view returns (bool) {
+        if (caller == emergency) {
+            return true;
+        }
+        if (guardian != address(0) && caller == guardian) {
+            return true;
+        }
+        return false;
     }
 
     /// @dev Role from the wallet's fixed controller addresses only (ignores controller agent mapping).

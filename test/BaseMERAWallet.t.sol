@@ -37,8 +37,8 @@ contract BaseMERAWalletTest is Test {
     ConfigurableTransactionChecker internal checkerNoHooks;
 
     function setUp() public {
-        wallet = new BaseMERAWallet(primary, backup, emergency, address(0));
-        walletWithExtensions = new MERAWalletFull(primary, backup, emergency, address(0));
+        wallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
+        walletWithExtensions = new MERAWalletFull(primary, backup, emergency, address(0), address(0));
         receiver = new ReceiverMock();
         token = new ERC20Mock();
         targetWhitelistChecker = new MERAWalletTargetWhitelistChecker(emergency);
@@ -86,6 +86,23 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.primary(), newPrimary);
         assertEq(wallet.backup(), newBackup);
         assertEq(wallet.emergency(), newEmergency);
+    }
+
+    function test_SetEmergency_GuardianCanRotate() public {
+        address guardianAddr = vm.addr(0xCAFE);
+        BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
+
+        address newEmergency = address(0xE2E2);
+        vm.prank(guardianAddr);
+        w.setEmergency(newEmergency);
+        assertEq(w.emergency(), newEmergency);
+    }
+
+    function test_SetEmergency_OutsiderRevertsWithoutGuardian() public {
+        address newEmergency = address(0xE4E4);
+        vm.prank(outsider);
+        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        wallet.setEmergency(newEmergency);
     }
 
     function test_ExecuteTransaction_ImmediateWhenNoTimelockConfigured() public {

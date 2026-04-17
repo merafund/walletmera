@@ -33,7 +33,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     function setUp() public {
         vm.warp(1_000_000);
 
-        wallet = new BaseMERAWallet(primary, vm.addr(0xB0B), emergency, address(0));
+        wallet = new BaseMERAWallet(primary, vm.addr(0xB0B), emergency, address(0), address(0));
         checker = new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
         tokenA = new ERC20Mock();
         tokenB = new ERC20Mock();

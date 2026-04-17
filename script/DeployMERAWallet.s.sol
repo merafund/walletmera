@@ -11,9 +11,10 @@ contract DeployMERAWallet is Script {
         address backup = vm.envAddress("WALLET_BACKUP");
         address emergency = vm.envAddress("WALLET_EMERGENCY");
         address eip1271Signer = vm.envOr("WALLET_EIP1271_SIGNER", address(0));
+        address guardianAddr = vm.envOr("WALLET_GUARDIAN", address(0));
 
         vm.startBroadcast();
-        wallet = new MERAWalletFull(primary, backup, emergency, eip1271Signer);
+        wallet = new MERAWalletFull(primary, backup, emergency, eip1271Signer, guardianAddr);
         vm.stopBroadcast();
 
         console2.log("MERAWalletFull deployed at:", address(wallet));
