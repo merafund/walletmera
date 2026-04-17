@@ -154,7 +154,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit WhitelistCheckerUpdated(checker, true, enableBefore, enableAfter, msg.sender);
     }
 
-    /// @notice Enable or disable a veto agent (may call {cancelPending} on any pending op). Only core controllers may configure.
+    /// @notice Enable or disable a veto agent (may call {vetoPending} on any pending op). Only core controllers may configure.
     /// @dev On enable, `removalMinRole` is set to `_coreRole(msg.sender)` so only that role or higher may later disable.
     function setControllerAgent(address agent, bool enabled) external override {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
@@ -253,8 +253,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         uint256 requiredDelay = _getRequiredDelay(callerRole, memoryCalls);
         require(requiredDelay != 0, ZeroDelayNotProposable());
 
+        MERAWalletTypes.OperationStatus existing = operations[operationId].status;
         require(
-            operations[operationId].status != MERAWalletTypes.OperationStatus.Pending,
+            existing != MERAWalletTypes.OperationStatus.Pending && existing != MERAWalletTypes.OperationStatus.Vetoed,
             OperationAlreadyPending(operationId)
         );
 
@@ -282,6 +283,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         bytes32 operationId = _computeOperationId(memoryCalls, nonce);
         MERAWalletTypes.PendingOperation storage operation = operations[operationId];
 
+        if (operation.status == MERAWalletTypes.OperationStatus.Vetoed) {
+            revert OperationVetoed(operationId);
+        }
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
         require(block.timestamp >= operation.executeAfter, TimelockNotExpired(operation.executeAfter, block.timestamp));
 
@@ -292,19 +296,45 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionExecuted(operationId, nonce, msg.sender);
     }
 
-    function cancelPending(bytes32 operationId) external override {
+    function vetoPending(bytes32 operationId) external override {
+        require(controllerAgents[msg.sender].enabled, Unauthorized());
+        require(_coreRole(msg.sender) == MERAWalletTypes.Role.None, Unauthorized());
+
         MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        if (operation.status == MERAWalletTypes.OperationStatus.Vetoed) {
+            revert OperationAlreadyVetoed(operationId);
+        }
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
 
-        if (_coreRole(msg.sender) == MERAWalletTypes.Role.None && controllerAgents[msg.sender].enabled) {
-            operation.status = MERAWalletTypes.OperationStatus.Cancelled;
-            emit PendingTransactionCancelled(operationId, operation.nonce, msg.sender);
-            return;
-        }
+        operation.status = MERAWalletTypes.OperationStatus.Vetoed;
+        emit PendingTransactionVetoed(operationId, operation.nonce, msg.sender);
+    }
+
+    function clearVeto(bytes32 operationId) external override {
+        MERAWalletTypes.Role callerRole = _requireController();
+        _requireCoreRoleNotFrozen(callerRole);
+
+        MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        require(operation.status == MERAWalletTypes.OperationStatus.Vetoed, OperationNotVetoed(operationId));
+
+        operation.status = MERAWalletTypes.OperationStatus.Pending;
+        emit PendingTransactionVetoCleared(operationId, operation.nonce, msg.sender);
+    }
+
+    /// @notice Irreversible cancel: only unfrozen Primary; must be the operation creator (proposer). Backup/Emergency/agents cannot call.
+    function cancelPending(bytes32 operationId) external override {
+        MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        require(
+            operation.status == MERAWalletTypes.OperationStatus.Pending
+                || operation.status == MERAWalletTypes.OperationStatus.Vetoed,
+            OperationNotPending(operationId)
+        );
 
         MERAWalletTypes.Role callerRole = _requireController();
-        bool isCreator = operation.creator == msg.sender;
-        require(isCreator || _canOverrideRole(callerRole, operation.creatorRole), CannotCancelOperation(operationId));
+        require(callerRole == MERAWalletTypes.Role.Primary, CancelPendingPrimaryOnly());
+        _requireCoreRoleNotFrozen(callerRole);
+        // Primary-only caller: only the proposer may cancel (override is for Backup/Emergency, not used here).
+        require(operation.creator == msg.sender, CannotCancelOperation(operationId));
 
         operation.status = MERAWalletTypes.OperationStatus.Cancelled;
         emit PendingTransactionCancelled(operationId, operation.nonce, msg.sender);

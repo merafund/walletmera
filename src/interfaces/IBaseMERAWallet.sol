@@ -40,7 +40,7 @@ interface IBaseMERAWallet {
     /// @param enabled If true, registers or syncs required checkers from `checker.hookModes()`. If false, removes `checker` from required lists.
     function setRequiredChecker(address checker, bool enabled) external;
     function setWhitelistedChecker(address checker, bool allowed) external;
-    /// @notice Enable or disable a veto agent. On enable, minimum removal rank is derived from the caller's core role (primary / backup / emergency).
+    /// @notice Enable or disable a veto agent (may {vetoPending}, not {cancelPending}). On enable, minimum removal rank is derived from the caller's core role.
     function setControllerAgent(address agent, bool enabled) external;
     /// @notice Backup or Emergency may set; Primary cannot. Controller agents use {freezePrimaryByAgent} to freeze only.
     function setFrozenPrimary(bool frozen) external;
@@ -54,6 +54,9 @@ interface IBaseMERAWallet {
         external
         returns (bytes32 operationId);
     function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
+    function vetoPending(bytes32 operationId) external;
+    function clearVeto(bytes32 operationId) external;
+    /// @notice Only unfrozen Primary who proposed the operation; agents use {vetoPending} instead.
     function cancelPending(bytes32 operationId) external;
 
     function getOperationId(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external view returns (bytes32);

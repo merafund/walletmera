@@ -20,6 +20,10 @@ interface IBaseMERAWalletErrors {
     error OperationNotPending(bytes32 operationId);
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
+    error CancelPendingPrimaryOnly();
+    error OperationVetoed(bytes32 operationId);
+    error OperationAlreadyVetoed(bytes32 operationId);
+    error OperationNotVetoed(bytes32 operationId);
     error CallExecutionFailed(uint256 index, bytes revertData);
     error CheckerNotWhitelisted(address checker, uint256 callIndex);
     error NoopCheckerConfig();

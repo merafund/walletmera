@@ -40,11 +40,13 @@ library MERAWalletTypes {
         Emergency
     }
 
+    /// @dev Values appended at the end only (storage compatibility). Vetoed is a timelock pause applied by agents until cleared by a controller.
     enum OperationStatus {
         None,
         Pending,
         Executed,
-        Cancelled
+        Cancelled,
+        Vetoed
     }
 
     struct PendingOperation {
@@ -56,8 +58,8 @@ library MERAWalletTypes {
         OperationStatus status;
     }
 
-    /// @notice Optional veto delegate: may cancel any pending operation via {cancelPending}.
-    /// @dev `removalMinRole` is set by the wallet on assign: only core controllers at or above this rank may disable the agent.
+    /// @notice Optional veto delegate: may apply {vetoPending} on any pending operation (not {cancelPending}).
+    /// @dev `removalMinRole` is set by the wallet on assign: only core controllers at or above this rank may disable the agent (veto-only delegate).
     struct ControllerAgent {
         bool enabled;
         Role removalMinRole;
