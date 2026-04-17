@@ -26,7 +26,11 @@ interface IBaseMERAWallet {
             uint64 createdAt,
             uint64 executeAfter,
             uint256 nonce,
-            MERAWalletTypes.OperationStatus status
+            MERAWalletTypes.OperationStatus status,
+            MERAWalletTypes.RelayExecutorPolicy relayPolicy,
+            uint256 relayReward,
+            address designatedExecutor,
+            bytes32 executorSetHash
         );
     function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role removalMinRole);
     function frozenPrimary() external view returns (bool);
@@ -54,7 +58,15 @@ interface IBaseMERAWallet {
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
         external
         returns (bytes32 operationId);
+    function proposeTransactionWithRelay(
+        MERAWalletTypes.Call[] calldata calls,
+        uint256 nonce,
+        MERAWalletTypes.RelayProposeConfig calldata relayConfig
+    ) external payable returns (bytes32 operationId);
     function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce, address[] calldata executorWhitelist)
+        external
+        payable;
     function vetoPending(bytes32 operationId) external;
     function clearVeto(bytes32 operationId) external;
     /// @notice Only unfrozen Primary who proposed the operation; agents use {vetoPending} instead.

@@ -17,6 +17,7 @@ interface IBaseMERAWalletErrors {
     error TimelockRequired(uint256 requiredDelay);
     error CallPathForbiddenForRole(MERAWalletTypes.Role role);
     error OperationAlreadyPending(bytes32 operationId);
+    error OperationAlreadyUsed(bytes32 operationId);
     error OperationNotPending(bytes32 operationId);
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
@@ -24,6 +25,13 @@ interface IBaseMERAWalletErrors {
     error OperationVetoed(bytes32 operationId);
     error OperationAlreadyVetoed(bytes32 operationId);
     error OperationNotVetoed(bytes32 operationId);
+    error InvalidRelayConfig();
+    error RelayRewardNotAllowed();
+    error RelayRewardRequired();
+    error RelayExecutorNotAllowed(address executor);
+    error CoreExecutorNotAllowed(address executor);
+    error InvalidExecutorWhitelist();
+    error RelayRewardTransferFailed(address recipient, uint256 amount);
     error CallExecutionFailed(uint256 index, bytes revertData);
     error CheckerNotWhitelisted(address checker, uint256 callIndex);
     error NoopCheckerConfig();

@@ -49,6 +49,21 @@ library MERAWalletTypes {
         Vetoed
     }
 
+    /// @notice Policy that controls who is allowed to execute a pending operation.
+    enum RelayExecutorPolicy {
+        CoreExecute,
+        Anyone,
+        Designated,
+        Whitelist
+    }
+
+    /// @notice Relay configuration used by {proposeTransactionWithRelay}.
+    struct RelayProposeConfig {
+        RelayExecutorPolicy relayPolicy;
+        address designatedExecutor;
+        bytes32 executorSetHash;
+    }
+
     struct PendingOperation {
         address creator;
         Role creatorRole;
@@ -56,6 +71,14 @@ library MERAWalletTypes {
         uint64 executeAfter;
         uint256 nonce;
         OperationStatus status;
+    }
+
+    /// @notice Relay execution metadata stored separately to avoid bloating base pending operation storage.
+    struct RelayOperation {
+        RelayExecutorPolicy relayPolicy;
+        uint256 relayReward;
+        address designatedExecutor;
+        bytes32 executorSetHash;
     }
 
     /// @notice Optional veto delegate: may apply {vetoPending} on any pending operation (not {cancelPending}).

@@ -23,7 +23,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     bool public frozenBackup;
     mapping(address target => MERAWalletTypes.CallPathPolicy policy) public callPolicyByTarget;
     mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy) public callPolicyBySelector;
-    mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) public operations;
+    mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) internal _operations;
+    mapping(bytes32 operationId => MERAWalletTypes.RelayOperation relayOperation) internal _relayOperations;
     mapping(address checker => MERAWalletTypes.WhitelistChecker) public whitelistedChecker;
     mapping(address agent => MERAWalletTypes.ControllerAgent) public controllerAgents;
 
@@ -232,6 +233,39 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return _requiredAfterList;
     }
 
+    function operations(bytes32 operationId)
+        external
+        view
+        override
+        returns (
+            address creator,
+            MERAWalletTypes.Role creatorRole,
+            uint64 createdAt,
+            uint64 executeAfter,
+            uint256 nonce,
+            MERAWalletTypes.OperationStatus status,
+            MERAWalletTypes.RelayExecutorPolicy relayPolicy,
+            uint256 relayReward,
+            address designatedExecutor,
+            bytes32 executorSetHash
+        )
+    {
+        MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
+        MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
+        return (
+            operation.creator,
+            operation.creatorRole,
+            operation.createdAt,
+            operation.executeAfter,
+            operation.nonce,
+            operation.status,
+            relayOperation.relayPolicy,
+            relayOperation.relayReward,
+            relayOperation.designatedExecutor,
+            relayOperation.executorSetHash
+        );
+    }
+
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
         MERAWalletTypes.Role callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
@@ -254,24 +288,54 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         returns (bytes32 operationId)
     {
-        MERAWalletTypes.Role callerRole = _requireController();
+        (operationId,,,) = _proposeTransaction(calls, nonce);
+    }
+
+    function proposeTransactionWithRelay(
+        MERAWalletTypes.Call[] calldata calls,
+        uint256 nonce,
+        MERAWalletTypes.RelayProposeConfig calldata relayConfig
+    ) external payable override returns (bytes32 operationId) {
+        MERAWalletTypes.RelayProposeConfig memory relayConfigMem = relayConfig;
+        _validateRelayConfig(relayConfigMem, msg.value);
+
+        (operationId,,,) = _proposeTransaction(calls, nonce);
+        _saveRelayOperation(operationId, relayConfigMem, msg.value);
+    }
+
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
+        address[] memory emptyWhitelist = new address[](0);
+        _executePending(calls, nonce, emptyWhitelist);
+    }
+
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce, address[] calldata executorWhitelist)
+        external
+        payable
+        override
+    {
+        address[] memory whitelist = executorWhitelist;
+        _executePending(calls, nonce, whitelist);
+    }
+
+    function _proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
+        internal
+        returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
+    {
+        callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
         MERAWalletTypes.Call[] memory memoryCalls = calls;
 
         _validateCalls(memoryCalls);
 
         operationId = _computeOperationId(memoryCalls, nonce);
-        uint256 requiredDelay = _getRequiredDelay(callerRole, memoryCalls);
+        requiredDelay = _getRequiredDelay(callerRole, memoryCalls);
         require(requiredDelay != 0, ZeroDelayNotProposable());
 
-        MERAWalletTypes.OperationStatus existing = operations[operationId].status;
-        require(
-            existing != MERAWalletTypes.OperationStatus.Pending && existing != MERAWalletTypes.OperationStatus.Vetoed,
-            OperationAlreadyPending(operationId)
-        );
+        MERAWalletTypes.OperationStatus existing = _operations[operationId].status;
+        require(existing == MERAWalletTypes.OperationStatus.None, OperationAlreadyUsed(operationId));
 
-        uint256 executeAfter = block.timestamp + requiredDelay;
-        operations[operationId] = MERAWalletTypes.PendingOperation({
+        executeAfter = block.timestamp + requiredDelay;
+        _operations[operationId] = MERAWalletTypes.PendingOperation({
             creator: msg.sender,
             creatorRole: callerRole,
             createdAt: uint64(block.timestamp),
@@ -285,14 +349,36 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit TransactionProposed(operationId, nonce, msg.sender, callerRole, executeAfter, requiredDelay);
     }
 
-    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
-        MERAWalletTypes.Role callerRole = _requireController();
-        _requireCoreRoleNotFrozen(callerRole);
+    function _saveRelayOperation(
+        bytes32 operationId,
+        MERAWalletTypes.RelayProposeConfig memory relayConfig,
+        uint256 relayReward
+    ) internal {
+        _relayOperations[operationId] =
+            MERAWalletTypes.RelayOperation({
+                relayPolicy: relayConfig.relayPolicy,
+                relayReward: relayReward,
+                designatedExecutor: relayConfig.designatedExecutor,
+                executorSetHash: relayConfig.executorSetHash
+            });
+        emit RelayOperationSaved(
+            operationId,
+            relayConfig.relayPolicy,
+            relayReward,
+            relayConfig.designatedExecutor,
+            relayConfig.executorSetHash
+        );
+    }
+
+    function _executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce, address[] memory executorWhitelist)
+        internal
+    {
         MERAWalletTypes.Call[] memory memoryCalls = calls;
         _validateCalls(memoryCalls);
 
         bytes32 operationId = _computeOperationId(memoryCalls, nonce);
-        MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
+        MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
 
         if (operation.status == MERAWalletTypes.OperationStatus.Vetoed) {
             revert OperationVetoed(operationId);
@@ -300,9 +386,19 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
         require(block.timestamp >= operation.executeAfter, TimelockNotExpired(operation.executeAfter, block.timestamp));
 
+        if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
+            require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
+            MERAWalletTypes.Role callerRole = _requireController();
+            _requireCoreRoleNotFrozen(callerRole);
+        } else {
+            require(!_isCoreController(msg.sender), CoreExecutorNotAllowed(msg.sender));
+            _validateRelayExecutor(relayOperation, executorWhitelist);
+        }
+
         operation.status = MERAWalletTypes.OperationStatus.Executed;
 
         _executeCallsWithHooks(memoryCalls, operationId);
+        _payoutRelayReward(relayOperation);
 
         emit PendingTransactionExecuted(operationId, nonce, msg.sender);
     }
@@ -311,7 +407,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(controllerAgents[msg.sender].enabled, Unauthorized());
         require(_coreRole(msg.sender) == MERAWalletTypes.Role.None, Unauthorized());
 
-        MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         if (operation.status == MERAWalletTypes.OperationStatus.Vetoed) {
             revert OperationAlreadyVetoed(operationId);
         }
@@ -325,7 +421,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         MERAWalletTypes.Role callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
 
-        MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         require(operation.status == MERAWalletTypes.OperationStatus.Vetoed, OperationNotVetoed(operationId));
 
         operation.status = MERAWalletTypes.OperationStatus.Pending;
@@ -334,7 +430,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     /// @notice Irreversible cancel: only unfrozen Primary; must be the operation creator (proposer). Backup/Emergency/agents cannot call.
     function cancelPending(bytes32 operationId) external override {
-        MERAWalletTypes.PendingOperation storage operation = operations[operationId];
+        MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
+        MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
         require(
             operation.status == MERAWalletTypes.OperationStatus.Pending
                 || operation.status == MERAWalletTypes.OperationStatus.Vetoed,
@@ -347,6 +444,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         // Primary-only caller: only the proposer may cancel (override is for Backup/Emergency, not used here).
         require(operation.creator == msg.sender, CannotCancelOperation(operationId));
 
+        _refundRelayReward(operation.creator, relayOperation.relayReward);
+        relayOperation.relayReward = 0;
         operation.status = MERAWalletTypes.OperationStatus.Cancelled;
         emit PendingTransactionCancelled(operationId, operation.nonce, msg.sender);
     }
@@ -670,6 +769,106 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return true;
         }
         return false;
+    }
+
+    function _validateRelayConfig(MERAWalletTypes.RelayProposeConfig memory relayConfig, uint256 relayReward)
+        internal
+        pure
+    {
+        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
+            require(relayReward == 0, RelayRewardNotAllowed());
+            require(
+                relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),
+                InvalidRelayConfig()
+            );
+            return;
+        }
+
+        require(relayReward != 0, RelayRewardRequired());
+
+        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Anyone) {
+            require(
+                relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),
+                InvalidRelayConfig()
+            );
+            return;
+        }
+        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Designated) {
+            require(
+                relayConfig.designatedExecutor != address(0) && relayConfig.executorSetHash == bytes32(0),
+                InvalidRelayConfig()
+            );
+            return;
+        }
+        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Whitelist) {
+            require(
+                relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash != bytes32(0),
+                InvalidRelayConfig()
+            );
+            return;
+        }
+
+        revert InvalidRelayConfig();
+    }
+
+    function _validateRelayExecutor(
+        MERAWalletTypes.RelayOperation storage relayOperation,
+        address[] memory executorWhitelist
+    ) internal view {
+        if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Anyone) {
+            require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
+            return;
+        }
+
+        if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Designated) {
+            require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
+            require(msg.sender == relayOperation.designatedExecutor, RelayExecutorNotAllowed(msg.sender));
+            return;
+        }
+
+        if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Whitelist) {
+            require(
+                relayOperation.executorSetHash == keccak256(abi.encode(executorWhitelist)), InvalidExecutorWhitelist()
+            );
+            uint256 whitelistLength = executorWhitelist.length;
+            for (uint256 i = 0; i < whitelistLength;) {
+                if (executorWhitelist[i] == msg.sender) {
+                    return;
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+            revert RelayExecutorNotAllowed(msg.sender);
+        }
+
+        revert InvalidRelayConfig();
+    }
+
+    function _payoutRelayReward(MERAWalletTypes.RelayOperation storage relayOperation) internal {
+        uint256 reward = relayOperation.relayReward;
+        if (reward == 0) {
+            return;
+        }
+
+        relayOperation.relayReward = 0;
+        _transferReward(payable(msg.sender), reward);
+    }
+
+    function _refundRelayReward(address recipient, uint256 reward) internal {
+        if (reward == 0) {
+            return;
+        }
+        _transferReward(payable(recipient), reward);
+    }
+
+    function _transferReward(address payable recipient, uint256 amount) internal {
+        (bool success,) = recipient.call{value: amount}("");
+        require(success, RelayRewardTransferFailed(recipient, amount));
+    }
+
+    function _isCoreController(address account) internal view returns (bool) {
+        return _coreRole(account) != MERAWalletTypes.Role.None;
     }
 
     /// @dev Role from the wallet's fixed controller addresses only (ignores controller agent mapping).

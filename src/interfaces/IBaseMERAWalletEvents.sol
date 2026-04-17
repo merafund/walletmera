@@ -35,6 +35,13 @@ interface IBaseMERAWalletEvents {
         uint256 executeAfter,
         uint256 requiredDelay
     );
+    event RelayOperationSaved(
+        bytes32 indexed operationId,
+        MERAWalletTypes.RelayExecutorPolicy relayPolicy,
+        uint256 relayReward,
+        address designatedExecutor,
+        bytes32 executorSetHash
+    );
     event PendingTransactionExecuted(bytes32 indexed operationId, uint256 indexed nonce, address indexed executor);
     event PendingTransactionCancelled(bytes32 indexed operationId, uint256 indexed nonce, address indexed cancelledBy);
     event PendingTransactionVetoed(bytes32 indexed operationId, uint256 indexed nonce, address indexed vetoedBy);
