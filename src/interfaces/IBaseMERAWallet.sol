@@ -28,6 +28,8 @@ interface IBaseMERAWallet {
             MERAWalletTypes.OperationStatus status
         );
     function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role removalMinRole);
+    function frozenPrimary() external view returns (bool);
+    function frozenBackup() external view returns (bool);
 
     function setPrimary(address newPrimary) external;
     function setBackup(address newBackup) external;
@@ -40,6 +42,12 @@ interface IBaseMERAWallet {
     function setWhitelistedChecker(address checker, bool allowed) external;
     /// @notice Enable or disable a veto agent. On enable, minimum removal rank is derived from the caller's core role (primary / backup / emergency).
     function setControllerAgent(address agent, bool enabled) external;
+    /// @notice Backup or Emergency may set; Primary cannot. Controller agents use {freezePrimaryByAgent} to freeze only.
+    function setFrozenPrimary(bool frozen) external;
+    /// @notice Only Emergency may set backup-level freeze.
+    function setFrozenBackup(bool frozen) external;
+    /// @notice Enabled controller agent may set primary freeze to true only (no unfreeze).
+    function freezePrimaryByAgent() external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)

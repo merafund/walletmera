@@ -735,6 +735,239 @@ contract BaseMERAWalletTest is Test {
         assertEq(receiver.value(), 0);
     }
 
+    function test_Freeze_BackupAndEmergency_MayToggleFrozenPrimary() public {
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+        assertTrue(wallet.frozenPrimary());
+
+        vm.prank(emergency);
+        wallet.setFrozenPrimary(false);
+        assertFalse(wallet.frozenPrimary());
+    }
+
+    function test_Freeze_PrimaryCannotSetFrozenPrimary() public {
+        vm.prank(primary);
+        vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
+        wallet.setFrozenPrimary(true);
+    }
+
+    function test_Freeze_BackupCannotSetFrozenBackup() public {
+        vm.prank(backup);
+        vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
+        wallet.setFrozenBackup(true);
+    }
+
+    function test_Freeze_EmergencyMayToggleFrozenBackup() public {
+        vm.prank(emergency);
+        wallet.setFrozenBackup(true);
+        assertTrue(wallet.frozenBackup());
+
+        vm.prank(emergency);
+        wallet.setFrozenBackup(false);
+        assertFalse(wallet.frozenBackup());
+    }
+
+    function test_FrozenPrimary_PrimaryCannotExecuteOrProposeOrGetDelay() public {
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.executeTransaction(calls, 1);
+
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.proposeTransaction(calls, 2);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.getRequiredDelay(calls);
+    }
+
+    function test_FrozenPrimary_BackupCanExecute() public {
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 55));
+
+        vm.prank(backup);
+        wallet.executeTransaction(calls, 1);
+        assertEq(receiver.value(), 55);
+    }
+
+    function test_FrozenPrimary_PrimaryCannotSetPrimary_BackupCan() public {
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        address newPrimary = address(0x7001);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.setPrimary(newPrimary);
+
+        vm.prank(backup);
+        wallet.setPrimary(newPrimary);
+        assertEq(wallet.primary(), newPrimary);
+    }
+
+    function test_FrozenPrimary_PrimaryCannotSetControllerAgent_BackupCan() public {
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.setControllerAgent(agentAddr, true);
+
+        vm.prank(backup);
+        wallet.setControllerAgent(agentAddr, true);
+        (bool en,) = wallet.controllerAgents(agentAddr);
+        assertTrue(en);
+    }
+
+    function test_FrozenBackup_BackupCannotExecute_EmergencyCan() public {
+        vm.prank(emergency);
+        wallet.setFrozenBackup(true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 66));
+
+        vm.prank(backup);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Backup));
+        wallet.executeTransaction(calls, 1);
+
+        vm.prank(emergency);
+        wallet.executeTransaction(calls, 1);
+        assertEq(receiver.value(), 66);
+    }
+
+    function test_FrozenBoth_OnlyEmergencyExecutes() public {
+        vm.startPrank(emergency);
+        wallet.setFrozenPrimary(true);
+        wallet.setFrozenBackup(true);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 77));
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.executeTransaction(calls, 1);
+
+        vm.prank(backup);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Backup));
+        wallet.executeTransaction(calls, 2);
+
+        vm.prank(emergency);
+        wallet.executeTransaction(calls, 3);
+        assertEq(receiver.value(), 77);
+    }
+
+    function test_FreezePrimaryByAgent_SetsFrozen_AgentCannotUnfreeze() public {
+        vm.prank(backup);
+        wallet.setControllerAgent(agentAddr, true);
+
+        vm.prank(agentAddr);
+        wallet.freezePrimaryByAgent();
+        assertTrue(wallet.frozenPrimary());
+
+        vm.prank(agentAddr);
+        vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
+        wallet.setFrozenPrimary(false);
+
+        vm.prank(backup);
+        wallet.setFrozenPrimary(false);
+        assertFalse(wallet.frozenPrimary());
+    }
+
+    function test_FreezePrimaryByAgent_OutsiderReverts() public {
+        vm.prank(outsider);
+        vm.expectRevert(IBaseMERAWalletErrors.Unauthorized.selector);
+        wallet.freezePrimaryByAgent();
+    }
+
+    function test_FrozenPrimary_AgentCancelPending_StillWorks() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        wallet.setControllerAgent(agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 8));
+
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        vm.prank(agentAddr);
+        wallet.cancelPending(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus status) = wallet.operations(operationId);
+        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
+    }
+
+    function test_FrozenPrimary_Emergency_ConfigUnaffected() public {
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(3 days);
+        assertEq(wallet.globalTimelock(), 3 days);
+    }
+
+    function test_FrozenPrimary_BackupExecutePending_AfterPrimaryProposed() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 99));
+
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(backup);
+        wallet.setFrozenPrimary(true);
+
+        (,,, uint64 executeAfter,,) = wallet.operations(operationId);
+        vm.warp(executeAfter);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
+        wallet.executePending(calls, 1);
+
+        vm.prank(backup);
+        wallet.executePending(calls, 1);
+        assertEq(receiver.value(), 99);
+    }
+
+    function test_FrozenBackup_PrimaryCannotSetBackup_EmergencyCan() public {
+        vm.prank(emergency);
+        wallet.setFrozenBackup(true);
+
+        address newBackup = address(0x8002);
+
+        vm.prank(primary);
+        vm.expectRevert(IBaseMERAWalletErrors.NotAllowedRoleChange.selector);
+        wallet.setBackup(newBackup);
+
+        vm.prank(backup);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Backup));
+        wallet.setBackup(newBackup);
+
+        vm.prank(emergency);
+        wallet.setBackup(newBackup);
+        assertEq(wallet.backup(), newBackup);
+    }
+
     function _callPathPolicy(uint120 primaryDelay, bool primaryForbidden, uint120 backupDelay, bool backupForbidden)
         internal
         pure

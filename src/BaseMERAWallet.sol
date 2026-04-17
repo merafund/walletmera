@@ -16,6 +16,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     address public eip1271Signer;
 
     uint256 public globalTimelock;
+    bool public frozenPrimary;
+    bool public frozenBackup;
     mapping(address target => MERAWalletTypes.CallPathPolicy policy) public callPolicyByTarget;
     mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy) public callPolicyBySelector;
     mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) public operations;
@@ -52,6 +54,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setPrimary(address newPrimary) external override {
         require(newPrimary != address(0), InvalidAddress());
 
+        _requireCoreRoleNotFrozen(_coreRole(msg.sender));
+
         require(msg.sender == primary || msg.sender == backup || msg.sender == emergency, Unauthorized());
 
         address previousPrimary = primary;
@@ -61,6 +65,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function setBackup(address newBackup) external override {
         require(newBackup != address(0), InvalidAddress());
+
+        _requireCoreRoleNotFrozen(_coreRole(msg.sender));
 
         require(msg.sender == backup || msg.sender == emergency, NotAllowedRoleChange());
 
@@ -153,6 +159,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setControllerAgent(address agent, bool enabled) external override {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         require(callerCore != MERAWalletTypes.Role.None, NotCoreController());
+        _requireCoreRoleNotFrozen(callerCore);
 
         MERAWalletTypes.ControllerAgent storage stored = controllerAgents[agent];
 
@@ -172,6 +179,40 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit ControllerAgentUpdated(agent, true, stored.removalMinRole, msg.sender);
     }
 
+    /// @dev Only Backup or Emergency may change primary-level freeze; Primary cannot.
+    function setFrozenPrimary(bool frozen) external override {
+        MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
+        require(
+            callerCore == MERAWalletTypes.Role.Backup || callerCore == MERAWalletTypes.Role.Emergency,
+            FreezeActionNotAuthorized()
+        );
+        if (frozenPrimary == frozen) {
+            return;
+        }
+        frozenPrimary = frozen;
+        emit PrimaryFreezeUpdated(frozen, msg.sender);
+    }
+
+    /// @dev Only Emergency may change backup-level freeze.
+    function setFrozenBackup(bool frozen) external override {
+        require(_coreRole(msg.sender) == MERAWalletTypes.Role.Emergency, FreezeActionNotAuthorized());
+        if (frozenBackup == frozen) {
+            return;
+        }
+        frozenBackup = frozen;
+        emit BackupFreezeUpdated(frozen, msg.sender);
+    }
+
+    /// @notice Sets `frozenPrimary` to true; only enabled controller agents; cannot unfreeze.
+    function freezePrimaryByAgent() external override {
+        require(controllerAgents[msg.sender].enabled, Unauthorized());
+        if (frozenPrimary) {
+            return;
+        }
+        frozenPrimary = true;
+        emit PrimaryFreezeUpdated(true, msg.sender);
+    }
+
     function getRequiredBeforeCheckers() external view override returns (address[] memory) {
         return _requiredBeforeList;
     }
@@ -182,6 +223,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
         MERAWalletTypes.Role callerRole = _requireController();
+        _requireCoreRoleNotFrozen(callerRole);
         MERAWalletTypes.Call[] memory memoryCalls = calls;
 
         _validateCalls(memoryCalls);
@@ -202,6 +244,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         returns (bytes32 operationId)
     {
         MERAWalletTypes.Role callerRole = _requireController();
+        _requireCoreRoleNotFrozen(callerRole);
         MERAWalletTypes.Call[] memory memoryCalls = calls;
 
         _validateCalls(memoryCalls);
@@ -231,7 +274,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable override {
-        _requireController();
+        MERAWalletTypes.Role callerRole = _requireController();
+        _requireCoreRoleNotFrozen(callerRole);
         MERAWalletTypes.Call[] memory memoryCalls = calls;
         _validateCalls(memoryCalls);
 
@@ -280,6 +324,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view override returns (uint256) {
         MERAWalletTypes.Role callerRole = _coreRole(msg.sender);
         require(callerRole != MERAWalletTypes.Role.None, Unauthorized());
+        _requireCoreRoleNotFrozen(callerRole);
 
         MERAWalletTypes.Call[] memory memoryCalls = calls;
         _validateCalls(memoryCalls);
@@ -323,6 +368,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 nonce) internal {
         MERAWalletTypes.Role callerRole = _requireController();
+        _requireCoreRoleNotFrozen(callerRole);
         _validateCalls(calls);
 
         bytes32 operationId = _computeOperationId(calls, nonce);
@@ -566,6 +612,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function _requireController() internal view returns (MERAWalletTypes.Role role) {
         role = _coreRole(msg.sender);
         require(role != MERAWalletTypes.Role.None, Unauthorized());
+    }
+
+    /// @dev Core role must not be frozen for this action; Emergency and None pass without revert.
+    function _requireCoreRoleNotFrozen(MERAWalletTypes.Role role) internal view {
+        require(role != MERAWalletTypes.Role.Primary || !frozenPrimary, RoleFrozen(MERAWalletTypes.Role.Primary));
+        require(role != MERAWalletTypes.Role.Backup || !frozenBackup, RoleFrozen(MERAWalletTypes.Role.Backup));
     }
 
     function _onlyEmergency() internal view {

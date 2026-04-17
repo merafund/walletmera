@@ -42,4 +42,6 @@ interface IBaseMERAWalletEvents {
     event ControllerAgentUpdated(
         address indexed agent, bool enabled, MERAWalletTypes.Role removalMinRole, address indexed caller
     );
+    event PrimaryFreezeUpdated(bool frozen, address indexed caller);
+    event BackupFreezeUpdated(bool frozen, address indexed caller);
 }
