@@ -11,7 +11,7 @@ library MERAWalletConstants {
     /// @dev Bytes needed to read a function selector from ABI-encoded call `data`.
     uint256 internal constant FUNCTION_SELECTOR_LENGTH = 4;
 
-    // --- Role ranks ({_roleRank} ordering: Primary < Backup < Emergency) ---
+    // --- Role ranks (numeric: Primary < Backup < Emergency; {_roleRank} checks Emergency → Backup → Primary) ---
     uint256 internal constant ROLE_RANK_NONE = 0;
     uint256 internal constant ROLE_RANK_PRIMARY = 1;
     uint256 internal constant ROLE_RANK_BACKUP = 2;

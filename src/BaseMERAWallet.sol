@@ -1083,29 +1083,30 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Role from the wallet's fixed controller addresses only (ignores controller agent mapping).
+    /// Checks are ordered Emergency → Backup → Primary (same precedence as {_roleRank}).
     function _coreRole(address account) internal view returns (MERAWalletTypes.Role) {
-        if (account == primary) {
-            return MERAWalletTypes.Role.Primary;
+        if (account == emergency) {
+            return MERAWalletTypes.Role.Emergency;
         }
         if (account == backup) {
             return MERAWalletTypes.Role.Backup;
         }
-        if (account == emergency) {
-            return MERAWalletTypes.Role.Emergency;
+        if (account == primary) {
+            return MERAWalletTypes.Role.Primary;
         }
         return MERAWalletTypes.Role.None;
     }
 
-    /// @dev Primary < Backup < Emergency for removal / assignment caps.
+    /// @dev Numeric rank: Primary < Backup < Emergency for removal / assignment caps (see {MERAWalletConstants}).
     function _roleRank(MERAWalletTypes.Role role) internal pure returns (uint256) {
-        if (role == MERAWalletTypes.Role.Primary) {
-            return MERAWalletConstants.ROLE_RANK_PRIMARY;
+        if (role == MERAWalletTypes.Role.Emergency) {
+            return MERAWalletConstants.ROLE_RANK_EMERGENCY;
         }
         if (role == MERAWalletTypes.Role.Backup) {
             return MERAWalletConstants.ROLE_RANK_BACKUP;
         }
-        if (role == MERAWalletTypes.Role.Emergency) {
-            return MERAWalletConstants.ROLE_RANK_EMERGENCY;
+        if (role == MERAWalletTypes.Role.Primary) {
+            return MERAWalletConstants.ROLE_RANK_PRIMARY;
         }
         return MERAWalletConstants.ROLE_RANK_NONE;
     }
