@@ -9,11 +9,13 @@ interface IBaseMERAWalletErrors {
     error InvalidCheckerAddress();
     error InvalidSigner();
     error EmptyCalls();
+    error TooManyCalls(uint256 length, uint256 maxAllowed);
     error InvalidRole();
     error Unauthorized();
     error NotAllowedRoleChange();
     error NotEmergency();
     error ZeroDelayNotProposable();
+    error TimelockDelayTooLarge(uint256 delay, uint256 maxDelay);
     error TimelockRequired(uint256 requiredDelay);
     error CallPathForbiddenForRole(MERAWalletTypes.Role role);
     error OperationAlreadyPending(bytes32 operationId);

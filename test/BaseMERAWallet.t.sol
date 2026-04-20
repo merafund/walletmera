@@ -4,6 +4,7 @@ pragma solidity 0.8.34;
 import {Test} from "forge-std/Test.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
+import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
 import {MERAWalletTargetWhitelistChecker} from "../src/whitelist/checkers/MERAWalletTargetWhitelistChecker.sol";
@@ -116,6 +117,38 @@ contract BaseMERAWalletTest is Test {
         vm.prank(emergency);
         vm.expectRevert(IBaseMERAWalletErrors.LifeHeartbeatTimeoutZero.selector);
         wallet.setLifeControl(true, 0);
+    }
+
+    function test_SetGlobalTimelock_MaxDelaySucceeds() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(MERAWalletConstants.MAX_TIMELOCK_DELAY);
+        assertEq(wallet.globalTimelock(), MERAWalletConstants.MAX_TIMELOCK_DELAY);
+    }
+
+    function test_SetGlobalTimelock_DelayAboveMaxReverts() public {
+        vm.prank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.TimelockDelayTooLarge.selector,
+                MERAWalletConstants.MAX_TIMELOCK_DELAY + 1,
+                MERAWalletConstants.MAX_TIMELOCK_DELAY
+            )
+        );
+        wallet.setGlobalTimelock(MERAWalletConstants.MAX_TIMELOCK_DELAY + 1);
+    }
+
+    function test_ExecuteTransaction_TooManyCallsReverts() public {
+        MERAWalletTypes.Call[] memory calls =
+            _repeatedCalls(address(receiver), MERAWalletConstants.MAX_CALLS_PER_BATCH + 1);
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.TooManyCalls.selector,
+                MERAWalletConstants.MAX_CALLS_PER_BATCH + 1,
+                MERAWalletConstants.MAX_CALLS_PER_BATCH
+            )
+        );
+        wallet.executeTransaction(calls, 1);
     }
 
     function test_LifeControl_ExpiryBlocksActionsUntilHeartbeatRestores() public {
@@ -400,7 +433,7 @@ contract BaseMERAWalletTest is Test {
             address creator,,
             uint64 createdAt,
             uint64 executeAfter,
-            uint256 operationNonce,
+            uint256 operationSalt,
             MERAWalletTypes.OperationStatus status,
             MERAWalletTypes.RelayExecutorPolicy relayPolicy,
             uint256 relayReward,
@@ -408,7 +441,7 @@ contract BaseMERAWalletTest is Test {
             bytes32 executorSetHash
         ) = wallet.operations(operationId);
         assertEq(creator, primary);
-        assertEq(operationNonce, 1);
+        assertEq(operationSalt, 1);
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Pending));
         assertEq(uint256(relayPolicy), uint256(MERAWalletTypes.RelayExecutorPolicy.CoreExecute));
         assertEq(relayReward, 0);
@@ -433,7 +466,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(finalStatus), uint256(MERAWalletTypes.OperationStatus.Executed));
     }
 
-    function test_GetOperationId_DiffersByNonce() public view {
+    function test_GetOperationId_DiffersBySalt() public view {
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 501));
 
@@ -1354,6 +1387,16 @@ contract BaseMERAWalletTest is Test {
     {
         p.primary = MERAWalletTypes.RoleCallPolicy({delay: primaryDelay, forbidden: primaryForbidden});
         p.backup = MERAWalletTypes.RoleCallPolicy({delay: backupDelay, forbidden: backupForbidden});
+    }
+
+    /// @dev Builds `n` identical calls to `target` with `ReceiverMock.setValue(0)` calldata (for batch limit tests).
+    function _repeatedCalls(address target, uint256 n) internal pure returns (MERAWalletTypes.Call[] memory calls) {
+        bytes memory data = abi.encodeWithSelector(ReceiverMock.setValue.selector, uint256(0));
+        calls = new MERAWalletTypes.Call[](n);
+        for (uint256 i = 0; i < n; i++) {
+            calls[i] =
+                MERAWalletTypes.Call({target: target, value: 0, data: data, checker: address(0), checkerData: ""});
+        }
     }
 
     function _singleCall(address target, uint256 value, bytes memory data)

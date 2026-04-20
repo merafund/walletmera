@@ -1,8 +1,27 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
-/// @notice Magic return values for EIP-1271 `isValidSignature` (https://eips.ethereum.org/EIPS/eip-1271).
+/// @notice Shared constants for MERA wallet contracts (EIP-1271, calldata, role ranks, timelock bounds, batch limits).
 library MERAWalletConstants {
+    // --- EIP-1271 (https://eips.ethereum.org/EIPS/eip-1271) ---
     bytes4 internal constant EIP1271_MAGICVALUE = 0x1626ba7e;
     bytes4 internal constant EIP1271_INVALID = 0xffffffff;
+
+    // --- Calldata ---
+    /// @dev Bytes needed to read a function selector from ABI-encoded call `data`.
+    uint256 internal constant FUNCTION_SELECTOR_LENGTH = 4;
+
+    // --- Role ranks ({_roleRank} ordering: Primary < Backup < Emergency) ---
+    uint256 internal constant ROLE_RANK_NONE = 0;
+    uint256 internal constant ROLE_RANK_PRIMARY = 1;
+    uint256 internal constant ROLE_RANK_BACKUP = 2;
+    uint256 internal constant ROLE_RANK_EMERGENCY = 3;
+
+    // --- Timelock bounds (aligned with uint120 per-path delays in call policies) ---
+    uint256 internal constant MIN_TIMELOCK_DELAY = 0;
+    uint256 internal constant MAX_TIMELOCK_DELAY = type(uint120).max;
+
+    // --- Batch execution ---
+    /// @dev Upper bound on `calls.length` for propose/execute paths to limit gas griefing.
+    uint256 internal constant MAX_CALLS_PER_BATCH = 256;
 }
