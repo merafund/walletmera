@@ -630,8 +630,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _validateCallWhitelist(calls);
     }
 
-    function _computeOperationId(MERAWalletTypes.Call[] memory calls, uint256 salt) internal view returns (bytes32) {
-        return keccak256(abi.encode(block.chainid, address(this), calls, salt));
+    /// @dev Same bytes as `abi.encode(chainId, wallet, calls, salt)`; `keccak256` runs over the length-prefixed buffer in assembly (matches high-level `keccak256(bytes)` hashing).
+    function _computeOperationId(MERAWalletTypes.Call[] memory calls, uint256 salt) internal view returns (bytes32 id) {
+        bytes memory preimage = abi.encode(block.chainid, address(this), calls, salt);
+        assembly ("memory-safe") {
+            id := keccak256(add(preimage, 32), mload(preimage))
+        }
     }
 
     function _getRequiredDelay(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call[] memory calls)

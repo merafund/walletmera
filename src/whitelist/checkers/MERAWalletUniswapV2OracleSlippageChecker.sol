@@ -170,7 +170,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         uint256 b1 = IERC20(t1).balanceOf(wallet);
         uint256 ethB = wallet.balance;
 
-        bytes32 key = keccak256(abi.encode(wallet, operationId, callId));
+        bytes32 key = _snapshotKey(wallet, operationId, callId);
         _snapshots[key] = Snapshot({
             token0Path: t0,
             token1Path: t1,
@@ -189,7 +189,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         whenNotPaused
     {
         address wallet = msg.sender;
-        bytes32 key = keccak256(abi.encode(wallet, operationId, callId));
+        bytes32 key = _snapshotKey(wallet, operationId, callId);
         Snapshot memory snap = _snapshots[key];
         if (!snap.active) {
             return;
@@ -277,6 +277,18 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     function _requireFeed(address token) internal view {
         if (tokenPriceFeed[token] == address(0)) {
             revert PriceFeedNotSet(token);
+        }
+    }
+
+    /// @dev Matches `keccak256(abi.encode(wallet, operationId, callId))` without `abi.encode` allocation.
+    function _snapshotKey(address wallet, bytes32 operationId, uint256 callId) private pure returns (bytes32 key) {
+        assembly ("memory-safe") {
+            let p := mload(0x40)
+            mstore(p, wallet)
+            mstore(add(p, 0x20), operationId)
+            mstore(add(p, 0x40), callId)
+            key := keccak256(p, 0x60)
+            mstore(0x40, add(p, 0x60))
         }
     }
 
