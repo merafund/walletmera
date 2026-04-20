@@ -1111,16 +1111,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return MERAWalletConstants.ROLE_RANK_NONE;
     }
 
-    function _canOverrideRole(MERAWalletTypes.Role callerRole, MERAWalletTypes.Role creatorRole)
-        internal
-        pure
-        returns (bool)
-    {
-        return (callerRole == MERAWalletTypes.Role.Backup && creatorRole == MERAWalletTypes.Role.Primary)
-            || (callerRole == MERAWalletTypes.Role.Emergency
-                && (creatorRole == MERAWalletTypes.Role.Primary || creatorRole == MERAWalletTypes.Role.Backup));
-    }
-
     function _beforePropose(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal virtual {}
 
     function _beforeExecute(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
