@@ -7,10 +7,10 @@ import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
-import {MERAWalletTargetWhitelistChecker} from "../src/whitelist/checkers/MERAWalletTargetWhitelistChecker.sol";
-import {MERAWalletTargetBlacklistChecker} from "../src/whitelist/checkers/MERAWalletTargetBlacklistChecker.sol";
-import {IMERAWalletWhitelistErrors} from "../src/whitelist/errors/IMERAWalletWhitelistErrors.sol";
-import {IMERAWalletBlacklistErrors} from "../src/whitelist/errors/IMERAWalletBlacklistErrors.sol";
+import {MERAWalletTargetWhitelistChecker} from "../src/checkers/MERAWalletTargetWhitelistChecker.sol";
+import {MERAWalletTargetBlacklistChecker} from "../src/checkers/MERAWalletTargetBlacklistChecker.sol";
+import {IMERAWalletWhitelistErrors} from "../src/checkers/errors/IMERAWalletWhitelistErrors.sol";
+import {IMERAWalletBlacklistErrors} from "../src/checkers/errors/IMERAWalletBlacklistErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";

@@ -6,10 +6,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
-import {
-    MERAWalletUniswapV2OracleSlippageChecker
-} from "../src/whitelist/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
-import {IMERAWalletUniswapV2SlippageErrors} from "../src/whitelist/errors/IMERAWalletUniswapV2SlippageErrors.sol";
+import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
+import {IMERAWalletUniswapV2SlippageErrors} from "../src/checkers/errors/IMERAWalletUniswapV2SlippageErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {MockUniV2Router02} from "./mocks/MockUniV2Router02.sol";
 import {MockAggregatorV3} from "./mocks/MockAggregatorV3.sol";

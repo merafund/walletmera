@@ -7,11 +7,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {MERAWalletTypes} from "../../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../../interfaces/extensions/IMERAWalletTransactionChecker.sol";
-import {IAggregatorV3} from "../../interfaces/oracles/IAggregatorV3.sol";
-import {IUniswapV2Router02} from "../../interfaces/uniswap/IUniswapV2Router02.sol";
-import {IMERAWalletUniswapV2SlippageErrors} from "../errors/IMERAWalletUniswapV2SlippageErrors.sol";
+import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IAggregatorV3} from "../interfaces/oracles/IAggregatorV3.sol";
+import {IUniswapV2Router02} from "../interfaces/uniswap/IUniswapV2Router02.sol";
+import {IMERAWalletUniswapV2SlippageErrors} from "./errors/IMERAWalletUniswapV2SlippageErrors.sol";
 
 /// @notice Validates Uniswap V2 Router02 swap calls against Chainlink spot prices using wallet balance deltas.
 contract MERAWalletUniswapV2OracleSlippageChecker is

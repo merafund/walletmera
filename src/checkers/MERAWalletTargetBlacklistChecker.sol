@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
-import {MERAWalletTypes} from "../../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../../interfaces/extensions/IMERAWalletTransactionChecker.sol";
-import {IMERAWalletBlacklistErrors} from "../errors/IMERAWalletBlacklistErrors.sol";
-import {MERAWalletBlacklistTypes} from "../types/MERAWalletBlacklistTypes.sol";
+import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletBlacklistErrors} from "./errors/IMERAWalletBlacklistErrors.sol";
+import {MERAWalletBlacklistTypes} from "./types/MERAWalletBlacklistTypes.sol";
 
 /// @title MERAWalletTargetBlacklistChecker
 /// @notice Blocks wallet calls whose `call.target` is marked blocked. Intended only as a required **before** hook:

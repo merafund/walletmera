@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
-import {MERAWalletTypes} from "../../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../../interfaces/extensions/IMERAWalletTransactionChecker.sol";
-import {IMERAWalletWhitelistErrors} from "../errors/IMERAWalletWhitelistErrors.sol";
-import {MERAWalletWhitelistTypes} from "../types/MERAWalletWhitelistTypes.sol";
+import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletWhitelistErrors} from "./errors/IMERAWalletWhitelistErrors.sol";
+import {MERAWalletWhitelistTypes} from "./types/MERAWalletWhitelistTypes.sol";
 
 contract MERAWalletTargetWhitelistChecker is IMERAWalletTransactionChecker, IMERAWalletWhitelistErrors {
     event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
