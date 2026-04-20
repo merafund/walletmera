@@ -69,7 +69,8 @@ library MERAWalletTypes {
         Role creatorRole;
         uint64 createdAt;
         uint64 executeAfter;
-        uint256 nonce;
+        /// @dev User-chosen entropy mixed into the operation id hash; not a sequential nonce.
+        uint256 salt;
         OperationStatus status;
     }
 

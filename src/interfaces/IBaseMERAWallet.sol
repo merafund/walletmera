@@ -28,7 +28,7 @@ interface IBaseMERAWallet {
             MERAWalletTypes.Role creatorRole,
             uint64 createdAt,
             uint64 executeAfter,
-            uint256 nonce,
+            uint256 salt,
             MERAWalletTypes.OperationStatus status,
             MERAWalletTypes.RelayExecutorPolicy relayPolicy,
             uint256 relayReward,
@@ -60,17 +60,17 @@ interface IBaseMERAWallet {
     /// @notice Enabled controller agent may set primary freeze to true only (no unfreeze).
     function freezePrimaryByAgent() external;
 
-    function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
-    function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 nonce)
+    function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
+    function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
         external
         returns (bytes32 operationId);
     function proposeTransactionWithRelay(
         MERAWalletTypes.Call[] calldata calls,
-        uint256 nonce,
+        uint256 salt,
         MERAWalletTypes.RelayProposeConfig calldata relayConfig
     ) external payable returns (bytes32 operationId);
-    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external payable;
-    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 nonce, address[] calldata executorWhitelist)
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
+    function executePending(MERAWalletTypes.Call[] calldata calls, uint256 salt, address[] calldata executorWhitelist)
         external
         payable;
     function vetoPending(bytes32 operationId) external;
@@ -78,7 +78,7 @@ interface IBaseMERAWallet {
     /// @notice Only unfrozen Primary who proposed the operation; agents use {vetoPending} instead.
     function cancelPending(bytes32 operationId) external;
 
-    function getOperationId(MERAWalletTypes.Call[] calldata calls, uint256 nonce) external view returns (bytes32);
+    function getOperationId(MERAWalletTypes.Call[] calldata calls, uint256 salt) external view returns (bytes32);
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view returns (uint256);
     function getRequiredBeforeCheckers() external view returns (address[] memory);
     function getRequiredAfterCheckers() external view returns (address[] memory);
