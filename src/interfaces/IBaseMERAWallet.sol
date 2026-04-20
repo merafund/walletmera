@@ -50,7 +50,8 @@ interface IBaseMERAWallet {
     function setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy) external;
     /// @param enabled If true, registers or syncs required checkers from `checker.hookModes()`. If false, removes `checker` from required lists.
     function setRequiredChecker(address checker, bool enabled) external;
-    function setWhitelistedChecker(address checker, bool allowed) external;
+    /// @param config Passed to `IMERAWalletTransactionChecker.applyConfig` when `allowed` is true and `config` is non-empty (skipped for `checker == address(0)` or empty `config`).
+    function setWhitelistedChecker(address checker, bool allowed, bytes calldata config) external;
     /// @notice Enable or disable a veto agent (may {vetoPending}, not {cancelPending}). On enable, minimum removal rank is derived from the caller's core role.
     function setControllerAgent(address agent, bool enabled) external;
     /// @notice Backup or Emergency may set; Primary cannot. Controller agents use {freezePrimaryByAgent} to freeze only.

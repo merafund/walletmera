@@ -5,5 +5,6 @@ pragma solidity 0.8.34;
 interface IMERAWalletWhitelistErrors {
     error WhitelistInvalidAddress();
     error WhitelistNotEmergency();
+    error WhitelistConfigNotAuthorized();
     error TargetNotAllowed(address target, uint256 index);
 }

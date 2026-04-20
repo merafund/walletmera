@@ -5,5 +5,6 @@ pragma solidity 0.8.34;
 interface IMERAWalletBlacklistErrors {
     error BlacklistInvalidAddress();
     error BlacklistNotEmergency();
+    error BlacklistConfigNotAuthorized();
     error TargetBlocked(address target, uint256 index);
 }

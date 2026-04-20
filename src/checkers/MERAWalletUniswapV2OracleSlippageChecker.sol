@@ -9,9 +9,11 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
 import {IAggregatorV3} from "../interfaces/oracles/IAggregatorV3.sol";
 import {IUniswapV2Router02} from "../interfaces/uniswap/IUniswapV2Router02.sol";
 import {IMERAWalletUniswapV2SlippageErrors} from "./errors/IMERAWalletUniswapV2SlippageErrors.sol";
+import {MERAWalletUniswapV2SlippageTypes} from "./types/MERAWalletUniswapV2SlippageTypes.sol";
 
 /// @notice Validates Uniswap V2 Router02 swap calls against Chainlink spot prices using wallet balance deltas.
 contract MERAWalletUniswapV2OracleSlippageChecker is
@@ -31,11 +33,24 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     event AllowedRouterUpdated(address indexed router, bool allowed, address indexed caller);
     event TokenPriceFeedUpdated(address indexed token, address indexed feed, address indexed caller);
     event PauseAgentUpdated(address indexed agent, bool allowed, address indexed caller);
+    /// @dev Emits `assetWhitelist` from stored config; additional struct fields may be reflected here later.
+    event WalletSlippageCheckerConfigUpdated(
+        address indexed wallet, address indexed assetWhitelist, address indexed caller
+    );
+    event DefaultAssetWhitelistUpdated(
+        address indexed previous, address indexed assetWhitelist, address indexed caller
+    );
 
     mapping(address agent => bool allowed) public isPauseAgent;
 
     mapping(address router => bool allowed) public allowedRouter;
     mapping(address token => address feed) public tokenPriceFeed;
+
+    /// @dev Full per-wallet config from {applyConfig} (extensible struct); `assetWhitelist` may be zero to fall back to {defaultAssetWhitelist}.
+    mapping(address wallet => MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig) public
+        walletSlippageCheckerConfig;
+    /// @dev Used when `walletSlippageCheckerConfig[wallet].assetWhitelist` is zero.
+    address public defaultAssetWhitelist;
 
     struct Snapshot {
         address token0Path;
@@ -124,6 +139,24 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
+    function applyConfig(bytes calldata config) external override {
+        if (config.length == 0) {
+            return;
+        }
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory decoded =
+            abi.decode(config, (MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig));
+        walletSlippageCheckerConfig[msg.sender] = decoded;
+        emit WalletSlippageCheckerConfigUpdated(msg.sender, decoded.assetWhitelist, msg.sender);
+    }
+
+    /// @notice Global fallback asset list when a wallet has not set its own via {applyConfig}.
+    function setDefaultAssetWhitelist(address newWhitelist) external onlyOwner {
+        address previous = defaultAssetWhitelist;
+        defaultAssetWhitelist = newWhitelist;
+        emit DefaultAssetWhitelistUpdated(previous, newWhitelist, msg.sender);
+    }
+
     /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgents}. Uses {Pausable-_pause}.
     function pause() external {
         if (msg.sender != owner() && !isPauseAgent[msg.sender]) {
@@ -160,12 +193,13 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
             revert UnsupportedRouterCall(bytes4(call.data[0:4]));
         }
 
+        address wallet = msg.sender;
+        _requirePathAssetsAllowed(wallet, path, callId);
+
         address t0 = path[0];
         address t1 = path[path.length - 1];
         _requireFeed(t0);
         _requireFeed(t1);
-
-        address wallet = msg.sender;
         uint256 b0 = IERC20(t0).balanceOf(wallet);
         uint256 b1 = IERC20(t1).balanceOf(wallet);
         uint256 ethB = wallet.balance;
@@ -237,6 +271,31 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         uint256 rhs = Math.mulDiv(amountIn, answerIn * minBps, denomIn);
         if (lhs < rhs) {
             revert SwapWorseThanOracle();
+        }
+    }
+
+    function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
+        address w = walletSlippageCheckerConfig[wallet].assetWhitelist;
+        if (w != address(0)) {
+            return w;
+        }
+        return defaultAssetWhitelist;
+    }
+
+    /// @dev No-op when no asset list is configured for `wallet`.
+    function _requirePathAssetsAllowed(address wallet, address[] memory path, uint256 callId) internal view {
+        address wl = _effectiveAssetWhitelist(wallet);
+        if (wl == address(0)) {
+            return;
+        }
+        uint256 len = path.length;
+        for (uint256 i = 0; i < len;) {
+            if (!IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(path[i])) {
+                revert AssetNotWhitelisted(path[i], callId);
+            }
+            unchecked {
+                ++i;
+            }
         }
     }
 

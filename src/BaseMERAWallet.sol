@@ -232,11 +232,20 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit RequiredCheckerUpdated(checker, enableBefore, enableAfter, msg.sender);
     }
 
-    function setWhitelistedChecker(address checker, bool allowed) external override onlyEmergencyOrSelf whenLifeAlive {
+    function setWhitelistedChecker(address checker, bool allowed, bytes calldata config)
+        external
+        override
+        onlyEmergencyOrSelf
+        whenLifeAlive
+    {
         if (!allowed) {
             delete whitelistedChecker[checker];
             emit WhitelistCheckerUpdated(checker, false, false, false, msg.sender);
             return;
+        }
+
+        if (checker != address(0) && config.length > 0) {
+            IMERAWalletTransactionChecker(checker).applyConfig(config);
         }
 
         if (checker == address(0)) {

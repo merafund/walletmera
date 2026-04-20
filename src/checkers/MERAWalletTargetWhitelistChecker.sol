@@ -11,11 +11,15 @@ contract MERAWalletTargetWhitelistChecker is IMERAWalletTransactionChecker, IMER
     event AllowedTargetUpdated(address indexed target, bool allowed, address indexed caller);
 
     address public emergency;
+    /// @dev Wallet authorized to call {applyConfig} together with {emergency}; may be zero for emergency-only config.
+    address public immutable MERA_WALLET;
+
     mapping(address target => bool allowed) public allowedTarget;
 
-    constructor(address initialEmergency) {
+    constructor(address initialEmergency, address initialMeraWallet) {
         require(initialEmergency != address(0), WhitelistInvalidAddress());
         emergency = initialEmergency;
+        MERA_WALLET = initialMeraWallet;
     }
 
     function setEmergency(address newEmergency) external {
@@ -47,6 +51,25 @@ contract MERAWalletTargetWhitelistChecker is IMERAWalletTransactionChecker, IMER
         }
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
+    function applyConfig(bytes calldata config) external override {
+        if (config.length == 0) {
+            return;
+        }
+        _onlyEmergencyOrMeraWallet();
+        MERAWalletWhitelistTypes.TargetPermission[] memory permissions =
+            abi.decode(config, (MERAWalletWhitelistTypes.TargetPermission[]));
+        uint256 permissionsLength = permissions.length;
+        for (uint256 i = 0; i < permissionsLength;) {
+            MERAWalletWhitelistTypes.TargetPermission memory permission = permissions[i];
+            allowedTarget[permission.target] = permission.allowed;
+            emit AllowedTargetUpdated(permission.target, permission.allowed, msg.sender);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function hookModes() external pure override returns (bool enableBefore, bool enableAfter) {
         return (true, false);
     }
@@ -60,5 +83,13 @@ contract MERAWalletTargetWhitelistChecker is IMERAWalletTransactionChecker, IMER
 
     function _onlyEmergency() internal view {
         require(msg.sender == emergency, WhitelistNotEmergency());
+    }
+
+    /// @dev Allows `emergency` (e.g. timelock) or the bound MERA wallet (when registering via `setWhitelistedChecker`).
+    function _onlyEmergencyOrMeraWallet() internal view {
+        if (msg.sender == emergency) {
+            return;
+        }
+        require(msg.sender == MERA_WALLET && MERA_WALLET != address(0), WhitelistConfigNotAuthorized());
     }
 }

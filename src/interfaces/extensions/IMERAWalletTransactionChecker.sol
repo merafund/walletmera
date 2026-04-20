@@ -13,4 +13,8 @@ interface IMERAWalletTransactionChecker {
 
     /// @param callId 0-based index of `call` in the batch being executed (same for before/after hooks).
     function checkAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) external;
+
+    /// @notice Opaque on-chain configuration; encoding is implementation-defined.
+    /// @dev The MERA wallet may call this with non-empty `config` when whitelisting this checker. Empty `config` is a no-op.
+    function applyConfig(bytes calldata config) external;
 }

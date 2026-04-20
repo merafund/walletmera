@@ -7,6 +7,8 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
+import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletUniswapV2SlippageTypes} from "../src/checkers/types/MERAWalletUniswapV2SlippageTypes.sol";
 import {IMERAWalletUniswapV2SlippageErrors} from "../src/checkers/errors/IMERAWalletUniswapV2SlippageErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {MockUniV2Router02} from "./mocks/MockUniV2Router02.sol";
@@ -41,8 +43,8 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         feedB = new MockAggregatorV3(1e8, 8);
 
         vm.startPrank(emergency);
-        wallet.setWhitelistedChecker(address(0), true);
-        wallet.setWhitelistedChecker(address(checker), true);
+        wallet.setWhitelistedChecker(address(0), true, "");
+        wallet.setWhitelistedChecker(address(checker), true, "");
         address[] memory routers = new address[](1);
         routers[0] = address(router);
         bool[] memory routerAllowed = new bool[](1);
@@ -98,6 +100,82 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
             address(wallet),
             block.timestamp + 1
         );
+    }
+
+    function test_AssetWhitelist_RevertsWhenPathTokenNotAllowed() public {
+        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        address[] memory assets = new address[](1);
+        assets[0] = address(tokenA);
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+        vm.prank(emergency);
+        aw.setAllowedAssets(assets, allowed);
+
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+        vm.prank(emergency);
+        wallet.setWhitelistedChecker(address(checker), true, abi.encode(cfg));
+
+        router.setBadRate(false);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMERAWalletUniswapV2SlippageErrors.AssetNotWhitelisted.selector, address(tokenB), uint256(1)
+            )
+        );
+        wallet.executeTransaction(calls, 42);
+    }
+
+    function test_DefaultAssetWhitelist_AllowsSwapWhenWalletSlotUnset() public {
+        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        address[] memory assets = new address[](2);
+        assets[0] = address(tokenA);
+        assets[1] = address(tokenB);
+        bool[] memory allowed = new bool[](2);
+        allowed[0] = true;
+        allowed[1] = true;
+        vm.startPrank(emergency);
+        aw.setAllowedAssets(assets, allowed);
+        checker.setDefaultAssetWhitelist(address(aw));
+        vm.stopPrank();
+
+        router.setBadRate(false);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallData(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        wallet.executeTransaction(calls, 43);
     }
 
     function test_SwapWithinOracleTolerance_Succeeds() public {
