@@ -108,9 +108,6 @@ contract BaseMERAWalletTest is Test {
 
     function test_LifeControllers_InitialEmergencyIncluded() public view {
         assertTrue(wallet.isLifeController(emergency));
-        address[] memory controllers = wallet.getLifeControllers();
-        assertEq(controllers.length, 1);
-        assertEq(controllers[0], emergency);
     }
 
     function test_SetLifeControl_EnableRequiresNonZeroTimeout() public {
@@ -151,7 +148,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executeTransaction(calls, 1);
     }
 
-    function test_LifeControl_ExpiryBlocksActionsUntilHeartbeatRestores() public {
+    function test_LifeControl_Expiry_RevertsSetGlobalTimelockUntilHeartbeat() public {
         vm.prank(emergency);
         wallet.setLifeControl(true, 1 days);
 
@@ -159,21 +156,20 @@ contract BaseMERAWalletTest is Test {
 
         uint256 lastHeartbeatAt = wallet.lastLifeHeartbeatAt();
         uint256 timeout = wallet.lifeHeartbeatTimeout();
-        vm.startPrank(emergency);
+        vm.prank(emergency);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBaseMERAWalletErrors.LifeHeartbeatExpired.selector, lastHeartbeatAt, timeout, block.timestamp
             )
         );
         wallet.setGlobalTimelock(1 days);
-        vm.stopPrank();
 
         vm.prank(emergency);
         wallet.confirmAlive();
 
         vm.prank(emergency);
-        wallet.setGlobalTimelock(1 days);
-        assertEq(wallet.globalTimelock(), 1 days);
+        wallet.setGlobalTimelock(2 days);
+        assertEq(wallet.globalTimelock(), 2 days);
     }
 
     function test_LifeControl_AnyControllerHeartbeatUnblocksExecution() public {
@@ -227,7 +223,7 @@ contract BaseMERAWalletTest is Test {
         assertTrue(wallet.isLifeController(newEmergency));
     }
 
-    function test_SetEmergency_KeepsPreviousEmergencyWhenManuallyPinnedAsController() public {
+    function test_SetEmergency_RemovesPreviousLifeControllerEvenIfPreviouslyInSetLifeControllers() public {
         address[] memory controllers = new address[](1);
         controllers[0] = emergency;
         vm.prank(emergency);
@@ -237,7 +233,7 @@ contract BaseMERAWalletTest is Test {
         vm.prank(emergency);
         wallet.setEmergency(newEmergency);
 
-        assertTrue(wallet.isLifeController(emergency));
+        assertFalse(wallet.isLifeController(emergency));
         assertTrue(wallet.isLifeController(newEmergency));
     }
 
@@ -879,6 +875,24 @@ contract BaseMERAWalletTest is Test {
         vm.prank(primary);
         wallet.executePending(calls, 1);
         assertEq(receiver.value(), 9);
+    }
+
+    function test_ControllerAgent_CannotVetoEmergencyProposedOperation() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        wallet.setControllerAgent(agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 7));
+
+        vm.prank(emergency);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(agentAddr);
+        vm.expectRevert(IBaseMERAWalletErrors.AgentCannotVetoEmergencyOperation.selector);
+        wallet.vetoPending(operationId);
     }
 
     function test_ControllerAgent_CannotCancelPending() public {

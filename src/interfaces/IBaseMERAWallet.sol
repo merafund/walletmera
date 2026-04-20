@@ -83,7 +83,6 @@ interface IBaseMERAWallet {
     function getRequiredBeforeCheckers() external view returns (address[] memory);
     function getRequiredAfterCheckers() external view returns (address[] memory);
     function isLifeController(address controller) external view returns (bool);
-    function getLifeControllers() external view returns (address[] memory);
 
     function set1271Signer(address signer) external;
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4);

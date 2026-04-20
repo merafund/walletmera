@@ -48,4 +48,7 @@ interface IBaseMERAWalletErrors {
     error LifeHeartbeatTimeoutZero();
     error LifeHeartbeatExpired(uint256 lastHeartbeatAt, uint256 timeout, uint256 currentTime);
     error EmergencyMustStayLifeController();
+    error TooManyRequiredCheckers(uint256 length, uint256 maxAllowed);
+    /// @dev Controller agents cannot veto a pending op created by the emergency role.
+    error AgentCannotVetoEmergencyOperation();
 }

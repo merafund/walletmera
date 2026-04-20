@@ -8,9 +8,33 @@ abstract contract MERAWalletNative is BaseMERAWallet {
         _executeSingleCall(to, amount, "", address(0), "", salt);
     }
 
+    function transferNative(
+        address payable to,
+        uint256 amount,
+        address checker,
+        bytes calldata checkerData,
+        uint256 salt
+    ) external {
+        bytes memory checkerMem = checkerData;
+        _executeSingleCall(to, amount, "", checker, checkerMem, salt);
+    }
+
     function callExternal(address target, uint256 value, bytes calldata data, uint256 salt) external {
         bytes memory dataMem = data;
         _executeSingleCall(target, value, dataMem, address(0), "", salt);
+    }
+
+    function callExternal(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        address checker,
+        bytes calldata checkerData,
+        uint256 salt
+    ) external {
+        bytes memory dataMem = data;
+        bytes memory checkerMem = checkerData;
+        _executeSingleCall(target, value, dataMem, checker, checkerMem, salt);
     }
 
     function callExternalWithChecker(
