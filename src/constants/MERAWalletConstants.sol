@@ -27,7 +27,7 @@ library MERAWalletConstants {
 
     // --- Required transaction checkers (before/after lists) ---
     /// @dev Upper bound per list to limit gas and griefing on every execution hook.
-    uint256 internal constant MAX_REQUIRED_CHECKERS_PER_LIST = 64;
+    uint256 internal constant MAX_REQUIRED_CHECKERS_PER_LIST = 8;
 
     // --- Self-call selectors: emergency timelock exemptions (config / freeze / life / roles on this wallet) ---
     /// @dev See `cast sig` / ABI; used when `callerRole == Emergency` and `target == address(this)`.
