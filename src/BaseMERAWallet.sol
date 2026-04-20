@@ -53,6 +53,17 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _;
     }
 
+    /// @dev Caller must be a core controller and not frozen for Primary/Backup.
+    modifier whenControllerCoreUnfrozen() {
+        _requireControllerCoreUnfrozen();
+        _;
+    }
+
+    function _requireControllerCoreUnfrozen() internal view {
+        MERAWalletTypes.Role callerRole = _requireController();
+        _requireCoreRoleNotFrozen(callerRole);
+    }
+
     constructor(
         address initialPrimary,
         address initialBackup,
@@ -352,15 +363,14 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         payable
         override
         whenLifeAlive
+        whenControllerCoreUnfrozen
     {
-        MERAWalletTypes.Role callerRole = _requireController();
-        _requireCoreRoleNotFrozen(callerRole);
         MERAWalletTypes.Call[] memory memoryCalls = calls;
 
         _validateCalls(memoryCalls);
 
         bytes32 operationId = _computeOperationId(memoryCalls, salt);
-        uint256 requiredDelay = _getRequiredDelay(callerRole, memoryCalls);
+        uint256 requiredDelay = _getRequiredDelay(_coreRole(msg.sender), memoryCalls);
 
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
 
@@ -445,10 +455,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     /// @dev Used by extensions that build `Call[]` in memory (e.g. ERC20 timelock helpers).
     function _proposeTransactionFromMemory(MERAWalletTypes.Call[] memory memoryCalls, uint256 salt)
         internal
+        whenControllerCoreUnfrozen
         returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
     {
-        callerRole = _requireController();
-        _requireCoreRoleNotFrozen(callerRole);
+        callerRole = _coreRole(msg.sender);
 
         _validateCalls(memoryCalls);
 
@@ -514,8 +524,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
-            MERAWalletTypes.Role callerRole = _requireController();
-            _requireCoreRoleNotFrozen(callerRole);
+            _requireControllerCoreUnfrozen();
         } else {
             require(!_isCoreController(msg.sender), CoreExecutorNotAllowed(msg.sender));
             _validateRelayExecutor(relayOperation, executorWhitelist);
@@ -543,10 +552,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoed(operationId, operation.salt, msg.sender);
     }
 
-    function clearVeto(bytes32 operationId) external override whenLifeAlive {
-        MERAWalletTypes.Role callerRole = _requireController();
-        _requireCoreRoleNotFrozen(callerRole);
-
+    function clearVeto(bytes32 operationId) external override whenLifeAlive whenControllerCoreUnfrozen {
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         require(operation.status == MERAWalletTypes.OperationStatus.Vetoed, OperationNotVetoed(operationId));
 
@@ -555,7 +561,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @notice Irreversible cancel: only unfrozen Primary; must be the operation creator (proposer). Backup/Emergency/agents cannot call.
-    function cancelPending(bytes32 operationId) external override whenLifeAlive {
+    function cancelPending(bytes32 operationId) external override whenLifeAlive whenControllerCoreUnfrozen {
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
         require(
@@ -564,9 +570,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             OperationNotPending(operationId)
         );
 
-        MERAWalletTypes.Role callerRole = _requireController();
-        require(callerRole == MERAWalletTypes.Role.Primary, CancelPendingPrimaryOnly());
-        _requireCoreRoleNotFrozen(callerRole);
+        require(_coreRole(msg.sender) == MERAWalletTypes.Role.Primary, CancelPendingPrimaryOnly());
         // Primary-only caller: only the proposer may cancel (override is for Backup/Emergency, not used here).
         require(operation.creator == msg.sender, CannotCancelOperation(operationId));
 
@@ -587,14 +591,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return _computeOperationId(memoryCalls, salt);
     }
 
-    function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view override returns (uint256) {
-        MERAWalletTypes.Role callerRole = _coreRole(msg.sender);
-        require(callerRole != MERAWalletTypes.Role.None, Unauthorized());
-        _requireCoreRoleNotFrozen(callerRole);
-
+    function getRequiredDelay(MERAWalletTypes.Call[] calldata calls)
+        external
+        view
+        override
+        whenControllerCoreUnfrozen
+        returns (uint256)
+    {
         MERAWalletTypes.Call[] memory memoryCalls = calls;
         _validateCalls(memoryCalls);
-        return _getRequiredDelay(callerRole, memoryCalls);
+        return _getRequiredDelay(_coreRole(msg.sender), memoryCalls);
     }
 
     function set1271Signer(address signer) external override onlyEmergencyOrSelf whenLifeAlive {
@@ -632,14 +638,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _executeImmediateFromCalls(calls, salt);
     }
 
-    function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 salt) internal {
-        _requireLifeAliveForStateChanges();
-        MERAWalletTypes.Role callerRole = _requireController();
-        _requireCoreRoleNotFrozen(callerRole);
+    function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 salt)
+        internal
+        whenLifeAlive
+        whenControllerCoreUnfrozen
+    {
         _validateCalls(calls);
 
         bytes32 operationId = _computeOperationId(calls, salt);
-        uint256 requiredDelay = _getRequiredDelay(callerRole, calls);
+        uint256 requiredDelay = _getRequiredDelay(_coreRole(msg.sender), calls);
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
 
         _executeCallsWithHooks(calls, operationId);
