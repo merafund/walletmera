@@ -117,7 +117,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function setGlobalTimelock(uint256 delay) external override onlyEmergencyOrSelf whenLifeAlive {
-        require(delay <= MERAWalletConstants.MAX_TIMELOCK_DELAY, TimelockDelayTooLarge(delay, MERAWalletConstants.MAX_TIMELOCK_DELAY));
+        require(
+            delay <= MERAWalletConstants.MAX_TIMELOCK_DELAY,
+            TimelockDelayTooLarge(delay, MERAWalletConstants.MAX_TIMELOCK_DELAY)
+        );
         uint256 previousDelay = globalTimelock;
         globalTimelock = delay;
         emit GlobalTimelockUpdated(previousDelay, delay, msg.sender);
@@ -616,7 +619,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function _validateCalls(MERAWalletTypes.Call[] memory calls) internal view {
         require(calls.length > 0, EmptyCalls());
-        require(calls.length <= MERAWalletConstants.MAX_CALLS_PER_BATCH, TooManyCalls(calls.length, MERAWalletConstants.MAX_CALLS_PER_BATCH));
+        require(
+            calls.length <= MERAWalletConstants.MAX_CALLS_PER_BATCH,
+            TooManyCalls(calls.length, MERAWalletConstants.MAX_CALLS_PER_BATCH)
+        );
         _validateCallWhitelist(calls);
     }
 
