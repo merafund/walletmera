@@ -10,7 +10,7 @@ interface IBaseMERAWallet {
     function primary() external view returns (address);
     function backup() external view returns (address);
     function emergency() external view returns (address);
-    function guardian() external view returns (address);
+    function GUARDIAN() external view returns (address);
     function eip1271Signer() external view returns (address);
     function globalTimelock() external view returns (uint256);
     function lifeHeartbeatTimeout() external view returns (uint256);

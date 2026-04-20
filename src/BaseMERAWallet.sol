@@ -11,7 +11,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors {
     /// @dev Optional recovery / multisig; address(0) disables guardian-only path for {setEmergency}.
-    address public immutable guardian;
+    address public immutable GUARDIAN;
 
     address public primary;
     address public backup;
@@ -43,8 +43,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     /// @dev Emergency may call directly; the wallet may call itself (e.g. batched executeTransaction) for gated config.
     modifier onlyEmergencyOrSelf() {
-        require(msg.sender == emergency || msg.sender == address(this), NotEmergency());
+        _onlyEmergencyOrSelf();
         _;
+    }
+
+    function _onlyEmergencyOrSelf() internal view {
+        require(msg.sender == emergency || msg.sender == address(this), NotEmergency());
     }
 
     modifier whenLifeAlive() {
@@ -64,7 +68,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             InvalidAddress()
         );
 
-        guardian = initialGuardian;
+        GUARDIAN = initialGuardian;
 
         primary = initialPrimary;
         backup = initialBackup;
@@ -910,7 +914,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         if (caller == emergency) {
             return true;
         }
-        if (guardian != address(0) && caller == guardian) {
+        if (GUARDIAN != address(0) && caller == GUARDIAN) {
             return true;
         }
         return false;

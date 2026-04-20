@@ -43,7 +43,7 @@ contract MERAWalletThresholdGuardian {
     event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
 
     address public wallet;
-    uint256 public immutable threshold;
+    uint256 public immutable THRESHOLD;
     address[] internal _members;
 
     uint256 public proposalNonce;
@@ -77,7 +77,7 @@ contract MERAWalletThresholdGuardian {
             wallet = wallet_;
             emit WalletSet(wallet_, msg.sender);
         }
-        threshold = threshold_;
+        THRESHOLD = threshold_;
     }
 
     function getMembers() external view returns (address[] memory) {
@@ -161,8 +161,8 @@ contract MERAWalletThresholdGuardian {
 
     function executeProposal(bytes32 proposalId) external {
         Proposal storage proposal = _activeProposal(proposalId);
-        if (proposal.approvals < threshold) {
-            revert ThresholdNotReached(proposalId, proposal.approvals, threshold);
+        if (proposal.approvals < THRESHOLD) {
+            revert ThresholdNotReached(proposalId, proposal.approvals, THRESHOLD);
         }
 
         proposal.executed = true;
