@@ -24,14 +24,14 @@ library MERAWalletTypes {
     }
 
     /// @dev Per-address optional checker policy: whether it may be used and which hooks run.
-    struct WhitelistChecker {
+    struct OptionalChecker {
         bool allowed;
         bool enableBefore;
         bool enableAfter;
     }
 
-    /// @notice One entry for {setWhitelistedCheckers} batch updates.
-    struct WhitelistCheckerUpdate {
+    /// @notice One entry for {setOptionalCheckers} batch updates.
+    struct OptionalCheckerUpdate {
         address checker;
         bool allowed;
         bytes config;
@@ -91,5 +91,14 @@ library MERAWalletTypes {
     struct ControllerAgent {
         bool enabled;
         Role roleLevel;
+    }
+
+    /// @notice Constructor arguments for `MERAWalletFull` / `BaseMERAWallet` when deployed via factory.
+    struct WalletInitParams {
+        address initialPrimary;
+        address initialBackup;
+        address initialEmergency;
+        address initialSigner;
+        address initialGuardian;
     }
 }

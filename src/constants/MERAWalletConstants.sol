@@ -3,6 +3,8 @@ pragma solidity 0.8.34;
 
 /// @notice Shared constants for MERA wallet contracts (EIP-1271, calldata, role ranks, timelock bounds, batch limits).
 library MERAWalletConstants {
+    /// @dev Global deterministic CREATE2 deployer (Nick Johnson / Arachnid); same address on chains where it is deployed.
+    address internal constant DETERMINISTIC_CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     // --- EIP-1271 (https://eips.ethereum.org/EIPS/eip-1271) ---
     bytes4 internal constant EIP1271_MAGICVALUE = 0x1626ba7e;
     bytes4 internal constant EIP1271_INVALID = 0xffffffff;
