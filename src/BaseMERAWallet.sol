@@ -747,20 +747,21 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _isEmergencyConfigSelector(bytes4 selector) internal pure returns (bool) {
-        return selector == MERAWalletConstants.SEL_SET_PRIMARY || selector == MERAWalletConstants.SEL_SET_BACKUP
-            || selector == MERAWalletConstants.SEL_SET_EMERGENCY
-            || selector == MERAWalletConstants.SEL_SET_GLOBAL_TIMELOCK
-            || selector == MERAWalletConstants.SEL_SET_LIFE_CONTROL
-            || selector == MERAWalletConstants.SEL_SET_LIFE_CONTROLLERS
-            || selector == MERAWalletConstants.SEL_SET_TARGET_CALL_POLICY
-            || selector == MERAWalletConstants.SEL_SET_SELECTOR_CALL_POLICY
-            || selector == MERAWalletConstants.SEL_SET_REQUIRED_CHECKER
-            || selector == MERAWalletConstants.SEL_SET_WHITELISTED_CHECKER
-            || selector == MERAWalletConstants.SEL_SET_CONTROLLER_AGENT
-            || selector == MERAWalletConstants.SEL_SET_FROZEN_PRIMARY
-            || selector == MERAWalletConstants.SEL_SET_FROZEN_BACKUP
-            || selector == MERAWalletConstants.SEL_SET1271_SIGNER
-            || selector == MERAWalletConstants.SEL_FREEZE_PRIMARY_BY_AGENT;
+        // Compare against IBaseMERAWallet so selectors stay aligned with the external API.
+        return selector == IBaseMERAWallet.setPrimary.selector || selector == IBaseMERAWallet.setBackup.selector
+            || selector == IBaseMERAWallet.setEmergency.selector
+            || selector == IBaseMERAWallet.setGlobalTimelock.selector
+            || selector == IBaseMERAWallet.setLifeControl.selector
+            || selector == IBaseMERAWallet.setLifeControllers.selector
+            || selector == IBaseMERAWallet.setTargetCallPolicy.selector
+            || selector == IBaseMERAWallet.setSelectorCallPolicy.selector
+            || selector == IBaseMERAWallet.setRequiredChecker.selector
+            || selector == IBaseMERAWallet.setWhitelistedChecker.selector
+            || selector == IBaseMERAWallet.setControllerAgent.selector
+            || selector == IBaseMERAWallet.setFrozenPrimary.selector
+            || selector == IBaseMERAWallet.setFrozenBackup.selector
+            || selector == IBaseMERAWallet.set1271Signer.selector
+            || selector == IBaseMERAWallet.freezePrimaryByAgent.selector;
     }
 
     function _rolePolicySlice(MERAWalletTypes.CallPathPolicy memory policy, MERAWalletTypes.Role callerRole)
