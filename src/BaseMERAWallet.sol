@@ -162,9 +162,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             if (enabled) {
                 _setLifeController(controller, true, msg.sender);
             } else {
-                if (controller == emergency) {
-                    revert EmergencyMustStayLifeController();
-                }
+                require(controller != emergency, EmergencyMustStayLifeController());
                 _setLifeController(controller, false, msg.sender);
             }
 
@@ -1150,13 +1148,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         pure
         returns (MERAWalletTypes.RoleCallPolicy memory)
     {
+        require(callerRole == MERAWalletTypes.Role.Primary || callerRole == MERAWalletTypes.Role.Backup, InvalidRole());
         if (callerRole == MERAWalletTypes.Role.Primary) {
             return policy.primary;
         }
-        if (callerRole == MERAWalletTypes.Role.Backup) {
-            return policy.backup;
-        }
-        revert InvalidRole();
+        return policy.backup;
     }
 
     // Consider refactoring low-level helpers (bytes selector reads, ECDSA, etc.) to Solady where it fits.

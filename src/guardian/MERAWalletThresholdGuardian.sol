@@ -53,19 +53,13 @@ contract MERAWalletThresholdGuardian {
     error ThresholdNotReached(bytes32 proposalId, uint256 approvals, uint256 threshold);
 
     constructor(address wallet_, uint256 threshold_, address[] memory members_) {
-        if (threshold_ == 0 || threshold_ > members_.length) {
-            revert InvalidThreshold();
-        }
+        require(threshold_ != 0 && threshold_ <= members_.length, InvalidThreshold());
 
         uint256 membersLength = members_.length;
         for (uint256 i = 0; i < membersLength;) {
             address member = members_[i];
-            if (member == address(0)) {
-                revert InvalidMember();
-            }
-            if (isMember[member]) {
-                revert DuplicateMember(member);
-            }
+            require(member != address(0), InvalidMember());
+            require(!isMember[member], DuplicateMember(member));
             isMember[member] = true;
             _members.push(member);
             unchecked {
@@ -82,30 +76,18 @@ contract MERAWalletThresholdGuardian {
 
     function setWallet(address wallet_) external {
         _requireMember();
-        if (wallet_ == address(0)) {
-            revert InvalidWallet();
-        }
-        if (wallet != address(0)) {
-            revert WalletAlreadySet(wallet);
-        }
+        require(wallet_ != address(0), InvalidWallet());
+        require(wallet == address(0), WalletAlreadySet(wallet));
         wallet = wallet_;
         emit WalletSet(wallet_, msg.sender);
     }
 
     function proposeEmergencyChange(address newEmergency, uint64 deadline) external returns (bytes32 proposalId) {
         _requireMember();
-        if (wallet == address(0)) {
-            revert InvalidWallet();
-        }
-        if (newEmergency == address(0)) {
-            revert InvalidEmergency();
-        }
-        if (deadline <= block.timestamp) {
-            revert InvalidDeadline();
-        }
-        if (deadline > block.timestamp + MAX_DEADLINE_FROM_NOW) {
-            revert InvalidDeadline();
-        }
+        require(wallet != address(0), InvalidWallet());
+        require(newEmergency != address(0), InvalidEmergency());
+        require(deadline > block.timestamp, InvalidDeadline());
+        require(deadline <= block.timestamp + MAX_DEADLINE_FROM_NOW, InvalidDeadline());
 
         uint256 nonce = proposalNonce;
         proposalId = keccak256(abi.encode(wallet, newEmergency, nonce));
@@ -124,9 +106,7 @@ contract MERAWalletThresholdGuardian {
         _requireMember();
         Proposal storage proposal = _activeProposal(proposalId);
 
-        if (hasApproved[proposalId][msg.sender]) {
-            revert AlreadyApproved(proposalId, msg.sender);
-        }
+        require(!hasApproved[proposalId][msg.sender], AlreadyApproved(proposalId, msg.sender));
 
         hasApproved[proposalId][msg.sender] = true;
         proposal.approvals += 1;
@@ -137,9 +117,7 @@ contract MERAWalletThresholdGuardian {
         _requireMember();
         Proposal storage proposal = _activeProposal(proposalId);
 
-        if (!hasApproved[proposalId][msg.sender]) {
-            revert NotApproved(proposalId, msg.sender);
-        }
+        require(hasApproved[proposalId][msg.sender], NotApproved(proposalId, msg.sender));
 
         hasApproved[proposalId][msg.sender] = false;
         proposal.approvals -= 1;
@@ -157,9 +135,7 @@ contract MERAWalletThresholdGuardian {
 
     function executeProposal(bytes32 proposalId) external {
         Proposal storage proposal = _activeProposal(proposalId);
-        if (proposal.approvals < THRESHOLD) {
-            revert ThresholdNotReached(proposalId, proposal.approvals, THRESHOLD);
-        }
+        require(proposal.approvals >= THRESHOLD, ThresholdNotReached(proposalId, proposal.approvals, THRESHOLD));
 
         proposal.executed = true;
         IBaseMERAWallet(payable(wallet)).setEmergency(proposal.newEmergency);
@@ -171,24 +147,14 @@ contract MERAWalletThresholdGuardian {
     }
 
     function _requireMember() internal view {
-        if (!isMember[msg.sender]) {
-            revert NotMember();
-        }
+        require(isMember[msg.sender], NotMember());
     }
 
     function _activeProposal(bytes32 proposalId) internal view returns (Proposal storage proposal) {
         proposal = proposals[proposalId];
-        if (proposal.createdAt == 0) {
-            revert ProposalNotFound(proposalId);
-        }
-        if (proposal.executed) {
-            revert ProposalAlreadyExecuted(proposalId);
-        }
-        if (proposal.cancelled) {
-            revert ProposalIsCancelled(proposalId);
-        }
-        if (block.timestamp > proposal.deadline) {
-            revert ProposalExpired(proposalId, proposal.deadline, block.timestamp);
-        }
+        require(proposal.createdAt != 0, ProposalNotFound(proposalId));
+        require(!proposal.executed, ProposalAlreadyExecuted(proposalId));
+        require(!proposal.cancelled, ProposalIsCancelled(proposalId));
+        require(block.timestamp <= proposal.deadline, ProposalExpired(proposalId, proposal.deadline, block.timestamp));
     }
 }

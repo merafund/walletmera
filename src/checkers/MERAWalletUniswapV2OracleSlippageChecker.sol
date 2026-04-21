@@ -71,12 +71,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     constructor(address initialOwner, uint256 maxOracleNegativeDeviationBps, uint256 maxOracleStaleSeconds)
         Ownable(initialOwner)
     {
-        if (maxOracleNegativeDeviationBps >= BPS) {
-            revert SlippageInvalidDeviationBps();
-        }
-        if (maxOracleStaleSeconds == 0) {
-            revert SlippageInvalidStaleSeconds();
-        }
+        require(maxOracleNegativeDeviationBps < BPS, SlippageInvalidDeviationBps());
+        require(maxOracleStaleSeconds != 0, SlippageInvalidStaleSeconds());
         MAX_ORACLE_NEGATIVE_DEVIATION_BPS = maxOracleNegativeDeviationBps;
         MAX_ORACLE_STALE_SECONDS = maxOracleStaleSeconds;
     }
@@ -88,9 +84,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     /// @notice Batch-update router allowlist; `routers[i]` paired with `allowed[i]`.
     function setAllowedRouters(address[] calldata routers, bool[] calldata allowed) external onlyOwner {
         uint256 n = routers.length;
-        if (n != allowed.length) {
-            revert SlippageArrayLengthMismatch();
-        }
+        require(n == allowed.length, SlippageArrayLengthMismatch());
         for (uint256 i = 0; i < n;) {
             allowedRouter[routers[i]] = allowed[i];
             emit AllowedRouterUpdated(routers[i], allowed[i], msg.sender);
@@ -103,15 +97,11 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     /// @notice Batch-set Chainlink feeds; `tokens[i]` paired with `feeds[i]`.
     function setTokenPriceFeeds(address[] calldata tokens, address[] calldata feeds) external onlyOwner {
         uint256 n = tokens.length;
-        if (n != feeds.length) {
-            revert SlippageArrayLengthMismatch();
-        }
+        require(n == feeds.length, SlippageArrayLengthMismatch());
         for (uint256 i = 0; i < n;) {
             address token = tokens[i];
             address feed = feeds[i];
-            if (token == address(0) || feed == address(0)) {
-                revert SlippageInvalidAddress();
-            }
+            require(token != address(0) && feed != address(0), SlippageInvalidAddress());
             tokenPriceFeed[token] = feed;
             emit TokenPriceFeedUpdated(token, feed, msg.sender);
             unchecked {
@@ -123,14 +113,10 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     /// @notice Batch grant or revoke the right to call {pause}. Only the owner may configure agents.
     function setPauseAgents(address[] calldata agents, bool[] calldata allowed) external onlyOwner {
         uint256 n = agents.length;
-        if (n != allowed.length) {
-            revert SlippageArrayLengthMismatch();
-        }
+        require(n == allowed.length, SlippageArrayLengthMismatch());
         for (uint256 i = 0; i < n;) {
             address agent = agents[i];
-            if (agent == address(0)) {
-                revert SlippageInvalidAddress();
-            }
+            require(agent != address(0), SlippageInvalidAddress());
             isPauseAgent[agent] = allowed[i];
             emit PauseAgentUpdated(agent, allowed[i], msg.sender);
             unchecked {
@@ -159,9 +145,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
     /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgents}. Uses {Pausable-_pause}.
     function pause() external {
-        if (msg.sender != owner() && !isPauseAgent[msg.sender]) {
-            revert SlippageNotPauseAuthorized();
-        }
+        require(msg.sender == owner() || isPauseAgent[msg.sender], SlippageNotPauseAuthorized());
         _pause();
     }
 
@@ -176,22 +160,14 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         whenNotPaused
     {
         address router = call.target;
-        if (!allowedRouter[router]) {
-            revert RouterNotAllowed(router, callId);
-        }
+        require(allowedRouter[router], RouterNotAllowed(router, callId));
 
         (address[] memory path, bool ethIn, bool ethOut) = _decodeSwap(call.data);
-        if (path.length < 2) {
-            revert PathTooShort();
-        }
+        require(path.length >= 2, PathTooShort());
 
         address weth = IUniswapV2Router02(router).WETH();
-        if (ethIn && path[0] != weth) {
-            revert UnsupportedRouterCall(bytes4(call.data[0:4]));
-        }
-        if (ethOut && path[path.length - 1] != weth) {
-            revert UnsupportedRouterCall(bytes4(call.data[0:4]));
-        }
+        require(!ethIn || path[0] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
+        require(!ethOut || path[path.length - 1] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
 
         address wallet = msg.sender;
         _requirePathAssetsAllowed(wallet, path, callId);
@@ -231,9 +207,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
         delete _snapshots[key];
 
-        if (!allowedRouter[call.target]) {
-            revert RouterNotAllowed(call.target, callId);
-        }
+        require(allowedRouter[call.target], RouterNotAllowed(call.target, callId));
 
         uint256 amountIn;
         uint256 amountOut;
@@ -252,9 +226,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
             amountOut = b1After - snap.erc20Bal1;
         }
 
-        if (amountIn == 0 || amountOut == 0) {
-            revert InvalidMeasuredAmounts();
-        }
+        require(amountIn != 0 && amountOut != 0, InvalidMeasuredAmounts());
 
         (uint256 answerIn, uint8 fdIn) = _readFeed(snap.token0Path);
         (uint256 answerOut, uint8 fdOut) = _readFeed(snap.token1Path);
@@ -269,9 +241,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         // Compare implied USD notionals without shrinking `amountOut * price` first (avoids floor-to-zero on uint256 paths).
         uint256 lhs = Math.mulDiv(amountOut, answerOut * BPS, denomOut);
         uint256 rhs = Math.mulDiv(amountIn, answerIn * minBps, denomIn);
-        if (lhs < rhs) {
-            revert SwapWorseThanOracle();
-        }
+        require(lhs >= rhs, SwapWorseThanOracle());
     }
 
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
@@ -290,9 +260,9 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
         uint256 len = path.length;
         for (uint256 i = 0; i < len;) {
-            if (!IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(path[i])) {
-                revert AssetNotWhitelisted(path[i], callId);
-            }
+            require(
+                IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(path[i]), AssetNotWhitelisted(path[i], callId)
+            );
             unchecked {
                 ++i;
             }
@@ -300,9 +270,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     }
 
     function _decodeSwap(bytes calldata data) internal pure returns (address[] memory path, bool ethIn, bool ethOut) {
-        if (data.length < 4) {
-            revert UnsupportedRouterCall(bytes4(0));
-        }
+        require(data.length >= 4, UnsupportedRouterCall(bytes4(0)));
         bytes4 sel = bytes4(data[0:4]);
         bytes calldata body = data[4:];
 
@@ -334,9 +302,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     }
 
     function _requireFeed(address token) internal view {
-        if (tokenPriceFeed[token] == address(0)) {
-            revert PriceFeedNotSet(token);
-        }
+        require(tokenPriceFeed[token] != address(0), PriceFeedNotSet(token));
     }
 
     /// @dev Matches `keccak256(abi.encode(wallet, operationId, callId))` without `abi.encode` allocation.
@@ -353,18 +319,12 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
     function _readFeed(address token) internal view returns (uint256 answer, uint8 feedDecimals) {
         address feedAddr = tokenPriceFeed[token];
-        if (feedAddr == address(0)) {
-            revert PriceFeedNotSet(token);
-        }
+        require(feedAddr != address(0), PriceFeedNotSet(token));
         IAggregatorV3 feed = IAggregatorV3(feedAddr);
         feedDecimals = feed.decimals();
         (, int256 ans,, uint256 updatedAt,) = feed.latestRoundData();
-        if (ans <= 0) {
-            revert OracleAnswerInvalid(token);
-        }
-        if (block.timestamp - updatedAt > MAX_ORACLE_STALE_SECONDS) {
-            revert StaleOraclePrice(token, updatedAt);
-        }
+        require(ans > 0, OracleAnswerInvalid(token));
+        require(block.timestamp - updatedAt <= MAX_ORACLE_STALE_SECONDS, StaleOraclePrice(token, updatedAt));
         answer = uint256(ans);
     }
 }

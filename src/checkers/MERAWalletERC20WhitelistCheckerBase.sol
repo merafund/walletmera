@@ -41,14 +41,10 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
 
     function setPauseAgents(address[] calldata agents, bool[] calldata allowed) external onlyOwner {
         uint256 n = agents.length;
-        if (n != allowed.length) {
-            revert Erc20WhitelistArrayLengthMismatch();
-        }
+        require(n == allowed.length, Erc20WhitelistArrayLengthMismatch());
         for (uint256 i = 0; i < n;) {
             address agent = agents[i];
-            if (agent == address(0)) {
-                revert Erc20WhitelistInvalidAddress();
-            }
+            require(agent != address(0), Erc20WhitelistInvalidAddress());
             isPauseAgent[agent] = allowed[i];
             emit PauseAgentUpdated(agent, allowed[i], msg.sender);
             unchecked {
@@ -84,9 +80,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
 
     /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgents}.
     function pause() external {
-        if (msg.sender != owner() && !isPauseAgent[msg.sender]) {
-            revert Erc20WhitelistNotPauseAuthorized();
-        }
+        require(msg.sender == owner() || isPauseAgent[msg.sender], Erc20WhitelistNotPauseAuthorized());
         _pause();
     }
 
@@ -100,19 +94,13 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     }
 
     function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external override whenNotPaused {
-        if (call.value != 0) {
-            revert Erc20WhitelistNonZeroValue(callId);
-        }
+        require(call.value == 0, Erc20WhitelistNonZeroValue(callId));
 
         bytes calldata data = call.data;
-        if (data.length < _ERC20_TRANSFER_OR_APPROVE_BODY_LEN) {
-            revert Erc20WhitelistCalldataTooShort(callId);
-        }
+        require(data.length >= _ERC20_TRANSFER_OR_APPROVE_BODY_LEN, Erc20WhitelistCalldataTooShort(callId));
 
         bytes4 sel = bytes4(data[0:4]);
-        if (sel != _expectedSelector()) {
-            revert Erc20WhitelistUnexpectedSelector(sel, callId);
-        }
+        require(sel == _expectedSelector(), Erc20WhitelistUnexpectedSelector(sel, callId));
 
         (address counterparty,) = abi.decode(data[4:], (address, uint256));
 
@@ -147,9 +135,9 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         if (wl == address(0)) {
             return;
         }
-        if (!IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(token)) {
-            revert Erc20WhitelistTokenNotAllowed(token, callId);
-        }
+        require(
+            IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(token), Erc20WhitelistTokenNotAllowed(token, callId)
+        );
     }
 
     /// @dev No-op when no counterparty list is configured for `wallet`. Uses the same interface as token lists (`to` or `spender` as generic address).
@@ -158,8 +146,9 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         if (wl == address(0)) {
             return;
         }
-        if (!IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(account)) {
-            revert Erc20WhitelistCounterpartyNotAllowed(account, callId);
-        }
+        require(
+            IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(account),
+            Erc20WhitelistCounterpartyNotAllowed(account, callId)
+        );
     }
 }

@@ -29,14 +29,10 @@ contract MERAWalletUniswapV2AssetWhitelist is
     /// @notice Batch-set local allow flags; pairs `assets[i]` with `allowed[i]`.
     function setAllowedAssets(address[] calldata assets, bool[] calldata allowed) external onlyOwner {
         uint256 n = assets.length;
-        if (n != allowed.length) {
-            revert AssetWhitelistArrayLengthMismatch();
-        }
+        require(n == allowed.length, AssetWhitelistArrayLengthMismatch());
         for (uint256 i = 0; i < n;) {
             address asset = assets[i];
-            if (asset == address(0)) {
-                revert AssetWhitelistInvalidAddress();
-            }
+            require(asset != address(0), AssetWhitelistInvalidAddress());
             allowedAsset[asset] = allowed[i];
             emit AssetAllowedUpdated(asset, allowed[i], msg.sender);
             unchecked {

@@ -31,31 +31,21 @@ contract MERAWalletCreate2Factory {
     {
         require(msg.value == 0, NonZeroValue());
 
-        if (MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER.code.length == 0) {
-            revert Create2DeployerNotDeployed();
-        }
+        require(MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER.code.length != 0, Create2DeployerNotDeployed());
 
         _requireNonEmptyLogin(login);
         (bytes32 salt, bytes memory initCode) = _saltAndInitCode(login, params);
-        if (walletByLoginHash[salt] != address(0)) {
-            revert LoginAlreadyRegistered();
-        }
+        require(walletByLoginHash[salt] == address(0), LoginAlreadyRegistered());
         address predicted =
             Create2.computeAddress(salt, keccak256(initCode), MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER);
 
         bytes memory data = abi.encodePacked(salt, initCode);
         (bool ok, bytes memory ret) = MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER.call(data);
-        if (!ok) {
-            revert FactoryCallFailed();
-        }
+        require(ok, FactoryCallFailed());
 
         wallet = _parseReturnedAddress(ret);
-        if (wallet == address(0)) {
-            revert InvalidReturnData();
-        }
-        if (wallet != predicted) {
-            revert AddressMismatch(predicted, wallet);
-        }
+        require(wallet != address(0), InvalidReturnData());
+        require(wallet == predicted, AddressMismatch(predicted, wallet));
 
         walletByLoginHash[salt] = wallet;
         emit WalletDeployed(salt, login, wallet);
@@ -82,9 +72,7 @@ contract MERAWalletCreate2Factory {
     }
 
     function _requireNonEmptyLogin(string calldata login) private pure {
-        if (bytes(login).length == 0) {
-            revert EmptyLogin();
-        }
+        require(bytes(login).length != 0, EmptyLogin());
     }
 
     /// @dev Salt scheme v1: `keccak256(bytes(login))` (documented, do not change without versioning).
