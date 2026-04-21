@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
-import {BaseMERAWallet} from "../BaseMERAWallet.sol";
+import {MERAWalletMemoryBatches} from "./MERAWalletMemoryBatches.sol";
 
-abstract contract MERAWalletNative is BaseMERAWallet {
+abstract contract MERAWalletNative is MERAWalletMemoryBatches {
     function transferNative(address payable to, uint256 amount, uint256 salt) external {
         _executeSingleCall(to, amount, "", address(0), "", salt);
     }
@@ -15,13 +15,11 @@ abstract contract MERAWalletNative is BaseMERAWallet {
         bytes calldata checkerData,
         uint256 salt
     ) external {
-        bytes memory checkerMem = checkerData;
-        _executeSingleCall(to, amount, "", checker, checkerMem, salt);
+        _executeSingleCall(to, amount, "", checker, _bytesCalldataToMemory(checkerData), salt);
     }
 
     function callExternal(address target, uint256 value, bytes calldata data, uint256 salt) external {
-        bytes memory dataMem = data;
-        _executeSingleCall(target, value, dataMem, address(0), "", salt);
+        _executeSingleCallCalldata(target, value, data, salt);
     }
 
     function callExternal(
@@ -32,9 +30,7 @@ abstract contract MERAWalletNative is BaseMERAWallet {
         bytes calldata checkerData,
         uint256 salt
     ) external {
-        bytes memory dataMem = data;
-        bytes memory checkerMem = checkerData;
-        _executeSingleCall(target, value, dataMem, checker, checkerMem, salt);
+        _executeSingleCallCalldata(target, value, data, checker, checkerData, salt);
     }
 
     function callExternalWithChecker(
@@ -45,8 +41,6 @@ abstract contract MERAWalletNative is BaseMERAWallet {
         bytes calldata checkerData,
         uint256 salt
     ) external {
-        bytes memory dataMem = data;
-        bytes memory checkerDataMem = checkerData;
-        _executeSingleCall(target, value, dataMem, checker, checkerDataMem, salt);
+        _executeSingleCallCalldata(target, value, data, checker, checkerData, salt);
     }
 }

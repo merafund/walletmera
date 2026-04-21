@@ -306,16 +306,14 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         whenLifeAlive
         whenControllerCoreUnfrozen
     {
-        MERAWalletTypes.Call[] memory memoryCalls = calls;
+        _validateCalls(calls);
 
-        _validateCalls(memoryCalls);
-
-        bytes32 operationId = _computeOperationId(memoryCalls, salt);
-        uint256 requiredDelay = _getRequiredDelay(_coreRole(msg.sender), memoryCalls);
+        bytes32 operationId = _computeOperationId(calls, salt);
+        uint256 requiredDelay = _getRequiredDelay(_coreRole(msg.sender), calls);
 
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
 
-        _executeCallsWithHooks(memoryCalls, operationId);
+        _executeCallsWithHooks(calls, operationId);
 
         emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
     }
@@ -326,15 +324,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         whenLifeAlive
         returns (bytes32 operationId)
     {
-        MERAWalletTypes.Call[] memory memoryCalls = new MERAWalletTypes.Call[](calls.length);
-        uint256 len = calls.length;
-        for (uint256 i = 0; i < len;) {
-            memoryCalls[i] = calls[i];
-            unchecked {
-                ++i;
-            }
-        }
-        (operationId,,,) = _proposeTransactionFromMemory(memoryCalls, salt);
+        (operationId,,,) = _proposeTransaction(calls, salt);
     }
 
     function proposeTransactionWithRelay(
@@ -342,19 +332,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         uint256 salt,
         MERAWalletTypes.RelayProposeConfig calldata relayConfig
     ) external payable override whenLifeAlive returns (bytes32 operationId) {
-        MERAWalletTypes.RelayProposeConfig memory relayConfigMem = relayConfig;
-        _validateRelayConfig(relayConfigMem, msg.value);
+        _validateRelayConfig(relayConfig, msg.value);
 
-        MERAWalletTypes.Call[] memory memoryCalls = new MERAWalletTypes.Call[](calls.length);
-        uint256 clen = calls.length;
-        for (uint256 i = 0; i < clen;) {
-            memoryCalls[i] = calls[i];
-            unchecked {
-                ++i;
-            }
-        }
-        (operationId,,,) = _proposeTransactionFromMemory(memoryCalls, salt);
-        _saveRelayOperation(operationId, relayConfigMem, msg.value);
+        (operationId,,,) = _proposeTransaction(calls, salt);
+        _saveRelayOperation(operationId, relayConfig, msg.value);
     }
 
     function executePending(MERAWalletTypes.Call[] calldata calls, uint256 salt)
@@ -363,8 +344,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         whenLifeAlive
     {
-        address[] memory emptyWhitelist = new address[](0);
-        _executePendingCalldata(calls, salt, emptyWhitelist);
+        _executePending(calls, salt, new address[](0));
     }
 
     function executePending(MERAWalletTypes.Call[] calldata calls, uint256 salt, address[] calldata executorWhitelist)
@@ -373,8 +353,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         whenLifeAlive
     {
-        address[] memory whitelist = executorWhitelist;
-        _executePendingCalldata(calls, salt, whitelist);
+        _executePending(calls, salt, executorWhitelist);
     }
 
     function vetoPending(bytes32 operationId) external override {
@@ -477,9 +456,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         returns (bytes32)
     {
-        MERAWalletTypes.Call[] memory memoryCalls = calls;
-        _validateCalls(memoryCalls);
-        return _computeOperationId(memoryCalls, salt);
+        _validateCalls(calls);
+        return _computeOperationId(calls, salt);
     }
 
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls)
@@ -489,9 +467,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         whenControllerCoreUnfrozen
         returns (uint256)
     {
-        MERAWalletTypes.Call[] memory memoryCalls = calls;
-        _validateCalls(memoryCalls);
-        return _getRequiredDelay(_coreRole(msg.sender), memoryCalls);
+        _validateCalls(calls);
+        return _getRequiredDelay(_coreRole(msg.sender), calls);
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
@@ -614,34 +591,17 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit ControllerAgentUpdated(agent, true, stored.roleLevel, msg.sender);
     }
 
-    function _executePendingCalldata(
-        MERAWalletTypes.Call[] calldata calls,
-        uint256 salt,
-        address[] memory executorWhitelist
-    ) internal {
-        MERAWalletTypes.Call[] memory memoryCalls = new MERAWalletTypes.Call[](calls.length);
-        uint256 clen = calls.length;
-        for (uint256 i = 0; i < clen;) {
-            memoryCalls[i] = calls[i];
-            unchecked {
-                ++i;
-            }
-        }
-        _executePendingFromMemory(memoryCalls, salt, executorWhitelist);
-    }
-
-    /// @dev Used by extensions that build `Call[]` in memory (e.g. ERC20 timelock helpers).
-    function _proposeTransactionFromMemory(MERAWalletTypes.Call[] memory memoryCalls, uint256 salt)
+    function _proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
         internal
         whenControllerCoreUnfrozen
         returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
     {
         callerRole = _coreRole(msg.sender);
 
-        _validateCalls(memoryCalls);
+        _validateCalls(calls);
 
-        operationId = _computeOperationId(memoryCalls, salt);
-        requiredDelay = _getRequiredDelay(callerRole, memoryCalls);
+        operationId = _computeOperationId(calls, salt);
+        requiredDelay = _getRequiredDelay(callerRole, calls);
         require(requiredDelay != 0, ZeroDelayNotProposable());
 
         MERAWalletTypes.OperationStatus existing = _operations[operationId].status;
@@ -657,14 +617,14 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             status: MERAWalletTypes.OperationStatus.Pending
         });
 
-        _beforePropose(memoryCalls, operationId);
+        _beforePropose(calls, operationId);
 
         emit TransactionProposed(operationId, salt, msg.sender, callerRole, executeAfter, requiredDelay);
     }
 
     function _saveRelayOperation(
         bytes32 operationId,
-        MERAWalletTypes.RelayProposeConfig memory relayConfig,
+        MERAWalletTypes.RelayProposeConfig calldata relayConfig,
         uint256 relayReward
     ) internal {
         _relayOperations[operationId] =
@@ -683,14 +643,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         );
     }
 
-    function _executePendingFromMemory(
-        MERAWalletTypes.Call[] memory memoryCalls,
-        uint256 salt,
-        address[] memory executorWhitelist
-    ) internal {
-        _validateCalls(memoryCalls);
+    function _executePending(MERAWalletTypes.Call[] calldata calls, uint256 salt, address[] memory executorWhitelist)
+        internal
+    {
+        _validateCalls(calls);
 
-        bytes32 operationId = _computeOperationId(memoryCalls, salt);
+        bytes32 operationId = _computeOperationId(calls, salt);
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
 
@@ -707,52 +665,36 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         operation.status = MERAWalletTypes.OperationStatus.Executed;
 
-        _executeCallsWithHooks(memoryCalls, operationId);
+        _executeCallsWithHooks(calls, operationId);
         _payoutRelayReward(relayOperation);
 
         emit PendingTransactionExecuted(operationId, salt, msg.sender);
     }
 
-    function _executeSingleCall(
-        address target,
-        uint256 value,
-        bytes memory data,
-        address checker,
-        bytes memory checkerData,
-        uint256 salt
-    ) internal {
-        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
-        calls[0] = MERAWalletTypes.Call({
-            target: target, value: value, data: data, checker: checker, checkerData: checkerData
-        });
-        _executeImmediateFromCalls(calls, salt);
-    }
-
-    function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 salt)
-        internal
-        whenLifeAlive
-        whenControllerCoreUnfrozen
-    {
-        _validateCalls(calls);
-
-        bytes32 operationId = _computeOperationId(calls, salt);
-        uint256 requiredDelay = _getRequiredDelay(_coreRole(msg.sender), calls);
-        require(requiredDelay == 0, TimelockRequired(requiredDelay));
-
-        _executeCallsWithHooks(calls, operationId);
-
-        emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
-    }
-
     /// @dev Runs before/after hooks and the external call for each entry in order so checkers observe post-state incrementally.
-    function _executeCallsWithHooks(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal {
+    function _executeCallsWithHooks(MERAWalletTypes.Call[] calldata calls, bytes32 operationId) internal {
         uint256 callsLength = calls.length;
         for (uint256 i = 0; i < callsLength;) {
-            MERAWalletTypes.Call memory callData = calls[i];
+            MERAWalletTypes.Call calldata callData = calls[i];
             _beforeExecute(callData, operationId, i);
             (bool success, bytes memory result) = callData.target.call{value: callData.value}(callData.data);
             require(success, CallExecutionFailed(i, result));
             _afterExecute(callData, operationId, i);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @dev Same as { _executeCallsWithHooks } for batches built in memory (extensions).
+    function _executeCallsWithHooksWithCallsMemory(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal {
+        uint256 callsLength = calls.length;
+        for (uint256 i = 0; i < callsLength;) {
+            MERAWalletTypes.Call memory callData = calls[i];
+            _beforeExecuteWithCallMemory(callData, operationId, i);
+            (bool success, bytes memory result) = callData.target.call{value: callData.value}(callData.data);
+            require(success, CallExecutionFailed(i, result));
+            _afterExecuteWithCallMemory(callData, operationId, i);
             unchecked {
                 ++i;
             }
@@ -836,7 +778,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit LifeControllerUpdated(controller, false, caller);
     }
 
-    function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
     {
         uint256 checkersLength = requiredBeforeCheckers.length;
@@ -851,7 +793,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    function _invokeAfterRequiredCheckers(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    function _invokeAfterRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
     {
         uint256 checkersLength = requiredAfterCheckers.length;
@@ -866,7 +808,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    function _invokeBeforeOptionalChecker(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    function _invokeBeforeOptionalChecker(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
     {
         address checker = callData.checker;
@@ -876,9 +818,67 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         IMERAWalletTransactionChecker(checker).checkBefore(callData, operationId, callId);
     }
 
-    function _invokeAfterOptionalChecker(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    function _invokeAfterOptionalChecker(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
     {
+        address checker = callData.checker;
+        if (checker == address(0) || !whitelistOptionalChecker[checker].enableAfter) {
+            return;
+        }
+        IMERAWalletTransactionChecker(checker).checkAfter(callData, operationId, callId);
+    }
+
+    function _invokeBeforeRequiredCheckersWithCallMemory(
+        MERAWalletTypes.Call memory callData,
+        bytes32 operationId,
+        uint256 callId
+    ) internal {
+        uint256 checkersLength = requiredBeforeCheckers.length;
+        if (checkersLength == 0) {
+            return;
+        }
+        for (uint256 i = 0; i < checkersLength;) {
+            IMERAWalletTransactionChecker(requiredBeforeCheckers[i]).checkBefore(callData, operationId, callId);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _invokeAfterRequiredCheckersWithCallMemory(
+        MERAWalletTypes.Call memory callData,
+        bytes32 operationId,
+        uint256 callId
+    ) internal {
+        uint256 checkersLength = requiredAfterCheckers.length;
+        if (checkersLength == 0) {
+            return;
+        }
+        for (uint256 i = 0; i < checkersLength;) {
+            IMERAWalletTransactionChecker(requiredAfterCheckers[i]).checkAfter(callData, operationId, callId);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _invokeBeforeOptionalCheckerWithCallMemory(
+        MERAWalletTypes.Call memory callData,
+        bytes32 operationId,
+        uint256 callId
+    ) internal {
+        address checker = callData.checker;
+        if (checker == address(0) || !whitelistOptionalChecker[checker].enableBefore) {
+            return;
+        }
+        IMERAWalletTransactionChecker(checker).checkBefore(callData, operationId, callId);
+    }
+
+    function _invokeAfterOptionalCheckerWithCallMemory(
+        MERAWalletTypes.Call memory callData,
+        bytes32 operationId,
+        uint256 callId
+    ) internal {
         address checker = callData.checker;
         if (checker == address(0) || !whitelistOptionalChecker[checker].enableAfter) {
             return;
@@ -915,9 +915,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         (bool success,) = recipient.call{value: amount}("");
         require(success, RelayRewardTransferFailed(recipient, amount));
     }
-    function _beforePropose(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal virtual {}
+    function _beforePropose(MERAWalletTypes.Call[] calldata calls, bytes32 operationId) internal virtual {}
 
-    function _beforeExecute(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    /// @dev Hook for extension batches built in memory (`MERAWalletMemoryBatches`); default no-op.
+    function _beforeProposeWithCallsMemory(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal virtual {}
+
+    function _beforeExecute(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
         virtual
     {
@@ -925,9 +928,28 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _invokeBeforeOptionalChecker(callData, operationId, callId);
     }
 
-    function _afterExecute(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId) internal virtual {
+    function _beforeExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+        internal
+        virtual
+    {
+        _invokeBeforeRequiredCheckersWithCallMemory(callData, operationId, callId);
+        _invokeBeforeOptionalCheckerWithCallMemory(callData, operationId, callId);
+    }
+
+    function _afterExecute(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
+        internal
+        virtual
+    {
         _invokeAfterRequiredCheckers(callData, operationId, callId);
         _invokeAfterOptionalChecker(callData, operationId, callId);
+    }
+
+    function _afterExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+        internal
+        virtual
+    {
+        _invokeAfterRequiredCheckersWithCallMemory(callData, operationId, callId);
+        _invokeAfterOptionalCheckerWithCallMemory(callData, operationId, callId);
     }
 
     function _onlyEmergencyOrSelf() internal view {
@@ -939,7 +961,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _requireCoreRoleNotFrozen(callerRole);
     }
 
-    function _validateCalls(MERAWalletTypes.Call[] memory calls) internal view {
+    function _validateCalls(MERAWalletTypes.Call[] calldata calls) internal view {
         require(calls.length > 0, EmptyCalls());
         require(
             calls.length <= MERAWalletConstants.MAX_CALLS_PER_BATCH,
@@ -949,14 +971,18 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Same bytes as `abi.encode(chainId, wallet, calls, salt)`; `keccak256` runs over the length-prefixed buffer in assembly (matches high-level `keccak256(bytes)` hashing).
-    function _computeOperationId(MERAWalletTypes.Call[] memory calls, uint256 salt) internal view returns (bytes32 id) {
+    function _computeOperationId(MERAWalletTypes.Call[] calldata calls, uint256 salt)
+        internal
+        view
+        returns (bytes32 id)
+    {
         bytes memory preimage = abi.encode(block.chainid, address(this), calls, salt);
         assembly ("memory-safe") {
             id := keccak256(add(preimage, 32), mload(preimage))
         }
     }
 
-    function _getRequiredDelay(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call[] memory calls)
+    function _getRequiredDelay(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call[] calldata calls)
         internal
         view
         returns (uint256 requiredDelay)
@@ -978,7 +1004,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     ///      Reverts if path forbidden for role.
     /// @dev Emergency uses the **backup** policy slice (no Emergency dimension in `CallPathPolicy`); self-calls that
     ///      only adjust wallet config may be exempt — see `_isEmergencyTimelockExemptSelfCall`.
-    function _getCallDelay(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call memory callData)
+    function _getCallDelay(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call calldata callData)
         internal
         view
         returns (uint256)
@@ -987,26 +1013,33 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             if (_isEmergencyTimelockExemptSelfCall(callData)) {
                 return 0;
             }
-            return _getCallDelayForPolicyRole(MERAWalletTypes.Role.Backup, callData);
+            return _getCallDelayForPolicyRole(MERAWalletTypes.Role.Backup, callData.target, callData.data);
         }
-        return _getCallDelayForPolicyRole(callerRole, callData);
+        return _getCallDelayForPolicyRole(callerRole, callData.target, callData.data);
     }
 
     /// @notice Delay from call policies for Primary or Backup (same slice as used for Emergency when not exempt).
-    function _getCallDelayForPolicyRole(MERAWalletTypes.Role policyRole, MERAWalletTypes.Call memory callData)
+    function _getCallDelayForPolicyRole(MERAWalletTypes.Role policyRole, address target, bytes calldata data)
         internal
         view
         returns (uint256)
     {
-        bytes4 selector = _extractSelector(callData.data);
-        MERAWalletTypes.CallPathPolicy memory pairPolicy = callPolicyByTargetSelector[callData.target][selector];
+        return _getCallDelayForPolicyRoleFromSelector(policyRole, target, _extractSelectorFromCalldataBytes(data));
+    }
+
+    function _getCallDelayForPolicyRoleFromSelector(MERAWalletTypes.Role policyRole, address target, bytes4 selector)
+        internal
+        view
+        returns (uint256)
+    {
+        MERAWalletTypes.CallPathPolicy memory pairPolicy = callPolicyByTargetSelector[target][selector];
         if (pairPolicy.exists) {
             MERAWalletTypes.RoleCallPolicy memory pairRole = _rolePolicySlice(pairPolicy, policyRole);
             require(!pairRole.forbidden, CallPathForbiddenForRole(policyRole));
             return uint256(pairRole.delay);
         }
 
-        MERAWalletTypes.CallPathPolicy memory targetPolicy = callPolicyByTarget[callData.target];
+        MERAWalletTypes.CallPathPolicy memory targetPolicy = callPolicyByTarget[target];
         MERAWalletTypes.CallPathPolicy memory selectorPolicy = callPolicyBySelector[selector];
 
         if (!targetPolicy.exists && !selectorPolicy.exists) {
@@ -1024,11 +1057,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Zero extra delay for emergency-driven self-calls that only reconfigure the wallet (role / freeze / policies / life).
-    function _isEmergencyTimelockExemptSelfCall(MERAWalletTypes.Call memory callData) internal view returns (bool) {
+    function _isEmergencyTimelockExemptSelfCall(MERAWalletTypes.Call calldata callData) internal view returns (bool) {
         if (callData.target != address(this)) {
             return false;
         }
-        return _isEmergencyConfigSelector(_extractSelector(callData.data));
+        return _isEmergencyConfigSelector(_extractSelectorFromCalldataBytes(callData.data));
     }
 
     function _requireLifeAliveForStateChanges() internal view {
@@ -1042,7 +1075,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         );
     }
 
-    function _validateCallWhitelist(MERAWalletTypes.Call[] memory calls) internal view {
+    function _validateCallWhitelist(MERAWalletTypes.Call[] calldata calls) internal view {
         uint256 callsLength = calls.length;
         for (uint256 i = 0; i < callsLength;) {
             address checker = calls[i].checker;
@@ -1159,14 +1192,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     // Consider refactoring low-level helpers (bytes selector reads, ECDSA, etc.) to Solady where it fits.
-    function _extractSelector(bytes memory data) internal pure returns (bytes4 selector) {
+    function _extractSelectorFromCalldataBytes(bytes calldata data) internal pure returns (bytes4 selector) {
         if (data.length < MERAWalletConstants.FUNCTION_SELECTOR_LENGTH) {
             return bytes4(0);
         }
-        // The first 4 bytes in calldata-encoded call data are always the function selector.
-        assembly {
-            selector := mload(add(data, 32))
-        }
+        return bytes4(data[0:4]);
     }
 
     /// @dev OpenZeppelin ECDSA on calldata; zero address on invalid signature (no revert, for EIP-1271).
@@ -1178,7 +1208,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return recovered;
     }
 
-    function _validateRelayConfig(MERAWalletTypes.RelayProposeConfig memory relayConfig, uint256 relayReward)
+    function _validateRelayConfig(MERAWalletTypes.RelayProposeConfig calldata relayConfig, uint256 relayReward)
         internal
         pure
     {
