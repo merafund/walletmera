@@ -52,4 +52,6 @@ interface IBaseMERAWalletErrors {
     error TooManyRequiredCheckers(uint256 length, uint256 maxAllowed);
     /// @dev Controller agents cannot veto a pending op created by the emergency role.
     error AgentCannotVetoEmergencyOperation();
+    /// @dev Parallel calldata arrays for a batch setter had different lengths.
+    error ArrayLengthMismatch(uint256 a, uint256 b);
 }

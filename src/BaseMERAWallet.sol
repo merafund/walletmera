@@ -190,33 +190,114 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit LifeHeartbeatConfirmed(msg.sender, block.timestamp);
     }
 
-    function setTargetCallPolicy(address target, MERAWalletTypes.CallPathPolicy calldata policy)
+    function setTargetCallPolicies(address[] calldata targets, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
         onlyEmergencyOrSelf
         whenLifeAlive
     {
+        uint256 n = targets.length;
+        require(n == policies.length, ArrayLengthMismatch(n, policies.length));
+        for (uint256 i = 0; i < n;) {
+            _setTargetCallPolicy(targets[i], policies[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setSelectorCallPolicies(bytes4[] calldata selectors, MERAWalletTypes.CallPathPolicy[] calldata policies)
+        external
+        override
+        onlyEmergencyOrSelf
+        whenLifeAlive
+    {
+        uint256 n = selectors.length;
+        require(n == policies.length, ArrayLengthMismatch(n, policies.length));
+        for (uint256 i = 0; i < n;) {
+            _setSelectorCallPolicy(selectors[i], policies[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setTargetSelectorCallPolicies(
+        address[] calldata targets,
+        bytes4[] calldata selectors,
+        MERAWalletTypes.CallPathPolicy[] calldata policies
+    ) external override onlyEmergencyOrSelf whenLifeAlive {
+        uint256 n = targets.length;
+        require(n == selectors.length, ArrayLengthMismatch(n, selectors.length));
+        require(n == policies.length, ArrayLengthMismatch(n, policies.length));
+        for (uint256 i = 0; i < n;) {
+            _setTargetSelectorCallPolicy(targets[i], selectors[i], policies[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled)
+        external
+        override
+        onlyEmergencyOrSelf
+        whenLifeAlive
+    {
+        uint256 n = checkers.length;
+        require(n == enabled.length, ArrayLengthMismatch(n, enabled.length));
+        for (uint256 i = 0; i < n;) {
+            _setRequiredChecker(checkers[i], enabled[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setWhitelistedCheckers(MERAWalletTypes.WhitelistCheckerUpdate[] calldata updates)
+        external
+        override
+        onlyEmergencyOrSelf
+        whenLifeAlive
+    {
+        uint256 n = updates.length;
+        for (uint256 i = 0; i < n;) {
+            MERAWalletTypes.WhitelistCheckerUpdate calldata u = updates[i];
+            _setWhitelistedChecker(u.checker, u.allowed, u.config);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setControllerAgents(address[] calldata agents, bool[] calldata enabled) external override whenLifeAlive {
+        uint256 n = agents.length;
+        require(n == enabled.length, ArrayLengthMismatch(n, enabled.length));
+        for (uint256 i = 0; i < n;) {
+            _setControllerAgent(agents[i], enabled[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _setTargetCallPolicy(address target, MERAWalletTypes.CallPathPolicy calldata policy) internal {
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyByTarget[target];
         callPolicyByTarget[target] = policy;
         emit TargetCallPolicyUpdated(target, previousPolicy, policy, msg.sender);
     }
 
-    function setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy)
-        external
-        override
-        onlyEmergencyOrSelf
-        whenLifeAlive
-    {
+    function _setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy) internal {
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyBySelector[selector];
         callPolicyBySelector[selector] = policy;
         emit SelectorCallPolicyUpdated(selector, previousPolicy, policy, msg.sender);
     }
 
-    function setTargetSelectorCallPolicy(
+    function _setTargetSelectorCallPolicy(
         address target,
         bytes4 selector,
         MERAWalletTypes.CallPathPolicy calldata policy
-    ) external override onlyEmergencyOrSelf whenLifeAlive {
+    ) internal {
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyByTargetSelector[target][selector];
         // Pair map: `policy.exists == false` clears the slot; `true` stores `policy` as given.
         if (!policy.exists) {
@@ -231,7 +312,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit TargetSelectorCallPolicyUpdated(target, selector, previousPolicy, policy, policy.exists, msg.sender);
     }
 
-    function setRequiredChecker(address checker, bool enabled) external override onlyEmergencyOrSelf whenLifeAlive {
+    function _setRequiredChecker(address checker, bool enabled) internal {
         require(checker != address(0), InvalidCheckerAddress());
 
         bool wasConfigured = _requiredBeforeIndexPlusOne[checker] != 0 || _requiredAfterIndexPlusOne[checker] != 0;
@@ -253,12 +334,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit RequiredCheckerUpdated(checker, enableBefore, enableAfter, msg.sender);
     }
 
-    function setWhitelistedChecker(address checker, bool allowed, bytes calldata config)
-        external
-        override
-        onlyEmergencyOrSelf
-        whenLifeAlive
-    {
+    function _setWhitelistedChecker(address checker, bool allowed, bytes calldata config) internal {
         if (!allowed) {
             delete whitelistedChecker[checker];
             emit WhitelistCheckerUpdated(checker, false, false, false, msg.sender);
@@ -286,7 +362,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     /// @notice Enable or disable a veto agent (may call {vetoPending} on any pending op). Only core controllers may configure.
     /// @dev On enable, `roleLevel` is set to `_coreRole(msg.sender)` so only that role or higher may later disable.
-    function setControllerAgent(address agent, bool enabled) external override whenLifeAlive {
+    function _setControllerAgent(address agent, bool enabled) internal {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         require(callerCore != MERAWalletTypes.Role.None, NotCoreController());
         _requireCoreRoleNotFrozen(callerCore);
@@ -779,12 +855,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             || selector == IBaseMERAWallet.setGlobalTimelock.selector
             || selector == IBaseMERAWallet.setLifeControl.selector
             || selector == IBaseMERAWallet.setLifeControllers.selector
-            || selector == IBaseMERAWallet.setTargetCallPolicy.selector
-            || selector == IBaseMERAWallet.setSelectorCallPolicy.selector
-            || selector == IBaseMERAWallet.setTargetSelectorCallPolicy.selector
-            || selector == IBaseMERAWallet.setRequiredChecker.selector
-            || selector == IBaseMERAWallet.setWhitelistedChecker.selector
-            || selector == IBaseMERAWallet.setControllerAgent.selector
+            || selector == IBaseMERAWallet.setTargetCallPolicies.selector
+            || selector == IBaseMERAWallet.setSelectorCallPolicies.selector
+            || selector == IBaseMERAWallet.setTargetSelectorCallPolicies.selector
+            || selector == IBaseMERAWallet.setRequiredCheckers.selector
+            || selector == IBaseMERAWallet.setWhitelistedCheckers.selector
+            || selector == IBaseMERAWallet.setControllerAgents.selector
             || selector == IBaseMERAWallet.setFrozenPrimary.selector
             || selector == IBaseMERAWallet.setFrozenBackup.selector
             || selector == IBaseMERAWallet.set1271Signer.selector;

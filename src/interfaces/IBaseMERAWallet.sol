@@ -46,20 +46,22 @@ interface IBaseMERAWallet {
     function setLifeControl(bool enabled, uint256 timeout) external;
     function setLifeControllers(address[] calldata controllers, bool enabled) external;
     function confirmAlive() external;
-    function setTargetCallPolicy(address target, MERAWalletTypes.CallPathPolicy calldata policy) external;
-    function setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy) external;
-    /// @notice Pair (target, selector) policy. When `policy.exists` is true, stores `policy`. When false, removes the pair entry (other fields ignored).
-    function setTargetSelectorCallPolicy(
-        address target,
-        bytes4 selector,
-        MERAWalletTypes.CallPathPolicy calldata policy
+    function setTargetCallPolicies(address[] calldata targets, MERAWalletTypes.CallPathPolicy[] calldata policies)
+        external;
+    function setSelectorCallPolicies(bytes4[] calldata selectors, MERAWalletTypes.CallPathPolicy[] calldata policies)
+        external;
+    /// @notice Pair (target, selector) policies in parallel arrays. When `policies[i].exists` is true, stores that policy; when false, removes that pair (other fields ignored).
+    function setTargetSelectorCallPolicies(
+        address[] calldata targets,
+        bytes4[] calldata selectors,
+        MERAWalletTypes.CallPathPolicy[] calldata policies
     ) external;
-    /// @param enabled If true, registers or syncs required checkers from `checker.hookModes()`. If false, removes `checker` from required lists.
-    function setRequiredChecker(address checker, bool enabled) external;
-    /// @param config Passed to `IMERAWalletTransactionChecker.applyConfig` when `allowed` is true and `config` is non-empty (skipped for `checker == address(0)` or empty `config`).
-    function setWhitelistedChecker(address checker, bool allowed, bytes calldata config) external;
-    /// @notice Enable or disable a veto agent (may {vetoPending}, not {cancelPending}). On enable, `roleLevel` is set from the caller's core role for removal authorization.
-    function setControllerAgent(address agent, bool enabled) external;
+    /// @param enabled Per checker: if true, registers or syncs from `checker.hookModes()`; if false, removes from required lists.
+    function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled) external;
+    /// @dev `config` is passed to `applyConfig` when allowed and non-empty (same rules as each single entry in the batch).
+    function setWhitelistedCheckers(MERAWalletTypes.WhitelistCheckerUpdate[] calldata updates) external;
+    /// @notice Enable or disable veto agents (may {vetoPending}). On enable, `roleLevel` follows the caller's core role.
+    function setControllerAgents(address[] calldata agents, bool[] calldata enabled) external;
     /// @notice Backup or Emergency may set any value. Enabled controller agents may set primary freeze to true only via the same function (no unfreeze).
     function setFrozenPrimary(bool frozen) external;
     /// @notice Emergency may set any value. Backup-scoped controller agents may set backup freeze to true only via the same function (no unfreeze).

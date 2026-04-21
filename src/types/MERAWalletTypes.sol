@@ -30,6 +30,13 @@ library MERAWalletTypes {
         bool enableAfter;
     }
 
+    /// @notice One entry for {setWhitelistedCheckers} batch updates.
+    struct WhitelistCheckerUpdate {
+        address checker;
+        bool allowed;
+        bytes config;
+    }
+
     enum Role {
         None,
         Primary,

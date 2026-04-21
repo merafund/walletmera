@@ -54,8 +54,8 @@ contract BaseMERAWalletTest is Test {
         checkerNoHooks = new ConfigurableTransactionChecker(false, false, address(walletWithExtensions));
 
         vm.startPrank(emergency);
-        wallet.setWhitelistedChecker(address(0), true, "");
-        walletWithExtensions.setWhitelistedChecker(address(0), true, "");
+        wallet.setWhitelistedCheckers(_mkWl(address(0), true, ""));
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(0), true, ""));
         vm.stopPrank();
     }
 
@@ -293,8 +293,8 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_UsesGlobalWhenPerRoleDelaysAreZero() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _inactiveCallPathPolicy(0, false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false));
+        _policyTarget(address(receiver), _inactiveCallPathPolicy(0, false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -308,7 +308,7 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_TargetPrimaryDelayApplies() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
+        _policyTarget(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -322,8 +322,8 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_UsesMaxOfTargetAndSelectorPrimaryDelays() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
+        _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -337,8 +337,8 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_UsesMaxWhenSelectorPrimaryDelayIsHigher() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(uint56(5 days), false, 0, false));
+        _policyTarget(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(5 days), false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -352,8 +352,8 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_UsesMaxDelayWhenBothDimensionsSet() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(uint56(3 days), false, 0, false));
+        _policyTarget(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(3 days), false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -367,9 +367,9 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_PairPolicyOverridesSeparateTargetAndSelector() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
-        wallet.setTargetSelectorCallPolicy(
+        _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
+        _policyPair(
             address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(uint56(1 days), false, 0, false)
         );
         vm.stopPrank();
@@ -384,14 +384,12 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_AfterClearPairPolicy_UsesMaxOfTargetAndSelector() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
-        wallet.setTargetSelectorCallPolicy(
+        _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
+        _policyPair(
             address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(uint56(1 days), false, 0, false)
         );
-        wallet.setTargetSelectorCallPolicy(
-            address(receiver), ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false)
-        );
+        _policyPair(address(receiver), ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -404,11 +402,9 @@ contract BaseMERAWalletTest is Test {
     function test_GetRequiredDelay_PairPolicyZeroPrimaryDelayReturnsZero() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
-        wallet.setTargetSelectorCallPolicy(
-            address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(0, false, 0, false)
-        );
+        _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
+        _policyPair(address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(0, false, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -420,11 +416,9 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_RevertsWhenPairCallPathForbiddenForPrimary() public {
         vm.startPrank(emergency);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(0, false, 0, false));
-        wallet.setSelectorCallPolicy(ReceiverMock.setValue.selector, _callPathPolicy(0, false, 0, false));
-        wallet.setTargetSelectorCallPolicy(
-            address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(0, true, 0, false)
-        );
+        _policyTarget(address(receiver), _callPathPolicy(0, false, 0, false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(0, false, 0, false));
+        _policyPair(address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(0, true, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -442,15 +436,13 @@ contract BaseMERAWalletTest is Test {
     function test_SetTargetSelectorCallPolicy_Clear_RevertsWhenNotConfigured() public {
         vm.prank(emergency);
         vm.expectRevert(IBaseMERAWalletErrors.NoopTargetSelectorCallPolicy.selector);
-        wallet.setTargetSelectorCallPolicy(
-            address(receiver), ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false)
-        );
+        _policyPair(address(receiver), ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false));
     }
 
     function test_CallPolicyByTargetSelector_PublicGetter_ReturnsStored() public {
         MERAWalletTypes.CallPathPolicy memory stored = _pairCallPathPolicy(uint56(9 days), false, uint56(1 days), true);
         vm.prank(emergency);
-        wallet.setTargetSelectorCallPolicy(address(receiver), ReceiverMock.setValue.selector, stored);
+        _policyPair(address(receiver), ReceiverMock.setValue.selector, stored);
 
         (
             MERAWalletTypes.RoleCallPolicy memory readPrimary,
@@ -466,10 +458,8 @@ contract BaseMERAWalletTest is Test {
 
     function test_CallPolicyGetters_ReturnStoredPolicy() public {
         vm.startPrank(emergency);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(123), true, uint56(7), false));
-        wallet.setSelectorCallPolicy(
-            ReceiverMock.setValue.selector, _callPathPolicy(uint56(456), false, uint56(8), true)
-        );
+        _policyTarget(address(receiver), _callPathPolicy(uint56(123), true, uint56(7), false));
+        _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(456), false, uint56(8), true));
         vm.stopPrank();
 
         (MERAWalletTypes.RoleCallPolicy memory tPrimary, MERAWalletTypes.RoleCallPolicy memory tBackup, bool tExists) =
@@ -492,7 +482,7 @@ contract BaseMERAWalletTest is Test {
     function test_BackupZeroPerRoleDelayAllowsImmediateExecutionWhilePrimaryStillTimelocked() public {
         // Per-role delays only: global stays 0 so backup max(0,0,0)=0 while primary max(0,1d,0)=1d.
         vm.startPrank(emergency);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(uint56(1 days), false, uint56(0), false));
+        _policyTarget(address(receiver), _callPathPolicy(uint56(1 days), false, uint56(0), false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -506,7 +496,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_RevertsWhenCallPathForbiddenForPrimary() public {
         vm.startPrank(emergency);
-        wallet.setTargetCallPolicy(address(receiver), _callPathPolicy(0, true, 0, false));
+        _policyTarget(address(receiver), _callPathPolicy(0, true, 0, false));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -692,10 +682,16 @@ contract BaseMERAWalletTest is Test {
     function test_SetRequiredChecker_OnlyEmergencyAndSupportsBothMode() public {
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
-        walletWithExtensions.setRequiredChecker(address(checkerBothHooks), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerBothHooks), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
 
         vm.prank(emergency);
-        walletWithExtensions.setRequiredChecker(address(checkerBothHooks), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerBothHooks), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
 
         address[] memory beforeList = walletWithExtensions.getRequiredBeforeCheckers();
         address[] memory afterList = walletWithExtensions.getRequiredAfterCheckers();
@@ -707,7 +703,10 @@ contract BaseMERAWalletTest is Test {
 
     function test_TargetWhitelistChecker_BlocksDisallowedTarget() public {
         vm.prank(emergency);
-        walletWithExtensions.setRequiredChecker(address(targetWhitelistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 777));
@@ -726,7 +725,10 @@ contract BaseMERAWalletTest is Test {
         vm.startPrank(emergency);
         targetWhitelistChecker.setAllowedTarget(address(receiver), true);
         targetWhitelistChecker.setAllowedTarget(address(token), true);
-        walletWithExtensions.setRequiredChecker(address(targetWhitelistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
         vm.stopPrank();
 
         vm.prank(primary);
@@ -747,7 +749,10 @@ contract BaseMERAWalletTest is Test {
         walletWithExtensions.setGlobalTimelock(1 days);
 
         vm.prank(emergency);
-        walletWithExtensions.setRequiredChecker(address(targetWhitelistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
@@ -769,7 +774,10 @@ contract BaseMERAWalletTest is Test {
     function test_TargetBlacklistChecker_BlocksListedTarget() public {
         vm.startPrank(emergency);
         targetBlacklistChecker.setBlockedTarget(address(receiver), true);
-        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -783,7 +791,10 @@ contract BaseMERAWalletTest is Test {
     function test_TargetBlacklistChecker_AllowsNonBlockedTargets() public {
         vm.startPrank(emergency);
         targetBlacklistChecker.setBlockedTarget(outsider, true);
-        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -800,7 +811,10 @@ contract BaseMERAWalletTest is Test {
 
         vm.startPrank(emergency);
         targetBlacklistChecker.setBlockedTarget(address(receiver), true);
-        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -821,7 +835,10 @@ contract BaseMERAWalletTest is Test {
     function test_TargetBlacklistChecker_UnblockAllowsAgain() public {
         vm.startPrank(emergency);
         targetBlacklistChecker.setBlockedTarget(address(receiver), true);
-        walletWithExtensions.setRequiredChecker(address(targetBlacklistChecker), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
         targetBlacklistChecker.setBlockedTarget(address(receiver), false);
         vm.stopPrank();
 
@@ -835,7 +852,10 @@ contract BaseMERAWalletTest is Test {
 
     function test_AfterChecker_RevertsAndRollsBackExecution() public {
         vm.prank(emergency);
-        walletWithExtensions.setRequiredChecker(address(checkerAfterOnly), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerAfterOnly), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
 
         checkerAfterOnly.configure(false, true);
 
@@ -851,7 +871,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_ControllerAgent_CannotExecute_IsVetoOnly() public {
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 33));
@@ -863,7 +883,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_ControllerAgent_BackupCanAssignVetoAgent() public {
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
         (bool en,) = wallet.controllerAgents(agentAddr);
         assertTrue(en);
     }
@@ -871,77 +891,77 @@ contract BaseMERAWalletTest is Test {
     function test_ControllerAgent_OutsiderCannotSetOrRemove() public {
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
     }
 
     function test_ControllerAgent_AgentCannotAssignAnotherAgent() public {
         address secondAgent = address(0xA62);
 
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(agentAddr);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(secondAgent, true);
+        _agentsCall(wallet, secondAgent, true);
     }
 
     function test_ControllerAgent_PrimaryScoped_RemovedByPrimaryOrHigher() public {
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotCoreController.selector);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
 
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
         (bool enAfterPrimary,) = wallet.controllerAgents(agentAddr);
         assertFalse(enAfterPrimary);
 
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
         (bool enAfterBackup,) = wallet.controllerAgents(agentAddr);
         assertFalse(enAfterBackup);
     }
 
     function test_ControllerAgent_EmergencyScoped_OnlyEmergencyRemoves() public {
         vm.prank(emergency);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.AgentRemovalNotAuthorized.selector);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
 
         vm.prank(backup);
         vm.expectRevert(IBaseMERAWalletErrors.AgentRemovalNotAuthorized.selector);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
 
         vm.prank(emergency);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
         (bool en,) = wallet.controllerAgents(agentAddr);
         assertFalse(en);
     }
 
     function test_ControllerAgent_BackupAssigned_OnlyBackupOrHigherRemoves() public {
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.AgentRemovalNotAuthorized.selector);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
         (bool en,) = wallet.controllerAgents(agentAddr);
         assertFalse(en);
     }
@@ -951,7 +971,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setGlobalTimelock(1 days);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 9));
@@ -988,7 +1008,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setGlobalTimelock(1 days);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 7));
@@ -1006,7 +1026,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setGlobalTimelock(1 days);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 3));
@@ -1024,7 +1044,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setGlobalTimelock(1 days);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 21));
@@ -1045,7 +1065,7 @@ contract BaseMERAWalletTest is Test {
     function test_ControllerAgent_CoreRoleUnaffectedByVetoSlotOnPrimaryAddress() public {
         vm.startPrank(emergency);
         wallet.setGlobalTimelock(1 days);
-        wallet.setControllerAgent(primary, true);
+        _agentsCall(wallet, primary, true);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -1059,19 +1079,22 @@ contract BaseMERAWalletTest is Test {
     function test_ControllerAgent_DisableWhenNotEnabled_Reverts() public {
         vm.prank(backup);
         vm.expectRevert(IBaseMERAWalletErrors.NoopControllerAgent.selector);
-        wallet.setControllerAgent(agentAddr, false);
+        _agentsCall(wallet, agentAddr, false);
     }
 
     function test_SetRequiredChecker_RevertsForNoopConfig() public {
         vm.prank(emergency);
         vm.expectRevert(IBaseMERAWalletErrors.NoopCheckerConfig.selector);
-        walletWithExtensions.setRequiredChecker(address(checkerNoHooks), true);
+        {
+            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerNoHooks), true);
+            walletWithExtensions.setRequiredCheckers(__rqA, __rqB);
+        }
     }
 
     function test_SetWhitelistedChecker_RevertsForNoopConfigOnNonZeroChecker() public {
         vm.prank(emergency);
         vm.expectRevert(IBaseMERAWalletErrors.NoopCheckerConfig.selector);
-        walletWithExtensions.setWhitelistedChecker(address(checkerNoHooks), true, "");
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerNoHooks), true, ""));
     }
 
     function test_SetWhitelistedChecker_AppliesConfigToTargetWhitelistChecker() public {
@@ -1081,7 +1104,7 @@ contract BaseMERAWalletTest is Test {
         perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
 
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedChecker(address(wl), true, abi.encode(perms));
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(wl), true, abi.encode(perms)));
 
         assertTrue(wl.allowedTarget(address(receiver)));
         (bool allowed,,) = walletWithExtensions.whitelistedChecker(address(wl));
@@ -1096,7 +1119,7 @@ contract BaseMERAWalletTest is Test {
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
 
         vm.startPrank(emergency);
-        walletWithExtensions.setWhitelistedChecker(address(slip), true, abi.encode(cfg));
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(slip), true, abi.encode(cfg)));
         vm.stopPrank();
 
         (address storedWl) = slip.walletSlippageCheckerConfig(address(walletWithExtensions));
@@ -1121,7 +1144,7 @@ contract BaseMERAWalletTest is Test {
     function test_SetWhitelistedChecker_AppliesConfigToConfigurableChecker() public {
         bytes memory cfg = abi.encode(true, false);
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedChecker(address(checkerBeforeOnly), true, cfg);
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerBeforeOnly), true, cfg));
         assertTrue(checkerBeforeOnly.revertBefore());
         assertFalse(checkerBeforeOnly.revertAfter());
     }
@@ -1144,7 +1167,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_ExecuteTransaction_RevertsWhenZeroCheckerNotWhitelisted() public {
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(0), false, "");
+        wallet.setWhitelistedCheckers(_mkWl(address(0), false, ""));
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 456));
@@ -1156,7 +1179,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_WhitelistedChecker_BeforeOnlyMode() public {
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedChecker(address(checkerBeforeOnly), true, "");
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerBeforeOnly), true, ""));
 
         checkerBeforeOnly.configure(true, false);
 
@@ -1175,7 +1198,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_WhitelistedChecker_AfterOnlyMode() public {
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedChecker(address(checkerAfterOnly), true, "");
+        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerAfterOnly), true, ""));
 
         checkerAfterOnly.configure(false, true);
 
@@ -1228,7 +1251,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_Freeze_BackupLevelAgent_SetsFrozenBackup_CannotUnfreeze() public {
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(agentAddr);
         wallet.setFrozenBackup(true);
@@ -1245,7 +1268,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_Freeze_PrimaryScopedAgent_CannotSetFrozenBackup() public {
         vm.prank(primary);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(agentAddr);
         vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
@@ -1308,10 +1331,10 @@ contract BaseMERAWalletTest is Test {
 
         vm.prank(primary);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RoleFrozen.selector, MERAWalletTypes.Role.Primary));
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
         (bool en,) = wallet.controllerAgents(agentAddr);
         assertTrue(en);
     }
@@ -1356,7 +1379,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_FreezePrimaryByAgent_SetsFrozen_AgentCannotUnfreeze() public {
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         vm.prank(agentAddr);
         wallet.setFrozenPrimary(true);
@@ -1382,7 +1405,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setGlobalTimelock(1 days);
 
         vm.prank(backup);
-        wallet.setControllerAgent(agentAddr, true);
+        _agentsCall(wallet, agentAddr, true);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 8));
@@ -1616,6 +1639,63 @@ contract BaseMERAWalletTest is Test {
             calls[i] =
                 MERAWalletTypes.Call({target: target, value: 0, data: data, checker: address(0), checkerData: ""});
         }
+    }
+
+    function _mkReq(address c, bool e) internal pure returns (address[] memory cc, bool[] memory ee) {
+        cc = new address[](1);
+        ee = new bool[](1);
+        cc[0] = c;
+        ee[0] = e;
+    }
+
+    function _mkAgents(address a, bool e) internal pure returns (address[] memory aa, bool[] memory bb) {
+        aa = new address[](1);
+        bb = new bool[](1);
+        aa[0] = a;
+        bb[0] = e;
+    }
+
+    function _agentsCall(BaseMERAWallet w, address agent, bool enabled) internal {
+        (address[] memory aa, bool[] memory bb) = _mkAgents(agent, enabled);
+        w.setControllerAgents(aa, bb);
+    }
+
+    /// @dev Applies one target policy via `setTargetCallPolicies` (singleton batch).
+    function _policyTarget(address target, MERAWalletTypes.CallPathPolicy memory pol) internal {
+        address[] memory ts = new address[](1);
+        MERAWalletTypes.CallPathPolicy[] memory ps = new MERAWalletTypes.CallPathPolicy[](1);
+        ts[0] = target;
+        ps[0] = pol;
+        wallet.setTargetCallPolicies(ts, ps);
+    }
+
+    /// @dev Applies one selector policy via `setSelectorCallPolicies`.
+    function _policySelector(bytes4 sel, MERAWalletTypes.CallPathPolicy memory pol) internal {
+        bytes4[] memory ss = new bytes4[](1);
+        MERAWalletTypes.CallPathPolicy[] memory ps = new MERAWalletTypes.CallPathPolicy[](1);
+        ss[0] = sel;
+        ps[0] = pol;
+        wallet.setSelectorCallPolicies(ss, ps);
+    }
+
+    /// @dev Applies one (target, selector) pair policy via `setTargetSelectorCallPolicies`.
+    function _policyPair(address target, bytes4 sel, MERAWalletTypes.CallPathPolicy memory pol) internal {
+        address[] memory ts = new address[](1);
+        bytes4[] memory ss = new bytes4[](1);
+        MERAWalletTypes.CallPathPolicy[] memory ps = new MERAWalletTypes.CallPathPolicy[](1);
+        ts[0] = target;
+        ss[0] = sel;
+        ps[0] = pol;
+        wallet.setTargetSelectorCallPolicies(ts, ss, ps);
+    }
+
+    function _mkWl(address checker, bool allowed, bytes memory config)
+        internal
+        pure
+        returns (MERAWalletTypes.WhitelistCheckerUpdate[] memory u)
+    {
+        u = new MERAWalletTypes.WhitelistCheckerUpdate[](1);
+        u[0] = MERAWalletTypes.WhitelistCheckerUpdate({checker: checker, allowed: allowed, config: config});
     }
 
     function _singleCall(address target, uint256 value, bytes memory data)

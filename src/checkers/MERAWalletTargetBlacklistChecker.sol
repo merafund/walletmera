@@ -8,7 +8,7 @@ import {MERAWalletBlacklistTypes} from "./types/MERAWalletBlacklistTypes.sol";
 
 /// @title MERAWalletTargetBlacklistChecker
 /// @notice Blocks wallet calls whose `call.target` is marked blocked. Intended only as a required **before** hook:
-/// validation runs before the external call; register via `setRequiredChecker` on the wallet (wallet reads `hookModes()`).
+/// validation runs before the external call; register via `setRequiredCheckers` on the wallet (wallet reads `hookModes()`).
 contract MERAWalletTargetBlacklistChecker is IMERAWalletTransactionChecker, IMERAWalletBlacklistErrors {
     event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
     event BlockedTargetUpdated(address indexed target, bool blocked, address indexed caller);
@@ -89,7 +89,7 @@ contract MERAWalletTargetBlacklistChecker is IMERAWalletTransactionChecker, IMER
         require(msg.sender == emergency, BlacklistNotEmergency());
     }
 
-    /// @dev Allows `emergency` (e.g. timelock) or the bound MERA wallet (when registering via `setWhitelistedChecker`).
+    /// @dev Allows `emergency` (e.g. timelock) or the bound MERA wallet (when registering via `setWhitelistedCheckers`).
     function _onlyEmergencyOrMeraWallet() internal view {
         if (msg.sender == emergency) {
             return;

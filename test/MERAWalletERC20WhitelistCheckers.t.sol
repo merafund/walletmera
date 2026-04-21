@@ -30,6 +30,15 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     MERAWalletUniswapV2AssetWhitelist internal assetWl;
     MERAWalletUniswapV2AssetWhitelist internal counterpartyWl;
 
+    function _mkWl(address checker, bool allowed, bytes memory config)
+        internal
+        pure
+        returns (MERAWalletTypes.WhitelistCheckerUpdate[] memory u)
+    {
+        u = new MERAWalletTypes.WhitelistCheckerUpdate[](1);
+        u[0] = MERAWalletTypes.WhitelistCheckerUpdate({checker: checker, allowed: allowed, config: config});
+    }
+
     function setUp() public {
         wallet = new MERAWalletFull(primary, backup, emergency, address(0), address(0));
         transferChecker = new MERAWalletERC20TransferWhitelistChecker(emergency);
@@ -46,7 +55,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         vm.startPrank(emergency);
         transferChecker.setPauseAgents(agents, agentAllowed);
         approveChecker.setPauseAgents(agents, agentAllowed);
-        wallet.setWhitelistedChecker(address(0), true, "");
+        wallet.setWhitelistedCheckers(_mkWl(address(0), true, ""));
         vm.stopPrank();
     }
 
@@ -77,7 +86,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Transfer_HappyPath() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(_cfg())));
 
         token.mint(address(wallet), 1000);
         vm.prank(primary);
@@ -98,7 +107,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
                 assetWhitelist: address(assetWl), recipientWhitelist: address(counterpartyWl)
             });
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(cfg));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(cfg)));
 
         token.mint(address(wallet), 1000);
         vm.prank(primary);
@@ -121,7 +130,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         assetWl.setAllowedAssets(a, ok);
 
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(_cfg())));
 
         token.mint(address(wallet), 1000);
         address badRecipient = address(0xBAD);
@@ -139,7 +148,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Transfer_RevertsOnWrongSelector() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(_cfg())));
 
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         calls[0] = MERAWalletTypes.Call({
@@ -164,7 +173,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Transfer_RevertsOnCalldataTooShort() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(_cfg())));
 
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         calls[0] = MERAWalletTypes.Call({
@@ -187,7 +196,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Transfer_RevertsOnNonZeroValue() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(_cfg())));
 
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         calls[0] = MERAWalletTypes.Call({
@@ -211,7 +220,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Transfer_RevertsWhenPaused() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(_cfg())));
 
         vm.prank(pauseAgent);
         transferChecker.pause();
@@ -244,7 +253,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
             MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
                 assetWhitelist: address(0), recipientWhitelist: address(0)
             });
-        wallet.setWhitelistedChecker(address(transferChecker), true, abi.encode(emptyCfg));
+        wallet.setWhitelistedCheckers(_mkWl(address(transferChecker), true, abi.encode(emptyCfg)));
         vm.stopPrank();
 
         token.mint(address(wallet), 1000);
@@ -261,7 +270,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Approve_HappyPath() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(approveChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));
 
         token.mint(address(wallet), 1000);
         vm.prank(primary);
@@ -272,7 +281,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Approve_RevertsOnWrongSelector() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(approveChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));
 
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         calls[0] = MERAWalletTypes.Call({
@@ -310,7 +319,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         counterpartyWl.setAllowedAssets(c, ok);
 
         vm.prank(emergency);
-        wallet.setWhitelistedChecker(address(approveChecker), true, abi.encode(_cfg()));
+        wallet.setWhitelistedCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));
 
         token.mint(address(wallet), 1000);
         vm.prank(primary);
