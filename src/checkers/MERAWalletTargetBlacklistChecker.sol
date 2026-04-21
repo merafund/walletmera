@@ -89,7 +89,7 @@ contract MERAWalletTargetBlacklistChecker is IMERAWalletTransactionChecker, IMER
         require(msg.sender == emergency, BlacklistNotEmergency());
     }
 
-    /// @dev Allows `emergency` (e.g. timelock) or the bound MERA wallet (when registering via `setWhitelistedCheckers`).
+    /// @dev Allows `emergency` (e.g. timelock) or the bound MERA wallet (when registering via `setOptionalCheckers`).
     function _onlyEmergencyOrMeraWallet() internal view {
         if (msg.sender == emergency) {
             return;

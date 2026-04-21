@@ -16,7 +16,7 @@ interface IBaseMERAWallet {
     function lifeHeartbeatTimeout() external view returns (uint256);
     function lastLifeHeartbeatAt() external view returns (uint256);
     function lifeControlEnabled() external view returns (bool);
-    function whitelistedChecker(address checker)
+    function whitelistOptionalChecker(address checker)
         external
         view
         returns (bool allowed, bool enableBefore, bool enableAfter);
@@ -59,7 +59,7 @@ interface IBaseMERAWallet {
     /// @param enabled Per checker: if true, registers or syncs from `checker.hookModes()`; if false, removes from required lists.
     function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled) external;
     /// @dev `config` is passed to `applyConfig` when allowed and non-empty (same rules as each single entry in the batch).
-    function setWhitelistedCheckers(MERAWalletTypes.WhitelistCheckerUpdate[] calldata updates) external;
+    function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates) external;
     /// @notice Enable or disable veto agents (may {vetoPending}). On enable, `roleLevel` follows the caller's core role.
     function setControllerAgents(address[] calldata agents, bool[] calldata enabled) external;
     /// @notice Backup or Emergency may set any value. Enabled controller agents may set primary freeze to true only via the same function (no unfreeze).

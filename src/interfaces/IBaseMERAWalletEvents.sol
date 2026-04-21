@@ -32,7 +32,7 @@ interface IBaseMERAWalletEvents {
     event RequiredCheckerUpdated(
         address indexed checker, bool beforeEnabled, bool afterEnabled, address indexed caller
     );
-    event WhitelistCheckerUpdated(
+    event OptionalCheckerUpdated(
         address indexed checker, bool allowed, bool beforeEnabled, bool afterEnabled, address indexed caller
     );
     event TransactionProposed(

@@ -35,7 +35,7 @@ interface IBaseMERAWalletErrors {
     error InvalidExecutorWhitelist();
     error RelayRewardTransferFailed(address recipient, uint256 amount);
     error CallExecutionFailed(uint256 index, bytes revertData);
-    error CheckerNotWhitelisted(address checker, uint256 callIndex);
+    error OptionalCheckerNotAllowed(address checker, uint256 callIndex);
     error NoopCheckerConfig();
     error NoopTargetSelectorCallPolicy();
     error NotCoreController();

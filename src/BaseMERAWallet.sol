@@ -30,7 +30,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         callPolicyByTargetSelector;
     mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) internal _operations;
     mapping(bytes32 operationId => MERAWalletTypes.RelayOperation relayOperation) internal _relayOperations;
-    mapping(address checker => MERAWalletTypes.WhitelistChecker) public whitelistedChecker;
+    mapping(address checker => MERAWalletTypes.OptionalChecker) public whitelistOptionalChecker;
     mapping(address agent => MERAWalletTypes.ControllerAgent) public controllerAgents;
 
     address[] internal requiredBeforeCheckers;
@@ -254,7 +254,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    function setWhitelistedCheckers(MERAWalletTypes.WhitelistCheckerUpdate[] calldata updates)
+    function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates)
         external
         override
         onlyEmergencyOrSelf
@@ -262,8 +262,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     {
         uint256 n = updates.length;
         for (uint256 i = 0; i < n;) {
-            MERAWalletTypes.WhitelistCheckerUpdate calldata u = updates[i];
-            _setWhitelistedChecker(u.checker, u.allowed, u.config);
+            MERAWalletTypes.OptionalCheckerUpdate calldata u = updates[i];
+            _setOptionalChecker(u.checker, u.allowed, u.config);
             unchecked {
                 ++i;
             }
@@ -334,10 +334,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit RequiredCheckerUpdated(checker, enableBefore, enableAfter, msg.sender);
     }
 
-    function _setWhitelistedChecker(address checker, bool allowed, bytes calldata config) internal {
+    function _setOptionalChecker(address checker, bool allowed, bytes calldata config) internal {
         if (!allowed) {
-            delete whitelistedChecker[checker];
-            emit WhitelistCheckerUpdated(checker, false, false, false, msg.sender);
+            delete whitelistOptionalChecker[checker];
+            emit OptionalCheckerUpdated(checker, false, false, false, msg.sender);
             return;
         }
 
@@ -346,18 +346,18 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
 
         if (checker == address(0)) {
-            whitelistedChecker[checker] =
-                MERAWalletTypes.WhitelistChecker({allowed: true, enableBefore: false, enableAfter: false});
-            emit WhitelistCheckerUpdated(checker, true, false, false, msg.sender);
+            whitelistOptionalChecker[checker] =
+                MERAWalletTypes.OptionalChecker({allowed: true, enableBefore: false, enableAfter: false});
+            emit OptionalCheckerUpdated(checker, true, false, false, msg.sender);
             return;
         }
 
         (bool enableBefore, bool enableAfter) = IMERAWalletTransactionChecker(checker).hookModes();
         require(enableBefore || enableAfter, NoopCheckerConfig());
 
-        whitelistedChecker[checker] =
-            MERAWalletTypes.WhitelistChecker({allowed: true, enableBefore: enableBefore, enableAfter: enableAfter});
-        emit WhitelistCheckerUpdated(checker, true, enableBefore, enableAfter, msg.sender);
+        whitelistOptionalChecker[checker] =
+            MERAWalletTypes.OptionalChecker({allowed: true, enableBefore: enableBefore, enableAfter: enableAfter});
+        emit OptionalCheckerUpdated(checker, true, enableBefore, enableAfter, msg.sender);
     }
 
     /// @notice Enable or disable a veto agent (may call {vetoPending} on any pending op). Only core controllers may configure.
@@ -859,7 +859,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             || selector == IBaseMERAWallet.setSelectorCallPolicies.selector
             || selector == IBaseMERAWallet.setTargetSelectorCallPolicies.selector
             || selector == IBaseMERAWallet.setRequiredCheckers.selector
-            || selector == IBaseMERAWallet.setWhitelistedCheckers.selector
+            || selector == IBaseMERAWallet.setOptionalCheckers.selector
             || selector == IBaseMERAWallet.setControllerAgents.selector
             || selector == IBaseMERAWallet.setFrozenPrimary.selector
             || selector == IBaseMERAWallet.setFrozenBackup.selector
@@ -987,7 +987,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         uint256 callsLength = calls.length;
         for (uint256 i = 0; i < callsLength;) {
             address checker = calls[i].checker;
-            require(whitelistedChecker[checker].allowed, CheckerNotWhitelisted(checker, i));
+            require(whitelistOptionalChecker[checker].allowed, OptionalCheckerNotAllowed(checker, i));
             unchecked {
                 ++i;
             }
@@ -1024,21 +1024,21 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    function _invokeBeforeWhitelistedChecker(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    function _invokeBeforeOptionalChecker(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
         internal
     {
         address checker = callData.checker;
-        if (checker == address(0) || !whitelistedChecker[checker].enableBefore) {
+        if (checker == address(0) || !whitelistOptionalChecker[checker].enableBefore) {
             return;
         }
         IMERAWalletTransactionChecker(checker).checkBefore(callData, operationId, callId);
     }
 
-    function _invokeAfterWhitelistedChecker(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+    function _invokeAfterOptionalChecker(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
         internal
     {
         address checker = callData.checker;
-        if (checker == address(0) || !whitelistedChecker[checker].enableAfter) {
+        if (checker == address(0) || !whitelistOptionalChecker[checker].enableAfter) {
             return;
         }
         IMERAWalletTransactionChecker(checker).checkAfter(callData, operationId, callId);
@@ -1230,11 +1230,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         virtual
     {
         _invokeBeforeRequiredCheckers(callData, operationId, callId);
-        _invokeBeforeWhitelistedChecker(callData, operationId, callId);
+        _invokeBeforeOptionalChecker(callData, operationId, callId);
     }
 
     function _afterExecute(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId) internal virtual {
         _invokeAfterRequiredCheckers(callData, operationId, callId);
-        _invokeAfterWhitelistedChecker(callData, operationId, callId);
+        _invokeAfterOptionalChecker(callData, operationId, callId);
     }
 }
