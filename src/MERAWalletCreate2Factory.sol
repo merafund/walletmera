@@ -12,6 +12,8 @@ contract MERAWalletCreate2Factory {
     /// @dev `salt` for CREATE2 is `keccak256(bytes(login))` (see {deployWallet}).
     mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
 
+    event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
+
     error EmptyLogin();
     error LoginAlreadyRegistered();
     error Create2DeployerNotDeployed();
@@ -19,28 +21,6 @@ contract MERAWalletCreate2Factory {
     error InvalidReturnData();
     error AddressMismatch(address expected, address actual);
     error NonZeroValue();
-
-    event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
-
-    /// @notice Returns the wallet registered for `login`, or `address(0)` if none.
-    function walletOf(string calldata login) external view returns (address) {
-        if (bytes(login).length == 0) {
-            return address(0);
-        }
-        return walletByLoginHash[keccak256(bytes(login))];
-    }
-
-    /// @notice Counterfactual wallet address for `login` and `params` using the Nick CREATE2 deployer.
-    /// @dev Salt is `keccak256(bytes(login))` only; changing `params` changes init code and thus the address.
-    function predictWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
-        external
-        pure
-        returns (address)
-    {
-        _requireNonEmptyLogin(login);
-        (bytes32 salt, bytes memory initCode) = _saltAndInitCode(login, params);
-        return Create2.computeAddress(salt, keccak256(initCode), MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER);
-    }
 
     /// @notice Deploys a new `MERAWalletFull` via the deterministic CREATE2 proxy and stores `login` → wallet.
     /// @dev Reverts if `login` was already used, if the proxy is missing on this chain, or if deployment fails.
@@ -79,6 +59,26 @@ contract MERAWalletCreate2Factory {
 
         walletByLoginHash[salt] = wallet;
         emit WalletDeployed(salt, login, wallet);
+    }
+
+    /// @notice Returns the wallet registered for `login`, or `address(0)` if none.
+    function walletOf(string calldata login) external view returns (address) {
+        if (bytes(login).length == 0) {
+            return address(0);
+        }
+        return walletByLoginHash[keccak256(bytes(login))];
+    }
+
+    /// @notice Counterfactual wallet address for `login` and `params` using the Nick CREATE2 deployer.
+    /// @dev Salt is `keccak256(bytes(login))` only; changing `params` changes init code and thus the address.
+    function predictWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
+        external
+        pure
+        returns (address)
+    {
+        _requireNonEmptyLogin(login);
+        (bytes32 salt, bytes memory initCode) = _saltAndInitCode(login, params);
+        return Create2.computeAddress(salt, keccak256(initCode), MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER);
     }
 
     function _requireNonEmptyLogin(string calldata login) private pure {

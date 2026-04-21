@@ -5,8 +5,6 @@ import {IBaseMERAWallet} from "../interfaces/IBaseMERAWallet.sol";
 
 /// @notice Threshold guardian for emergency recovery: N-of-M members approve, then execute separately before deadline.
 contract MERAWalletThresholdGuardian {
-    uint64 public constant MAX_DEADLINE_FROM_NOW = 30 days;
-
     struct Proposal {
         address newEmergency;
         address proposer;
@@ -16,6 +14,27 @@ contract MERAWalletThresholdGuardian {
         bool executed;
         bool cancelled;
     }
+
+    uint64 public constant MAX_DEADLINE_FROM_NOW = 30 days;
+
+    address public wallet;
+    uint256 public immutable THRESHOLD;
+    address[] internal _members;
+
+    uint256 public proposalNonce;
+
+    mapping(address member => bool isMember) public isMember;
+    mapping(bytes32 proposalId => Proposal proposal) public proposals;
+    mapping(bytes32 proposalId => mapping(address member => bool approved)) public hasApproved;
+
+    event WalletSet(address indexed wallet, address indexed caller);
+    event EmergencyChangeProposed(
+        bytes32 indexed proposalId, address indexed proposer, address indexed newEmergency, uint256 deadline
+    );
+    event ProposalApproved(bytes32 indexed proposalId, address indexed member, uint256 approvals);
+    event ProposalApprovalRevoked(bytes32 indexed proposalId, address indexed member, uint256 approvals);
+    event ProposalCancelled(bytes32 indexed proposalId, address indexed by);
+    event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
 
     error InvalidWallet();
     error WalletAlreadySet(address wallet);
@@ -32,25 +51,6 @@ contract MERAWalletThresholdGuardian {
     error AlreadyApproved(bytes32 proposalId, address member);
     error NotApproved(bytes32 proposalId, address member);
     error ThresholdNotReached(bytes32 proposalId, uint256 approvals, uint256 threshold);
-
-    event WalletSet(address indexed wallet, address indexed caller);
-    event EmergencyChangeProposed(
-        bytes32 indexed proposalId, address indexed proposer, address indexed newEmergency, uint256 deadline
-    );
-    event ProposalApproved(bytes32 indexed proposalId, address indexed member, uint256 approvals);
-    event ProposalApprovalRevoked(bytes32 indexed proposalId, address indexed member, uint256 approvals);
-    event ProposalCancelled(bytes32 indexed proposalId, address indexed by);
-    event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
-
-    address public wallet;
-    uint256 public immutable THRESHOLD;
-    address[] internal _members;
-
-    uint256 public proposalNonce;
-
-    mapping(address member => bool isMember) public isMember;
-    mapping(bytes32 proposalId => Proposal proposal) public proposals;
-    mapping(bytes32 proposalId => mapping(address member => bool approved)) public hasApproved;
 
     constructor(address wallet_, uint256 threshold_, address[] memory members_) {
         if (threshold_ == 0 || threshold_ > members_.length) {
@@ -78,10 +78,6 @@ contract MERAWalletThresholdGuardian {
             emit WalletSet(wallet_, msg.sender);
         }
         THRESHOLD = threshold_;
-    }
-
-    function getMembers() external view returns (address[] memory) {
-        return _members;
     }
 
     function setWallet(address wallet_) external {
@@ -168,6 +164,10 @@ contract MERAWalletThresholdGuardian {
         proposal.executed = true;
         IBaseMERAWallet(payable(wallet)).setEmergency(proposal.newEmergency);
         emit ProposalExecuted(proposalId, msg.sender, proposal.newEmergency);
+    }
+
+    function getMembers() external view returns (address[] memory) {
+        return _members;
     }
 
     function _requireMember() internal view {
