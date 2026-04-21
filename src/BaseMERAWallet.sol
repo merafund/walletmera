@@ -391,15 +391,18 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoed(operationId, operation.salt, msg.sender);
     }
 
+    /// @notice Resume a vetoed timelock op: unfrozen core controller; uses {_roleRank} (Primary=1 .. Emergency=3). Requires caller rank >= operation creator rank (same or higher numeric rank).
     function clearVeto(bytes32 operationId) external override whenLifeAlive whenControllerCoreUnfrozen {
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         require(operation.status == MERAWalletTypes.OperationStatus.Vetoed, OperationNotVetoed(operationId));
+
+        require(_roleRank(_coreRole(msg.sender)) >= _roleRank(operation.creatorRole), CannotClearVeto(operationId));
 
         operation.status = MERAWalletTypes.OperationStatus.Pending;
         emit PendingTransactionVetoCleared(operationId, operation.salt, msg.sender);
     }
 
-    /// @notice Irreversible cancel: only unfrozen Primary; must be the operation creator (proposer). Backup/Emergency/agents cannot call.
+    /// @notice Irreversible cancel: unfrozen core controller; uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). Refund still goes to the proposer. Agents cannot call.
     function cancelPending(bytes32 operationId) external override whenLifeAlive whenControllerCoreUnfrozen {
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
@@ -409,9 +412,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             OperationNotPending(operationId)
         );
 
-        require(_coreRole(msg.sender) == MERAWalletTypes.Role.Primary, CancelPendingPrimaryOnly());
-        // Primary-only caller: only the proposer may cancel (override is for Backup/Emergency, not used here).
-        require(operation.creator == msg.sender, CannotCancelOperation(operationId));
+        require(
+            _roleRank(_coreRole(msg.sender)) <= _roleRank(operation.creatorRole), CannotCancelOperation(operationId)
+        );
 
         _refundRelayReward(operation.creator, relayOperation.relayReward);
         relayOperation.relayReward = 0;
@@ -1215,7 +1218,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         revert InvalidRelayConfig();
     }
 
-    /// @dev Numeric rank: Primary < Backup < Emergency for removal / assignment caps (see {MERAWalletConstants}).
+    /// @dev Numeric rank: Primary < Backup < Emergency (see {MERAWalletConstants}). Used for agent caps and for {cancelPending}/{clearVeto} (lower number = stronger wallet authority).
     function _roleRank(MERAWalletTypes.Role role) internal pure returns (uint256) {
         if (role == MERAWalletTypes.Role.Emergency) {
             return MERAWalletConstants.ROLE_RANK_EMERGENCY;

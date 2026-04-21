@@ -81,8 +81,9 @@ interface IBaseMERAWallet {
         external
         payable;
     function vetoPending(bytes32 operationId) external;
+    /// @notice Unfrozen core controller; role rank Primary=1 .. Emergency=3 (see MERAWalletConstants). Requires `_roleRank(caller) >= _roleRank(operation.creatorRole)`.
     function clearVeto(bytes32 operationId) external;
-    /// @notice Only unfrozen Primary who proposed the operation; agents use {vetoPending} instead.
+    /// @notice Unfrozen core controller; role rank Primary=1 .. Emergency=3. Cancel if caller rank is at most operation creator rank; agents use {vetoPending} instead.
     function cancelPending(bytes32 operationId) external;
 
     function getOperationId(MERAWalletTypes.Call[] calldata calls, uint256 salt) external view returns (bytes32);

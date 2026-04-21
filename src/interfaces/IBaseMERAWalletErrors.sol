@@ -23,7 +23,7 @@ interface IBaseMERAWalletErrors {
     error OperationNotPending(bytes32 operationId);
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
-    error CancelPendingPrimaryOnly();
+    error CannotClearVeto(bytes32 operationId);
     error OperationAlreadyVetoed(bytes32 operationId);
     error OperationNotVetoed(bytes32 operationId);
     error InvalidRelayConfig();

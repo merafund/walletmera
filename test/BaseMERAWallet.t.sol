@@ -568,7 +568,7 @@ contract BaseMERAWalletTest is Test {
         assertTrue(operationIdA != operationIdB);
     }
 
-    function test_CancelPending_OnlyPrimaryMayCancel() public {
+    function test_CancelPending_BackupCannotCancelPrimaryOperation() public {
         vm.prank(emergency);
         wallet.setGlobalTimelock(1 days);
 
@@ -579,7 +579,7 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(backup);
-        vm.expectRevert(IBaseMERAWalletErrors.CancelPendingPrimaryOnly.selector);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
         wallet.cancelPending(operationId);
 
         vm.prank(primary);
@@ -587,6 +587,43 @@ contract BaseMERAWalletTest is Test {
 
         (,,,,, MERAWalletTypes.OperationStatus status,,,,) = wallet.operations(operationId);
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
+    }
+
+    function test_CancelPending_BackupMayCancelOwnOperation() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 42));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(backup);
+        wallet.cancelPending(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus status,,,,) = wallet.operations(operationId);
+        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
+    }
+
+    function test_CancelPending_DemotionBlocksCancelPrimaryOp() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 88));
+
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(backup);
+        wallet.setPrimary(backup);
+        vm.prank(backup);
+        wallet.setBackup(primary);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
+        wallet.cancelPending(operationId);
     }
 
     function test_ProposeTransaction_RevertsWhenOperationIdWasCancelledBefore() public {
@@ -626,7 +663,7 @@ contract BaseMERAWalletTest is Test {
         wallet.proposeTransaction(calls, 1);
     }
 
-    function test_CancelPending_PrimaryCannotCancelBackupOperation() public {
+    function test_CancelPending_PrimaryMayCancelBackupOperation() public {
         vm.prank(emergency);
         wallet.setGlobalTimelock(1 days);
 
@@ -637,6 +674,40 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(primary);
+        wallet.cancelPending(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus status,,,,) = wallet.operations(operationId);
+        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
+    }
+
+    function test_CancelPending_BackupMayCancelEmergencyOperation() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 56));
+
+        vm.prank(emergency);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(backup);
+        wallet.cancelPending(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus status,,,,) = wallet.operations(operationId);
+        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
+    }
+
+    function test_CancelPending_EmergencyCannotCancelBackupOperation() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 57));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(emergency);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
         wallet.cancelPending(operationId);
     }
@@ -976,7 +1047,7 @@ contract BaseMERAWalletTest is Test {
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 9));
 
-        vm.prank(primary);
+        vm.prank(backup);
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(agentAddr);
@@ -1001,6 +1072,119 @@ contract BaseMERAWalletTest is Test {
         vm.prank(primary);
         wallet.executePending(calls, 1);
         assertEq(receiver.value(), 9);
+    }
+
+    function test_ClearVeto_BackupMayClearPrimaryVetoedOp() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
+
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        vm.prank(backup);
+        wallet.clearVeto(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus statusAfter,,,,) = wallet.operations(operationId);
+        assertEq(uint256(statusAfter), uint256(MERAWalletTypes.OperationStatus.Pending));
+    }
+
+    function test_ClearVeto_EmergencyMayClearBackupVetoedOp() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 12));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        vm.prank(emergency);
+        wallet.clearVeto(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus statusAfter,,,,) = wallet.operations(operationId);
+        assertEq(uint256(statusAfter), uint256(MERAWalletTypes.OperationStatus.Pending));
+    }
+
+    function test_ClearVeto_PrimaryCannotClearBackupVetoedOp() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 12));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotClearVeto.selector, operationId));
+        wallet.clearVeto(operationId);
+    }
+
+    function test_ClearVeto_PrimaryMayClearOwnTierVetoedOp() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 13));
+
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        vm.prank(primary);
+        wallet.clearVeto(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus statusAfter,,,,) = wallet.operations(operationId);
+        assertEq(uint256(statusAfter), uint256(MERAWalletTypes.OperationStatus.Pending));
+    }
+
+    function test_ClearVeto_BackupMayClearOwnTierVetoedOp() public {
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(1 days);
+
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, true);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 14));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        vm.prank(backup);
+        wallet.clearVeto(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus statusAfter,,,,) = wallet.operations(operationId);
+        assertEq(uint256(statusAfter), uint256(MERAWalletTypes.OperationStatus.Pending));
     }
 
     function test_ControllerAgent_CannotVetoEmergencyProposedOperation() public {
