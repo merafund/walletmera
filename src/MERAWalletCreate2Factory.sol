@@ -4,10 +4,10 @@ pragma solidity 0.8.34;
 import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {MERAWalletConstants} from "./constants/MERAWalletConstants.sol";
 import {MERAWalletTypes} from "./types/MERAWalletTypes.sol";
-import {MERAWalletFull} from "./extensions/MERAWalletFull.sol";
+import {BaseMERAWallet} from "./BaseMERAWallet.sol";
 
 /// @title MERAWalletCreate2Factory
-/// @notice Deploys `MERAWalletFull` via the global Nick deterministic CREATE2 proxy and records `login` → wallet.
+/// @notice Deploys `BaseMERAWallet` via the global Nick deterministic CREATE2 proxy and records `login` → wallet.
 contract MERAWalletCreate2Factory {
     /// @dev `salt` for CREATE2 is `keccak256(bytes(login))` (see {deployWallet}).
     mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
@@ -22,7 +22,7 @@ contract MERAWalletCreate2Factory {
     error AddressMismatch(address expected, address actual);
     error NonZeroValue();
 
-    /// @notice Deploys a new `MERAWalletFull` via the deterministic CREATE2 proxy and stores `login` → wallet.
+    /// @notice Deploys a new `BaseMERAWallet` via the deterministic CREATE2 proxy and stores `login` → wallet.
     /// @dev Reverts if `login` was already used, if the proxy is missing on this chain, or if deployment fails.
     function deployWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
         external
@@ -83,7 +83,7 @@ contract MERAWalletCreate2Factory {
     {
         salt = keccak256(bytes(login));
         initCode = abi.encodePacked(
-            type(MERAWalletFull).creationCode,
+            type(BaseMERAWallet).creationCode,
             abi.encode(
                 params.initialPrimary,
                 params.initialBackup,

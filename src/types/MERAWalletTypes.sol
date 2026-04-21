@@ -93,7 +93,7 @@ library MERAWalletTypes {
         Role roleLevel;
     }
 
-    /// @notice Constructor arguments for `MERAWalletFull` / `BaseMERAWallet` when deployed via factory.
+    /// @notice Constructor arguments for `BaseMERAWallet` (factory) or `MERAWalletFull` when deployed directly.
     struct WalletInitParams {
         address initialPrimary;
         address initialBackup;

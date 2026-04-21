@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {MERAWalletCreate2Factory} from "../src/MERAWalletCreate2Factory.sol";
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
-import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
+import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 
 contract MERAWalletCreate2FactoryTest is Test {
     /// @dev Runtime bytecode of the Nick deterministic CREATE2 proxy at `MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER` (Ethereum mainnet `eth_getCode`).
@@ -38,7 +38,7 @@ contract MERAWalletCreate2FactoryTest is Test {
         MERAWalletTypes.WalletInitParams memory p = _params();
         bytes32 salt = keccak256(bytes(login));
         bytes memory initCode = abi.encodePacked(
-            type(MERAWalletFull).creationCode,
+            type(BaseMERAWallet).creationCode,
             abi.encode(p.initialPrimary, p.initialBackup, p.initialEmergency, p.initialSigner, p.initialGuardian)
         );
         bytes32 initHash = keccak256(initCode);
@@ -58,7 +58,7 @@ contract MERAWalletCreate2FactoryTest is Test {
         assertEq(deployed, predicted);
         assertEq(factory.walletOf(login), deployed);
         assertEq(factory.walletByLoginHash(keccak256(bytes(login))), deployed);
-        assertEq(MERAWalletFull(payable(deployed)).primary(), primary);
+        assertEq(BaseMERAWallet(payable(deployed)).primary(), primary);
     }
 
     function test_deploy_twice_same_login_reverts() public {
