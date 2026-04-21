@@ -26,6 +26,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     bool public frozenBackup;
     mapping(address target => MERAWalletTypes.CallPathPolicy policy) public callPolicyByTarget;
     mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy) public callPolicyBySelector;
+    mapping(address target => mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy)) public
+        callPolicyByTargetSelector;
     mapping(bytes32 operationId => MERAWalletTypes.PendingOperation operation) internal _operations;
     mapping(bytes32 operationId => MERAWalletTypes.RelayOperation relayOperation) internal _relayOperations;
     mapping(address checker => MERAWalletTypes.WhitelistChecker) public whitelistedChecker;
@@ -208,6 +210,25 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyBySelector[selector];
         callPolicyBySelector[selector] = policy;
         emit SelectorCallPolicyUpdated(selector, previousPolicy, policy, msg.sender);
+    }
+
+    function setTargetSelectorCallPolicy(
+        address target,
+        bytes4 selector,
+        MERAWalletTypes.CallPathPolicy calldata policy
+    ) external override onlyEmergencyOrSelf whenLifeAlive {
+        MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyByTargetSelector[target][selector];
+        // Pair map: `policy.exists == false` clears the slot; `true` stores `policy` as given.
+        if (!policy.exists) {
+            require(previousPolicy.exists, NoopTargetSelectorCallPolicy());
+            delete callPolicyByTargetSelector[target][selector];
+            MERAWalletTypes.CallPathPolicy memory cleared;
+            emit TargetSelectorCallPolicyUpdated(target, selector, previousPolicy, cleared, false, msg.sender);
+            return;
+        }
+
+        callPolicyByTargetSelector[target][selector] = policy;
+        emit TargetSelectorCallPolicyUpdated(target, selector, previousPolicy, policy, policy.exists, msg.sender);
     }
 
     function setRequiredChecker(address checker, bool enabled) external override onlyEmergencyOrSelf whenLifeAlive {
@@ -697,8 +718,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    /// @dev Required delay for one call: if neither target nor selector sets a role delay, use `globalTimelock`;
-    ///      otherwise use max(target role delay, selector role delay). Reverts if path forbidden for role.
+    /// @dev Required delay for one call: if a (target, selector) pair policy is configured, use only that slice (zero role delay => 0);
+    ///      else if both target and selector policies have `exists == false`, use `globalTimelock`; otherwise max(target, selector) delays.
+    ///      Reverts if path forbidden for role.
     /// @dev Emergency uses the **backup** policy slice (no Emergency dimension in `CallPathPolicy`); self-calls that
     ///      only adjust wallet config may be exempt — see `_isEmergencyTimelockExemptSelfCall`.
     function _getCallDelay(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call memory callData)
@@ -721,9 +743,20 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         view
         returns (uint256)
     {
-        MERAWalletTypes.CallPathPolicy memory targetPolicy = callPolicyByTarget[callData.target];
         bytes4 selector = _extractSelector(callData.data);
+        MERAWalletTypes.CallPathPolicy memory pairPolicy = callPolicyByTargetSelector[callData.target][selector];
+        if (pairPolicy.exists) {
+            MERAWalletTypes.RoleCallPolicy memory pairRole = _rolePolicySlice(pairPolicy, policyRole);
+            require(!pairRole.forbidden, CallPathForbiddenForRole(policyRole));
+            return uint256(pairRole.delay);
+        }
+
+        MERAWalletTypes.CallPathPolicy memory targetPolicy = callPolicyByTarget[callData.target];
         MERAWalletTypes.CallPathPolicy memory selectorPolicy = callPolicyBySelector[selector];
+
+        if (!targetPolicy.exists && !selectorPolicy.exists) {
+            return globalTimelock;
+        }
 
         MERAWalletTypes.RoleCallPolicy memory targetRole = _rolePolicySlice(targetPolicy, policyRole);
         MERAWalletTypes.RoleCallPolicy memory selectorRole = _rolePolicySlice(selectorPolicy, policyRole);
@@ -732,9 +765,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         uint256 a = uint256(targetRole.delay);
         uint256 b = uint256(selectorRole.delay);
-        if (a == 0 && b == 0) {
-            return globalTimelock;
-        }
         return a > b ? a : b;
     }
 
@@ -755,6 +785,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             || selector == IBaseMERAWallet.setLifeControllers.selector
             || selector == IBaseMERAWallet.setTargetCallPolicy.selector
             || selector == IBaseMERAWallet.setSelectorCallPolicy.selector
+            || selector == IBaseMERAWallet.setTargetSelectorCallPolicy.selector
             || selector == IBaseMERAWallet.setRequiredChecker.selector
             || selector == IBaseMERAWallet.setWhitelistedChecker.selector
             || selector == IBaseMERAWallet.setControllerAgent.selector

@@ -48,6 +48,12 @@ interface IBaseMERAWallet {
     function confirmAlive() external;
     function setTargetCallPolicy(address target, MERAWalletTypes.CallPathPolicy calldata policy) external;
     function setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy) external;
+    /// @notice Pair (target, selector) policy. When `policy.exists` is true, stores `policy`. When false, removes the pair entry (other fields ignored).
+    function setTargetSelectorCallPolicy(
+        address target,
+        bytes4 selector,
+        MERAWalletTypes.CallPathPolicy calldata policy
+    ) external;
     /// @param enabled If true, registers or syncs required checkers from `checker.hookModes()`. If false, removes `checker` from required lists.
     function setRequiredChecker(address checker, bool enabled) external;
     /// @param config Passed to `IMERAWalletTransactionChecker.applyConfig` when `allowed` is true and `config` is non-empty (skipped for `checker == address(0)` or empty `config`).

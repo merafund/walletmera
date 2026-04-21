@@ -17,9 +17,9 @@ library MERAWalletConstants {
     uint256 internal constant ROLE_RANK_BACKUP = 2;
     uint256 internal constant ROLE_RANK_EMERGENCY = 3;
 
-    // --- Timelock bounds (aligned with uint120 per-path delays in call policies) ---
+    // --- Timelock bounds (aligned with uint56 per-path delays in call policies) ---
     uint256 internal constant MIN_TIMELOCK_DELAY = 0;
-    uint256 internal constant MAX_TIMELOCK_DELAY = type(uint120).max;
+    uint256 internal constant MAX_TIMELOCK_DELAY = type(uint56).max;
 
     // --- Batch execution ---
     /// @dev Upper bound on `calls.length` for propose/execute paths to limit gas griefing.

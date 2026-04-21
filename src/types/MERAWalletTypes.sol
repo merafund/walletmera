@@ -3,19 +3,16 @@ pragma solidity 0.8.34;
 
 /// @notice Shared structs and enums for MERA wallet contracts.
 library MERAWalletTypes {
-    /// @notice Per-role delay and forbid flag for one policy dimension (single target OR single selector).
-    /// @dev uint120 + bool packs to 128 bits so two roles fit in one storage slot inside CallPathPolicy.
     struct RoleCallPolicy {
-        /// @dev Timelock duration for this role on this path dimension; 0 means no extra delay from this side.
-        uint120 delay;
-        /// @dev If true, this role must not execute calls matching this dimension (merged with OR across target/selector).
+        uint56 delay;
         bool forbidden;
     }
 
-    /// @notice Primary vs backup execution policy for one target address or one function selector (one storage slot).
     struct CallPathPolicy {
         RoleCallPolicy primary;
         RoleCallPolicy backup;
+        /// @dev If true: for pair map, entry overrides merge; for target/selector maps, policy participates in merge delay (otherwise merge treats both as unset and uses `globalTimelock`).
+        bool exists;
     }
 
     struct Call {

@@ -21,6 +21,14 @@ interface IBaseMERAWalletEvents {
         MERAWalletTypes.CallPathPolicy newPolicy,
         address indexed caller
     );
+    event TargetSelectorCallPolicyUpdated(
+        address indexed target,
+        bytes4 indexed selector,
+        MERAWalletTypes.CallPathPolicy previousPolicy,
+        MERAWalletTypes.CallPathPolicy newPolicy,
+        bool configured,
+        address indexed caller
+    );
     event RequiredCheckerUpdated(
         address indexed checker, bool beforeEnabled, bool afterEnabled, address indexed caller
     );
