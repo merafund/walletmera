@@ -989,7 +989,7 @@ contract BaseMERAWalletTest is Test {
         vm.warp(executeAfter);
 
         vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.OperationVetoed.selector, operationId));
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.OperationNotPending.selector, operationId));
         wallet.executePending(calls, 1);
 
         vm.prank(backup);

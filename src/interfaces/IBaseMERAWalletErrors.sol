@@ -24,7 +24,6 @@ interface IBaseMERAWalletErrors {
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
     error CancelPendingPrimaryOnly();
-    error OperationVetoed(bytes32 operationId);
     error OperationAlreadyVetoed(bytes32 operationId);
     error OperationNotVetoed(bytes32 operationId);
     error InvalidRelayConfig();
