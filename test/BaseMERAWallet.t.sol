@@ -1226,6 +1226,32 @@ contract BaseMERAWalletTest is Test {
         assertFalse(wallet.frozenBackup());
     }
 
+    function test_Freeze_BackupLevelAgent_SetsFrozenBackup_CannotUnfreeze() public {
+        vm.prank(backup);
+        wallet.setControllerAgent(agentAddr, true);
+
+        vm.prank(agentAddr);
+        wallet.setFrozenBackup(true);
+        assertTrue(wallet.frozenBackup());
+
+        vm.prank(agentAddr);
+        vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
+        wallet.setFrozenBackup(false);
+
+        vm.prank(emergency);
+        wallet.setFrozenBackup(false);
+        assertFalse(wallet.frozenBackup());
+    }
+
+    function test_Freeze_PrimaryScopedAgent_CannotSetFrozenBackup() public {
+        vm.prank(primary);
+        wallet.setControllerAgent(agentAddr, true);
+
+        vm.prank(agentAddr);
+        vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
+        wallet.setFrozenBackup(true);
+    }
+
     function test_FrozenPrimary_PrimaryCannotExecuteOrProposeOrGetDelay() public {
         vm.prank(backup);
         wallet.setFrozenPrimary(true);
@@ -1333,7 +1359,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setControllerAgent(agentAddr, true);
 
         vm.prank(agentAddr);
-        wallet.freezePrimaryByAgent();
+        wallet.setFrozenPrimary(true);
         assertTrue(wallet.frozenPrimary());
 
         vm.prank(agentAddr);
@@ -1347,8 +1373,8 @@ contract BaseMERAWalletTest is Test {
 
     function test_FreezePrimaryByAgent_OutsiderReverts() public {
         vm.prank(outsider);
-        vm.expectRevert(IBaseMERAWalletErrors.Unauthorized.selector);
-        wallet.freezePrimaryByAgent();
+        vm.expectRevert(IBaseMERAWalletErrors.FreezeActionNotAuthorized.selector);
+        wallet.setFrozenPrimary(true);
     }
 
     function test_FrozenPrimary_AgentVetoPending_StillWorks() public {

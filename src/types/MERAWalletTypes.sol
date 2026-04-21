@@ -80,9 +80,9 @@ library MERAWalletTypes {
     }
 
     /// @notice Optional veto delegate: may apply {vetoPending} on any pending operation (not {cancelPending}).
-    /// @dev `removalMinRole` is set by the wallet on assign: only core controllers at or above this rank may disable the agent (veto-only delegate).
+    /// @dev `roleLevel` is the assigner's core role at enable time; only core controllers at or above this rank may disable the agent (veto-only delegate).
     struct ControllerAgent {
         bool enabled;
-        Role removalMinRole;
+        Role roleLevel;
     }
 }

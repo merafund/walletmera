@@ -285,7 +285,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @notice Enable or disable a veto agent (may call {vetoPending} on any pending op). Only core controllers may configure.
-    /// @dev On enable, `removalMinRole` is set to `_coreRole(msg.sender)` so only that role or higher may later disable.
+    /// @dev On enable, `roleLevel` is set to `_coreRole(msg.sender)` so only that role or higher may later disable.
     function setControllerAgent(address agent, bool enabled) external override whenLifeAlive {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         require(callerCore != MERAWalletTypes.Role.None, NotCoreController());
@@ -295,7 +295,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         if (!enabled) {
             require(stored.enabled, NoopControllerAgent());
-            require(_roleRank(callerCore) >= _roleRank(stored.removalMinRole), AgentRemovalNotAuthorized());
+            require(_roleRank(callerCore) >= _roleRank(stored.roleLevel), AgentRemovalNotAuthorized());
             delete controllerAgents[agent];
             emit ControllerAgentUpdated(agent, false, MERAWalletTypes.Role.None, msg.sender);
             return;
@@ -304,43 +304,39 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(agent != address(0), InvalidAddress());
 
         stored.enabled = true;
-        stored.removalMinRole = callerCore;
+        stored.roleLevel = callerCore;
 
-        emit ControllerAgentUpdated(agent, true, stored.removalMinRole, msg.sender);
+        emit ControllerAgentUpdated(agent, true, stored.roleLevel, msg.sender);
     }
 
-    /// @dev Only Backup or Emergency may change primary-level freeze; Primary cannot.
+    /// @dev Backup or Emergency may toggle primary freeze; enabled controller agents may set freeze to true only.
     function setFrozenPrimary(bool frozen) external override whenLifeAlive {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
-        require(
-            callerCore == MERAWalletTypes.Role.Backup || callerCore == MERAWalletTypes.Role.Emergency,
-            FreezeActionNotAuthorized()
-        );
-        if (frozenPrimary == frozen) {
-            return;
+        bool allowed = callerCore == MERAWalletTypes.Role.Backup || callerCore == MERAWalletTypes.Role.Emergency;
+        if (!allowed) {
+            MERAWalletTypes.ControllerAgent storage agent = controllerAgents[msg.sender];
+            allowed = agent.enabled && frozen;
         }
+        require(allowed, FreezeActionNotAuthorized());
+
         frozenPrimary = frozen;
         emit PrimaryFreezeUpdated(frozen, msg.sender);
     }
 
-    /// @dev Only Emergency may change backup-level freeze.
+    /// @dev Emergency may toggle backup freeze. Backup-scoped controller agents may set freeze to true only (same pattern as {setFrozenPrimary} for agents).
     function setFrozenBackup(bool frozen) external override whenLifeAlive {
-        require(_coreRole(msg.sender) == MERAWalletTypes.Role.Emergency, FreezeActionNotAuthorized());
+        MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
+        bool allowed = callerCore == MERAWalletTypes.Role.Emergency;
+        if (!allowed) {
+            MERAWalletTypes.ControllerAgent storage agent = controllerAgents[msg.sender];
+            allowed = agent.enabled && frozen && agent.roleLevel == MERAWalletTypes.Role.Backup;
+        }
+        require(allowed, FreezeActionNotAuthorized());
         if (frozenBackup == frozen) {
             return;
         }
         frozenBackup = frozen;
         emit BackupFreezeUpdated(frozen, msg.sender);
-    }
-
-    /// @notice Sets `frozenPrimary` to true; only enabled controller agents; cannot unfreeze.
-    function freezePrimaryByAgent() external override whenLifeAlive {
-        require(controllerAgents[msg.sender].enabled, Unauthorized());
-        if (frozenPrimary) {
-            return;
-        }
-        frozenPrimary = true;
-        emit PrimaryFreezeUpdated(true, msg.sender);
     }
 
     function getRequiredBeforeCheckers() external view override returns (address[] memory) {
@@ -791,8 +787,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             || selector == IBaseMERAWallet.setControllerAgent.selector
             || selector == IBaseMERAWallet.setFrozenPrimary.selector
             || selector == IBaseMERAWallet.setFrozenBackup.selector
-            || selector == IBaseMERAWallet.set1271Signer.selector
-            || selector == IBaseMERAWallet.freezePrimaryByAgent.selector;
+            || selector == IBaseMERAWallet.set1271Signer.selector;
     }
 
     function _rolePolicySlice(MERAWalletTypes.CallPathPolicy memory policy, MERAWalletTypes.Role callerRole)

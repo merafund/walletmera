@@ -35,7 +35,7 @@ interface IBaseMERAWallet {
             address designatedExecutor,
             bytes32 executorSetHash
         );
-    function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role removalMinRole);
+    function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role roleLevel);
     function frozenPrimary() external view returns (bool);
     function frozenBackup() external view returns (bool);
 
@@ -58,14 +58,12 @@ interface IBaseMERAWallet {
     function setRequiredChecker(address checker, bool enabled) external;
     /// @param config Passed to `IMERAWalletTransactionChecker.applyConfig` when `allowed` is true and `config` is non-empty (skipped for `checker == address(0)` or empty `config`).
     function setWhitelistedChecker(address checker, bool allowed, bytes calldata config) external;
-    /// @notice Enable or disable a veto agent (may {vetoPending}, not {cancelPending}). On enable, minimum removal rank is derived from the caller's core role.
+    /// @notice Enable or disable a veto agent (may {vetoPending}, not {cancelPending}). On enable, `roleLevel` is set from the caller's core role for removal authorization.
     function setControllerAgent(address agent, bool enabled) external;
-    /// @notice Backup or Emergency may set; Primary cannot. Controller agents use {freezePrimaryByAgent} to freeze only.
+    /// @notice Backup or Emergency may set any value. Enabled controller agents may set primary freeze to true only via the same function (no unfreeze).
     function setFrozenPrimary(bool frozen) external;
-    /// @notice Only Emergency may set backup-level freeze.
+    /// @notice Emergency may set any value. Backup-scoped controller agents may set backup freeze to true only via the same function (no unfreeze).
     function setFrozenBackup(bool frozen) external;
-    /// @notice Enabled controller agent may set primary freeze to true only (no unfreeze).
-    function freezePrimaryByAgent() external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
