@@ -272,7 +272,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Backup or Emergency may toggle primary freeze; enabled controller agents may set freeze to true only.
-    function setFrozenPrimary(bool frozen) external override whenLifeAlive {
+    function setFrozenPrimary(bool frozen) external override {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         bool allowed = callerCore == MERAWalletTypes.Role.Backup || callerCore == MERAWalletTypes.Role.Emergency;
         if (!allowed) {
@@ -286,7 +286,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Emergency may toggle backup freeze. Backup-scoped controller agents may set freeze to true only (same pattern as {setFrozenPrimary} for agents).
-    function setFrozenBackup(bool frozen) external override whenLifeAlive {
+    function setFrozenBackup(bool frozen) external override {
         MERAWalletTypes.Role callerCore = _coreRole(msg.sender);
         bool allowed = callerCore == MERAWalletTypes.Role.Emergency;
         if (!allowed) {
@@ -379,7 +379,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _executePendingCalldata(calls, salt, whitelist);
     }
 
-    function vetoPending(bytes32 operationId) external override whenLifeAlive {
+    function vetoPending(bytes32 operationId) external override {
         require(controllerAgents[msg.sender].enabled, Unauthorized());
         require(_coreRole(msg.sender) == MERAWalletTypes.Role.None, Unauthorized());
 
