@@ -552,7 +552,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
 
         (bool enableBefore, bool enableAfter) = IMERAWalletTransactionChecker(checker).hookModes();
-        require(enableBefore || enableAfter || wasConfigured, NoopCheckerConfig());
+        require(enableBefore || enableAfter, NoopCheckerConfig());
 
         _setRequiredBeforeChecker(checker, enableBefore);
         _setRequiredAfterChecker(checker, enableAfter);
