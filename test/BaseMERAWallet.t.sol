@@ -54,8 +54,8 @@ contract BaseMERAWalletTest is Test {
         checkerNoHooks = new ConfigurableTransactionChecker(false, false, address(walletWithExtensions));
 
         vm.startPrank(emergency);
-        wallet.setWhitelistedCheckers(_mkWl(address(0), true, ""));
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(0), true, ""));
+        wallet.setOptionalCheckers(_mkWl(address(0), true, ""));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(0), true, ""));
         vm.stopPrank();
     }
 
@@ -1091,27 +1091,27 @@ contract BaseMERAWalletTest is Test {
         }
     }
 
-    function test_SetWhitelistedChecker_RevertsForNoopConfigOnNonZeroChecker() public {
+    function test_SetOptionalChecker_RevertsForNoopConfigOnNonZeroChecker() public {
         vm.prank(emergency);
         vm.expectRevert(IBaseMERAWalletErrors.NoopCheckerConfig.selector);
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerNoHooks), true, ""));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(checkerNoHooks), true, ""));
     }
 
-    function test_SetWhitelistedChecker_AppliesConfigToTargetWhitelistChecker() public {
+    function test_SetOptionalChecker_AppliesConfigToTargetWhitelistChecker() public {
         MERAWalletTargetWhitelistChecker wl =
             new MERAWalletTargetWhitelistChecker(emergency, address(walletWithExtensions));
         MERAWalletWhitelistTypes.TargetPermission[] memory perms = new MERAWalletWhitelistTypes.TargetPermission[](1);
         perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
 
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(wl), true, abi.encode(perms)));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(wl), true, abi.encode(perms)));
 
         assertTrue(wl.allowedTarget(address(receiver)));
-        (bool allowed,,) = walletWithExtensions.whitelistedChecker(address(wl));
+        (bool allowed,,) = walletWithExtensions.whitelistOptionalChecker(address(wl));
         assertTrue(allowed);
     }
 
-    function test_SetWhitelistedChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
+    function test_SetOptionalChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
         MERAWalletUniswapV2OracleSlippageChecker slip =
             new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
         MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
@@ -1119,7 +1119,7 @@ contract BaseMERAWalletTest is Test {
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
 
         vm.startPrank(emergency);
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(slip), true, abi.encode(cfg)));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(slip), true, abi.encode(cfg)));
         vm.stopPrank();
 
         (address storedWl) = slip.walletSlippageCheckerConfig(address(walletWithExtensions));
@@ -1141,15 +1141,15 @@ contract BaseMERAWalletTest is Test {
         targetWhitelistChecker.applyConfig(abi.encode(perms));
     }
 
-    function test_SetWhitelistedChecker_AppliesConfigToConfigurableChecker() public {
+    function test_SetOptionalChecker_AppliesConfigToConfigurableChecker() public {
         bytes memory cfg = abi.encode(true, false);
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerBeforeOnly), true, cfg));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(checkerBeforeOnly), true, cfg));
         assertTrue(checkerBeforeOnly.revertBefore());
         assertFalse(checkerBeforeOnly.revertAfter());
     }
 
-    function test_ExecuteTransaction_RevertsWhenOptionalCheckerNotWhitelisted() public {
+    function test_ExecuteTransaction_RevertsWhenOptionalCheckerNotAllowed() public {
         MERAWalletTypes.Call[] memory calls = _singleCallWithChecker(
             address(receiver),
             0,
@@ -1160,26 +1160,28 @@ contract BaseMERAWalletTest is Test {
 
         vm.prank(primary);
         vm.expectRevert(
-            abi.encodeWithSelector(IBaseMERAWalletErrors.CheckerNotWhitelisted.selector, address(checkerBothHooks), 0)
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.OptionalCheckerNotAllowed.selector, address(checkerBothHooks), 0
+            )
         );
         walletWithExtensions.executeTransaction(calls, 1);
     }
 
-    function test_ExecuteTransaction_RevertsWhenZeroCheckerNotWhitelisted() public {
+    function test_ExecuteTransaction_RevertsWhenZeroOptionalCheckerNotAllowed() public {
         vm.prank(emergency);
-        wallet.setWhitelistedCheckers(_mkWl(address(0), false, ""));
+        wallet.setOptionalCheckers(_mkWl(address(0), false, ""));
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 456));
 
         vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CheckerNotWhitelisted.selector, address(0), 0));
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.OptionalCheckerNotAllowed.selector, address(0), 0));
         wallet.executeTransaction(calls, 1);
     }
 
-    function test_WhitelistedChecker_BeforeOnlyMode() public {
+    function test_OptionalChecker_BeforeOnlyMode() public {
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerBeforeOnly), true, ""));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(checkerBeforeOnly), true, ""));
 
         checkerBeforeOnly.configure(true, false);
 
@@ -1196,9 +1198,9 @@ contract BaseMERAWalletTest is Test {
         walletWithExtensions.executeTransaction(calls, 1);
     }
 
-    function test_WhitelistedChecker_AfterOnlyMode() public {
+    function test_OptionalChecker_AfterOnlyMode() public {
         vm.prank(emergency);
-        walletWithExtensions.setWhitelistedCheckers(_mkWl(address(checkerAfterOnly), true, ""));
+        walletWithExtensions.setOptionalCheckers(_mkWl(address(checkerAfterOnly), true, ""));
 
         checkerAfterOnly.configure(false, true);
 
@@ -1692,10 +1694,10 @@ contract BaseMERAWalletTest is Test {
     function _mkWl(address checker, bool allowed, bytes memory config)
         internal
         pure
-        returns (MERAWalletTypes.WhitelistCheckerUpdate[] memory u)
+        returns (MERAWalletTypes.OptionalCheckerUpdate[] memory u)
     {
-        u = new MERAWalletTypes.WhitelistCheckerUpdate[](1);
-        u[0] = MERAWalletTypes.WhitelistCheckerUpdate({checker: checker, allowed: allowed, config: config});
+        u = new MERAWalletTypes.OptionalCheckerUpdate[](1);
+        u[0] = MERAWalletTypes.OptionalCheckerUpdate({checker: checker, allowed: allowed, config: config});
     }
 
     function _singleCall(address target, uint256 value, bytes memory data)
