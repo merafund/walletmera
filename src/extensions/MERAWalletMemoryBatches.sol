@@ -141,6 +141,7 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
 
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
         require(block.timestamp >= operation.executeAfter, TimelockNotExpired(operation.executeAfter, block.timestamp));
+        _requireRelayExecutionNotExpired(relayOperation);
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());

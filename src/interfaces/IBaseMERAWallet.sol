@@ -33,7 +33,8 @@ interface IBaseMERAWallet {
             MERAWalletTypes.RelayExecutorPolicy relayPolicy,
             uint256 relayReward,
             address designatedExecutor,
-            bytes32 executorSetHash
+            bytes32 executorSetHash,
+            uint64 relayExecuteBefore
         );
     function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role roleLevel);
     function frozenPrimary() external view returns (bool);

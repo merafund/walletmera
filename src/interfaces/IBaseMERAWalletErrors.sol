@@ -27,6 +27,10 @@ interface IBaseMERAWalletErrors {
     error OperationAlreadyVetoed(bytes32 operationId);
     error OperationNotVetoed(bytes32 operationId);
     error InvalidRelayConfig();
+    /// @dev {proposeTransactionWithRelay} requires a non-zero execution deadline.
+    error RelayDeadlineRequired();
+    error RelayDeadlineBeforeTimelock(uint64 relayExecuteBefore, uint256 executeAfter);
+    error RelayExecutionExpired(uint64 relayExecuteBefore, uint256 currentTime);
     error RelayRewardNotAllowed();
     error RelayRewardRequired();
     error RelayExecutorNotAllowed(address executor);

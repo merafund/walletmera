@@ -66,6 +66,8 @@ library MERAWalletTypes {
         RelayExecutorPolicy relayPolicy;
         address designatedExecutor;
         bytes32 executorSetHash;
+        /// @dev Unix timestamp (inclusive): execution must happen on or before this time once the timelock has passed.
+        uint64 relayExecuteBefore;
     }
 
     struct PendingOperation {
@@ -84,6 +86,8 @@ library MERAWalletTypes {
         uint256 relayReward;
         address designatedExecutor;
         bytes32 executorSetHash;
+        /// @dev Non-zero: inclusive latest execution time after timelock. Zero: no relay deadline (plain {proposeTransaction} path).
+        uint64 relayExecuteBefore;
     }
 
     /// @notice Optional veto delegate: may apply {vetoPending} on any pending operation (not {cancelPending}).

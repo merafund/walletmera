@@ -334,7 +334,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     ) external payable override whenLifeAlive returns (bytes32 operationId) {
         _validateRelayConfig(relayConfig, msg.value);
 
-        (operationId,,,) = _proposeTransaction(calls, salt);
+        uint256 executeAfter;
+        (operationId,, executeAfter,) = _proposeTransaction(calls, salt);
+        require(
+            uint256(relayConfig.relayExecuteBefore) >= executeAfter,
+            RelayDeadlineBeforeTimelock(relayConfig.relayExecuteBefore, executeAfter)
+        );
         _saveRelayOperation(operationId, relayConfig, msg.value);
     }
 
@@ -431,7 +436,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             MERAWalletTypes.RelayExecutorPolicy relayPolicy,
             uint256 relayReward,
             address designatedExecutor,
-            bytes32 executorSetHash
+            bytes32 executorSetHash,
+            uint64 relayExecuteBefore
         )
     {
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
@@ -446,7 +452,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             relayOperation.relayPolicy,
             relayOperation.relayReward,
             relayOperation.designatedExecutor,
-            relayOperation.executorSetHash
+            relayOperation.executorSetHash,
+            relayOperation.relayExecuteBefore
         );
     }
 
@@ -632,14 +639,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
                 relayPolicy: relayConfig.relayPolicy,
                 relayReward: relayReward,
                 designatedExecutor: relayConfig.designatedExecutor,
-                executorSetHash: relayConfig.executorSetHash
+                executorSetHash: relayConfig.executorSetHash,
+                relayExecuteBefore: relayConfig.relayExecuteBefore
             });
         emit RelayOperationSaved(
             operationId,
             relayConfig.relayPolicy,
             relayReward,
             relayConfig.designatedExecutor,
-            relayConfig.executorSetHash
+            relayConfig.executorSetHash,
+            relayConfig.relayExecuteBefore
         );
     }
 
@@ -654,6 +663,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
         require(block.timestamp >= operation.executeAfter, TimelockNotExpired(operation.executeAfter, block.timestamp));
+        _requireRelayExecutionNotExpired(relayOperation);
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
@@ -1208,10 +1218,20 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return recovered;
     }
 
+    /// @dev When `relayExecuteBefore` is non-zero, pending execution must happen on or before that timestamp (after timelock).
+    function _requireRelayExecutionNotExpired(MERAWalletTypes.RelayOperation storage relayOperation) internal view {
+        uint64 before = relayOperation.relayExecuteBefore;
+        if (before != 0) {
+            require(block.timestamp <= before, RelayExecutionExpired(before, uint256(block.timestamp)));
+        }
+    }
+
     function _validateRelayConfig(MERAWalletTypes.RelayProposeConfig calldata relayConfig, uint256 relayReward)
         internal
         pure
     {
+        require(relayConfig.relayExecuteBefore != 0, RelayDeadlineRequired());
+
         if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(relayReward == 0, RelayRewardNotAllowed());
             require(
