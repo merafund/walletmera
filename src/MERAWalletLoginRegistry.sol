@@ -25,7 +25,7 @@ contract MERAWalletLoginRegistry is Ownable {
     error AddressAlreadyHasLogin();
 
     modifier onlyFactory() {
-        require(isFactory[msg.sender], UnauthorizedFactory());
+        _onlyFactory();
         _;
     }
 
@@ -68,7 +68,7 @@ contract MERAWalletLoginRegistry is Ownable {
         if (bytes(login).length == 0) {
             return address(0);
         }
-        return walletByLoginHash[keccak256(bytes(login))];
+        return walletByLoginHash[_loginHash(login)];
     }
 
     function loginOf(address wallet) external view returns (string memory) {
@@ -81,6 +81,18 @@ contract MERAWalletLoginRegistry is Ownable {
 
     function _requireLoginHash(string calldata login) private pure returns (bytes32) {
         require(bytes(login).length != 0, EmptyLogin());
-        return keccak256(bytes(login));
+        return _loginHash(login);
+    }
+
+    function _onlyFactory() private view {
+        require(isFactory[msg.sender], UnauthorizedFactory());
+    }
+
+    function _loginHash(string calldata login) private pure returns (bytes32 loginHash) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, login.offset, login.length)
+            loginHash := keccak256(ptr, login.length)
+        }
     }
 }
