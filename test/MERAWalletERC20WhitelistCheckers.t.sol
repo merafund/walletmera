@@ -273,8 +273,16 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         wallet.setOptionalCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));
 
         token.mint(address(wallet), 1000);
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(IERC20.approve.selector, spender, 500),
+            checker: address(approveChecker),
+            checkerData: ""
+        });
         vm.prank(primary);
-        wallet.approveERC20(address(token), spender, 500, address(approveChecker), "", 1);
+        wallet.executeTransaction(calls, 1);
         assertEq(token.allowance(address(wallet), spender), 500);
     }
 
@@ -322,6 +330,14 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         wallet.setOptionalCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));
 
         token.mint(address(wallet), 1000);
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(IERC20.approve.selector, spender, 1),
+            checker: address(approveChecker),
+            checkerData: ""
+        });
         vm.prank(primary);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -330,6 +346,6 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
                 uint256(0)
             )
         );
-        wallet.approveERC20(address(token), spender, 1, address(approveChecker), "", 1);
+        wallet.executeTransaction(calls, 1);
     }
 }

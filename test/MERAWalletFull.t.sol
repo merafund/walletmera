@@ -2,6 +2,7 @@
 pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
@@ -74,11 +75,11 @@ contract MERAWalletFullTest is Test {
         token.mint(address(wallet), 1000);
 
         vm.prank(primary);
-        wallet.transferERC20(address(token), outsider, 250, 1);
+        wallet.transferERC20(address(token), outsider, 250, address(0), "", 1);
         assertEq(token.balanceOf(outsider), 250);
 
         vm.prank(primary);
-        wallet.approveERC20(address(token), outsider, 400, 2);
+        wallet.callExternal(address(token), 0, abi.encodeWithSelector(IERC20.approve.selector, outsider, 400), 2);
         assertEq(token.allowance(address(wallet), outsider), 400);
     }
 
@@ -100,7 +101,7 @@ contract MERAWalletFullTest is Test {
         assertEq(address(receiver).balance, 1 ether);
 
         vm.prank(primary);
-        wallet.transferERC20(address(token), outsider, 250, 2);
+        wallet.transferERC20(address(token), outsider, 250, address(0), "", 2);
         assertEq(token.balanceOf(outsider), 250);
 
         vm.prank(primary);
