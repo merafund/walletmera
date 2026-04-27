@@ -42,6 +42,7 @@ interface IBaseMERAWallet {
     function safeModeBefore() external view returns (uint256);
     function safeModeUsed() external view returns (bool);
 
+    function initializeFromImmutableArgs() external;
     function setPrimary(address newPrimary) external;
     function setBackup(address newBackup) external;
     function setEmergency(address newEmergency) external;

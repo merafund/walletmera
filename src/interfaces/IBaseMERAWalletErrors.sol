@@ -6,6 +6,7 @@ import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 /// @notice Custom errors for BaseMERAWallet and extensions.
 interface IBaseMERAWalletErrors {
     error InvalidAddress();
+    error AlreadyInitialized();
     error InvalidCheckerAddress();
     error InvalidSigner();
     error EmptyCalls();

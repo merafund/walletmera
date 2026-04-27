@@ -7,11 +7,12 @@ import {IBaseMERAWallet} from "./interfaces/IBaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "./interfaces/IBaseMERAWalletErrors.sol";
 import {IBaseMERAWalletEvents} from "./interfaces/IBaseMERAWalletEvents.sol";
 import {IMERAWalletTransactionChecker} from "./interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors {
     /// @dev Optional recovery / multisig; address(0) disables guardian-only path for {setEmergency}.
-    address public immutable GUARDIAN;
+    address private _guardian;
 
     address public primary;
     address public backup;
@@ -65,23 +66,27 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address initialSigner,
         address initialGuardian
     ) {
-        require(
-            initialPrimary != address(0) && initialBackup != address(0) && initialEmergency != address(0),
-            InvalidAddress()
-        );
-
-        GUARDIAN = initialGuardian;
-
-        primary = initialPrimary;
-        backup = initialBackup;
-        emergency = initialEmergency;
-        _setLifeController(initialEmergency, true, msg.sender);
-        lastLifeHeartbeatAt = block.timestamp;
-
-        _set1271Signer(initialSigner);
+        _initialize(initialPrimary, initialBackup, initialEmergency, initialSigner, initialGuardian);
     }
 
     receive() external payable override {}
+
+    function GUARDIAN() external view override returns (address) {
+        return _guardian;
+    }
+
+    function initializeFromImmutableArgs() external override {
+        require(primary == address(0), AlreadyInitialized());
+        MERAWalletTypes.WalletInitParams memory params =
+            abi.decode(Clones.fetchCloneArgs(address(this)), (MERAWalletTypes.WalletInitParams));
+        _initialize(
+            params.initialPrimary,
+            params.initialBackup,
+            params.initialEmergency,
+            params.initialSigner,
+            params.initialGuardian
+        );
+    }
 
     function setPrimary(address newPrimary) external override whenLifeAlive {
         require(newPrimary != address(0), InvalidAddress());
@@ -819,6 +824,29 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit LifeControllerUpdated(controller, false, caller);
     }
 
+    function _initialize(
+        address initialPrimary,
+        address initialBackup,
+        address initialEmergency,
+        address initialSigner,
+        address initialGuardian
+    ) internal {
+        require(
+            initialPrimary != address(0) && initialBackup != address(0) && initialEmergency != address(0),
+            InvalidAddress()
+        );
+
+        _guardian = initialGuardian;
+
+        primary = initialPrimary;
+        backup = initialBackup;
+        emergency = initialEmergency;
+        _setLifeController(initialEmergency, true, msg.sender);
+        lastLifeHeartbeatAt = block.timestamp;
+
+        _set1271Signer(initialSigner);
+    }
+
     function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
     {
@@ -994,7 +1022,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _onlyEmergencyOrSelf() internal view {
-        require(msg.sender == address(this) || (GUARDIAN == address(0) && msg.sender == emergency), NotEmergency());
+        require(msg.sender == address(this) || (_guardian == address(0) && msg.sender == emergency), NotEmergency());
     }
 
     function _requireControllerCoreUnfrozen() internal view {
@@ -1150,7 +1178,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         if (caller == emergency) {
             return true;
         }
-        if (GUARDIAN != address(0) && caller == GUARDIAN) {
+        if (_guardian != address(0) && caller == _guardian) {
             return true;
         }
         return false;
