@@ -5,24 +5,30 @@ import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {MERAWalletConstants} from "./constants/MERAWalletConstants.sol";
 import {MERAWalletTypes} from "./types/MERAWalletTypes.sol";
 import {BaseMERAWallet} from "./BaseMERAWallet.sol";
+import {MERAWalletLoginRegistry} from "./MERAWalletLoginRegistry.sol";
 
 /// @title MERAWalletCreate2Factory
-/// @notice Deploys `BaseMERAWallet` via the global Nick deterministic CREATE2 proxy and records `login` → wallet.
+/// @notice Deploys `BaseMERAWallet` via the global Nick deterministic CREATE2 proxy and records `login` -> wallet.
 contract MERAWalletCreate2Factory {
-    /// @dev `salt` for CREATE2 is `keccak256(bytes(login))` (see {deployWallet}).
-    mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
+    MERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
 
     event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
 
     error EmptyLogin();
     error LoginAlreadyRegistered();
+    error LoginRegistryNotDeployed();
     error Create2DeployerNotDeployed();
     error FactoryCallFailed();
     error InvalidReturnData();
     error AddressMismatch(address expected, address actual);
     error NonZeroValue();
 
-    /// @notice Deploys a new `BaseMERAWallet` via the deterministic CREATE2 proxy and stores `login` → wallet.
+    constructor(address loginRegistry) {
+        require(loginRegistry.code.length != 0, LoginRegistryNotDeployed());
+        LOGIN_REGISTRY = MERAWalletLoginRegistry(loginRegistry);
+    }
+
+    /// @notice Deploys a new `BaseMERAWallet` via the deterministic CREATE2 proxy and stores `login` -> wallet.
     /// @dev Reverts if `login` was already used, if the proxy is missing on this chain, or if deployment fails.
     function deployWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
         external
@@ -35,7 +41,7 @@ contract MERAWalletCreate2Factory {
 
         _requireNonEmptyLogin(login);
         (bytes32 salt, bytes memory initCode) = _saltAndInitCode(login, params);
-        require(walletByLoginHash[salt] == address(0), LoginAlreadyRegistered());
+        require(LOGIN_REGISTRY.walletByLoginHash(salt) == address(0), LoginAlreadyRegistered());
         address predicted =
             Create2.computeAddress(salt, keccak256(initCode), MERAWalletConstants.DETERMINISTIC_CREATE2_DEPLOYER);
 
@@ -47,7 +53,7 @@ contract MERAWalletCreate2Factory {
         require(wallet != address(0), InvalidReturnData());
         require(wallet == predicted, AddressMismatch(predicted, wallet));
 
-        walletByLoginHash[salt] = wallet;
+        LOGIN_REGISTRY.registerLogin(login, wallet);
         emit WalletDeployed(salt, login, wallet);
     }
 
@@ -56,7 +62,11 @@ contract MERAWalletCreate2Factory {
         if (bytes(login).length == 0) {
             return address(0);
         }
-        return walletByLoginHash[keccak256(bytes(login))];
+        return LOGIN_REGISTRY.walletByLoginHash(keccak256(bytes(login)));
+    }
+
+    function walletByLoginHash(bytes32 loginHash) external view returns (address) {
+        return LOGIN_REGISTRY.walletByLoginHash(loginHash);
     }
 
     /// @notice Counterfactual wallet address for `login` and `params` using the Nick CREATE2 deployer.

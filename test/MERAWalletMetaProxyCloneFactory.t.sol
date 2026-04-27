@@ -5,13 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
+import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletMetaProxyCloneFactory} from "../src/MERAWalletMetaProxyCloneFactory.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 
 contract MERAWalletMetaProxyCloneFactoryTest is Test {
     BaseMERAWallet internal implementation;
+    MERAWalletLoginRegistry internal registry;
     MERAWalletMetaProxyCloneFactory internal factory;
 
+    address internal owner = address(0xAD111);
     address internal primary = address(0xA11CE);
     address internal backup = address(0xB0B);
     address internal emergency = address(0xE911);
@@ -20,7 +23,11 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
     function setUp() public {
         implementation = new BaseMERAWallet(address(1), address(2), address(3), address(0), address(0));
-        factory = new MERAWalletMetaProxyCloneFactory(address(implementation));
+        registry = new MERAWalletLoginRegistry(owner);
+        factory = new MERAWalletMetaProxyCloneFactory(address(implementation), address(registry));
+
+        vm.prank(owner);
+        registry.setFactory(address(factory), true);
     }
 
     function _params() internal view returns (MERAWalletTypes.WalletInitParams memory p) {
@@ -67,6 +74,9 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         assertEq(deployed, predicted);
         assertEq(factory.walletOf(login), deployed);
         assertEq(factory.walletByLoginHash(keccak256(bytes(login))), deployed);
+        assertEq(registry.walletOf(login), deployed);
+        assertEq(registry.loginHashByWallet(deployed), keccak256(bytes(login)));
+        assertEq(registry.loginOf(deployed), login);
 
         BaseMERAWallet wallet = BaseMERAWallet(payable(deployed));
         assertEq(wallet.primary(), primary);
@@ -85,6 +95,50 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
         vm.expectRevert(MERAWalletMetaProxyCloneFactory.LoginAlreadyRegistered.selector);
         factory.deployWallet(login, p);
+    }
+
+    function test_registry_transfer_login_to_new_address() public {
+        string memory login = "carol";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = factory.deployWallet(login, p);
+        address newWallet = address(0x123456);
+
+        vm.expectEmit(true, true, true, true);
+        emit MERAWalletLoginRegistry.LoginTransferred(keccak256(bytes(login)), login, deployed, newWallet);
+
+        vm.prank(deployed);
+        registry.transferLogin(login, newWallet);
+
+        assertEq(registry.walletOf(login), newWallet);
+        assertEq(registry.loginHashByWallet(deployed), bytes32(0));
+        assertEq(registry.loginHashByWallet(newWallet), keccak256(bytes(login)));
+        assertEq(registry.loginOf(newWallet), login);
+    }
+
+    function test_registry_transfer_reverts_when_not_current_wallet() public {
+        string memory login = "carol";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        factory.deployWallet(login, p);
+
+        vm.expectRevert(MERAWalletLoginRegistry.LoginNotOwned.selector);
+        registry.transferLogin(login, address(0x123456));
+    }
+
+    function test_registry_only_factory_can_register_login() public {
+        vm.expectRevert(MERAWalletLoginRegistry.UnauthorizedFactory.selector);
+        registry.registerLogin("mallory", address(0x123456));
+    }
+
+    function test_registry_owner_controls_factories() public {
+        address otherFactory = address(0xFAc70);
+
+        vm.expectRevert();
+        registry.setFactory(otherFactory, true);
+
+        vm.prank(owner);
+        registry.setFactory(otherFactory, true);
+
+        assertTrue(registry.isFactory(otherFactory));
     }
 
     function test_empty_login_reverts() public {
@@ -119,6 +173,11 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
     function test_constructor_reverts_for_implementation_without_code() public {
         vm.expectRevert(MERAWalletMetaProxyCloneFactory.WalletImplementationNotDeployed.selector);
-        new MERAWalletMetaProxyCloneFactory(address(0x1234));
+        new MERAWalletMetaProxyCloneFactory(address(0x1234), address(registry));
+    }
+
+    function test_constructor_reverts_for_registry_without_code() public {
+        vm.expectRevert(MERAWalletMetaProxyCloneFactory.LoginRegistryNotDeployed.selector);
+        new MERAWalletMetaProxyCloneFactory(address(implementation), address(0x1234));
     }
 }

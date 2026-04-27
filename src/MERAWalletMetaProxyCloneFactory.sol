@@ -4,25 +4,27 @@ pragma solidity 0.8.34;
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {MERAWalletTypes} from "./types/MERAWalletTypes.sol";
 import {BaseMERAWallet} from "./BaseMERAWallet.sol";
+import {MERAWalletLoginRegistry} from "./MERAWalletLoginRegistry.sol";
 
 /// @title MERAWalletMetaProxyCloneFactory
 /// @notice Deploys deterministic `BaseMERAWallet` meta-proxy clones with init params embedded as immutable args.
 contract MERAWalletMetaProxyCloneFactory {
     address public immutable WALLET_IMPLEMENTATION;
-
-    /// @dev `salt` for CREATE2 is `keccak256(bytes(login))` (see {deployWallet}).
-    mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
+    MERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
 
     event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
 
     error EmptyLogin();
     error LoginAlreadyRegistered();
     error WalletImplementationNotDeployed();
+    error LoginRegistryNotDeployed();
     error NonZeroValue();
 
-    constructor(address walletImplementation) {
+    constructor(address walletImplementation, address loginRegistry) {
         require(walletImplementation.code.length != 0, WalletImplementationNotDeployed());
+        require(loginRegistry.code.length != 0, LoginRegistryNotDeployed());
         WALLET_IMPLEMENTATION = walletImplementation;
+        LOGIN_REGISTRY = MERAWalletLoginRegistry(loginRegistry);
     }
 
     /// @notice Deploys a new `BaseMERAWallet` meta-proxy clone and stores `login` -> wallet.
@@ -35,12 +37,12 @@ contract MERAWalletMetaProxyCloneFactory {
         _requireNonEmptyLogin(login);
 
         bytes32 salt = _salt(login);
-        require(walletByLoginHash[salt] == address(0), LoginAlreadyRegistered());
+        require(LOGIN_REGISTRY.walletByLoginHash(salt) == address(0), LoginAlreadyRegistered());
 
         wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, _immutableArgs(params), salt);
         BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
 
-        walletByLoginHash[salt] = wallet;
+        LOGIN_REGISTRY.registerLogin(login, wallet);
         emit WalletDeployed(salt, login, wallet);
     }
 
@@ -49,7 +51,11 @@ contract MERAWalletMetaProxyCloneFactory {
         if (bytes(login).length == 0) {
             return address(0);
         }
-        return walletByLoginHash[_salt(login)];
+        return LOGIN_REGISTRY.walletByLoginHash(_salt(login));
+    }
+
+    function walletByLoginHash(bytes32 loginHash) external view returns (address) {
+        return LOGIN_REGISTRY.walletByLoginHash(loginHash);
     }
 
     /// @notice Counterfactual wallet address for `login` and `params` using this factory as CREATE2 deployer.
