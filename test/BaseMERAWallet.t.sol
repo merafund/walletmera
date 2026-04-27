@@ -46,7 +46,7 @@ contract BaseMERAWalletTest is Test {
         walletWithExtensions = new MERAWalletFull(primary, backup, emergency, address(0), address(0));
         receiver = new ReceiverMock();
         token = new ERC20Mock();
-        targetWhitelistChecker = new MERAWalletTargetWhitelistChecker(emergency, address(walletWithExtensions));
+        targetWhitelistChecker = new MERAWalletTargetWhitelistChecker(emergency);
         targetBlacklistChecker = new MERAWalletTargetBlacklistChecker(emergency, address(walletWithExtensions));
         checkerBothHooks = new ConfigurableTransactionChecker(true, true, address(walletWithExtensions));
         checkerAfterOnly = new ConfigurableTransactionChecker(false, true, address(walletWithExtensions));
@@ -1284,15 +1284,15 @@ contract BaseMERAWalletTest is Test {
     }
 
     function test_SetOptionalChecker_AppliesConfigToTargetWhitelistChecker() public {
-        MERAWalletTargetWhitelistChecker wl =
-            new MERAWalletTargetWhitelistChecker(emergency, address(walletWithExtensions));
+        MERAWalletTargetWhitelistChecker wl = new MERAWalletTargetWhitelistChecker(emergency);
         MERAWalletWhitelistTypes.TargetPermission[] memory perms = new MERAWalletWhitelistTypes.TargetPermission[](1);
         perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
 
         vm.prank(emergency);
         walletWithExtensions.setOptionalCheckers(_mkWl(address(wl), true, abi.encode(perms)));
 
-        assertTrue(wl.allowedTarget(address(receiver)));
+        assertTrue(wl.walletAllowedTarget(address(walletWithExtensions), address(receiver)));
+        assertFalse(wl.allowedTarget(address(receiver)));
         (bool allowed,,) = walletWithExtensions.whitelistOptionalChecker(address(wl));
         assertTrue(allowed);
     }
@@ -1318,13 +1318,14 @@ contract BaseMERAWalletTest is Test {
         assertFalse(targetWhitelistChecker.allowedTarget(address(receiver)));
     }
 
-    function test_TargetWhitelistChecker_ApplyConfig_RevertsWhenUnauthorized() public {
+    function test_TargetWhitelistChecker_ApplyConfig_PersonalDoesNotAffectOtherWallet() public {
         MERAWalletWhitelistTypes.TargetPermission[] memory perms = new MERAWalletWhitelistTypes.TargetPermission[](1);
         perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
 
         vm.prank(outsider);
-        vm.expectRevert(IMERAWalletWhitelistErrors.WhitelistConfigNotAuthorized.selector);
         targetWhitelistChecker.applyConfig(abi.encode(perms));
+        assertTrue(targetWhitelistChecker.walletAllowedTarget(outsider, address(receiver)));
+        assertFalse(targetWhitelistChecker.walletAllowedTarget(address(walletWithExtensions), address(receiver)));
     }
 
     function test_SetOptionalChecker_AppliesConfigToConfigurableChecker() public {

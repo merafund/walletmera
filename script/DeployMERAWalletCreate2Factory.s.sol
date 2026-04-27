@@ -8,6 +8,8 @@ import {MERAWalletCreate2Factory} from "../src/MERAWalletCreate2Factory.sol";
 contract DeployMERAWalletCreate2Factory is Script {
     function run() external returns (MERAWalletCreate2Factory factory) {
         vm.startBroadcast();
+        address deployer = msg.sender;
+        console2.log("Deployer:", deployer);
         factory = new MERAWalletCreate2Factory();
         vm.stopBroadcast();
 
