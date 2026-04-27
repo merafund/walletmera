@@ -57,4 +57,16 @@ interface IBaseMERAWalletErrors {
     error AgentCannotVetoEmergencyOperation();
     /// @dev Parallel calldata arrays for a batch setter had different lengths.
     error ArrayLengthMismatch(uint256 a, uint256 b);
+    /// @dev Caller is not allowed to enter safe mode (not emergency or emergency-level agent).
+    error SafeModeNotAuthorized();
+    /// @dev Safe mode has already been used once and cannot be activated again.
+    error SafeModeAlreadyUsed();
+    /// @dev Requested duration is outside [SAFE_MODE_MIN_DURATION, SAFE_MODE_MAX_DURATION].
+    error SafeModeDurationOutOfRange(uint256 duration);
+    /// @dev Action is blocked while safe mode is active.
+    error SafeModeActive(uint256 safeModeBefore);
+    /// @dev resetSafeMode called but safe mode was never activated.
+    error SafeModeNotUsed();
+    /// @dev resetSafeMode called before the safe mode period has expired.
+    error SafeModeStillActive(uint256 safeModeBefore);
 }

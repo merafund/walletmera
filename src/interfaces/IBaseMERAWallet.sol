@@ -39,6 +39,8 @@ interface IBaseMERAWallet {
     function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role roleLevel);
     function frozenPrimary() external view returns (bool);
     function frozenBackup() external view returns (bool);
+    function safeModeBefore() external view returns (uint256);
+    function safeModeUsed() external view returns (bool);
 
     function setPrimary(address newPrimary) external;
     function setBackup(address newBackup) external;
@@ -67,6 +69,11 @@ interface IBaseMERAWallet {
     function setFrozenPrimary(bool frozen) external;
     /// @notice Emergency may set any value. Backup-scoped controller agents may set backup freeze to true only via the same function (no unfreeze).
     function setFrozenBackup(bool frozen) external;
+    /// @notice Enter safe mode: blocks all transaction execution/proposal for `duration` seconds. One-time use.
+    /// @dev Callable only by emergency address or emergency-level controller agent.
+    function enterSafeMode(uint256 duration) external;
+    /// @notice Reset safe mode flag after expiry, re-enabling future use. Only callable by emergency after safeModeBefore has passed.
+    function resetSafeMode() external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)

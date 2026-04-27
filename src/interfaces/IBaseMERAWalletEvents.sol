@@ -65,4 +65,6 @@ interface IBaseMERAWalletEvents {
     event LifeControlUpdated(bool enabled, uint256 timeout, address indexed caller);
     event LifeControllerUpdated(address indexed controller, bool enabled, address indexed caller);
     event LifeHeartbeatConfirmed(address indexed controller, uint256 timestamp);
+    event SafeModeEntered(uint256 safeModeBefore, address indexed caller);
+    event SafeModeReset(address indexed caller);
 }

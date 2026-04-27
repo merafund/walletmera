@@ -30,4 +30,8 @@ library MERAWalletConstants {
     // --- Required transaction checkers (before/after lists) ---
     /// @dev Upper bound per list to limit gas and griefing on every execution hook.
     uint256 internal constant MAX_REQUIRED_CHECKERS_PER_LIST = 8;
+
+    // --- Safe mode ---
+    uint256 internal constant SAFE_MODE_MIN_DURATION = 30 days;
+    uint256 internal constant SAFE_MODE_MAX_DURATION = 90 days;
 }

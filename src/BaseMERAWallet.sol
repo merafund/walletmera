@@ -24,6 +24,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     bool public lifeControlEnabled;
     bool public frozenPrimary;
     bool public frozenBackup;
+    uint256 public safeModeBefore;
+    bool public safeModeUsed;
     mapping(address target => MERAWalletTypes.CallPathPolicy policy) public callPolicyByTarget;
     mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy) public callPolicyBySelector;
     mapping(address target => mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy)) public
@@ -297,6 +299,35 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
         frozenBackup = frozen;
         emit BackupFreezeUpdated(frozen, msg.sender);
+    }
+
+    function enterSafeMode(uint256 duration) external override {
+        require(
+            msg.sender == emergency
+                || (controllerAgents[msg.sender].enabled
+                    && controllerAgents[msg.sender].roleLevel == MERAWalletTypes.Role.Emergency),
+            SafeModeNotAuthorized()
+        );
+        require(!safeModeUsed, SafeModeAlreadyUsed());
+        require(
+            duration >= MERAWalletConstants.SAFE_MODE_MIN_DURATION
+                && duration <= MERAWalletConstants.SAFE_MODE_MAX_DURATION,
+            SafeModeDurationOutOfRange(duration)
+        );
+
+        safeModeUsed = true;
+        safeModeBefore = block.timestamp + duration;
+        emit SafeModeEntered(safeModeBefore, msg.sender);
+    }
+
+    function resetSafeMode() external override {
+        require(msg.sender == emergency, NotEmergency());
+        require(safeModeUsed, SafeModeNotUsed());
+        require(block.timestamp > safeModeBefore, SafeModeStillActive(safeModeBefore));
+
+        safeModeUsed = false;
+        safeModeBefore = 0;
+        emit SafeModeReset(msg.sender);
     }
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
@@ -967,8 +998,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _requireControllerCoreUnfrozen() internal view {
+        _requireNotSafeMode();
         MERAWalletTypes.Role callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
+    }
+
+    function _requireNotSafeMode() internal view {
+        if (safeModeBefore != 0) {
+            require(block.timestamp > safeModeBefore, SafeModeActive(safeModeBefore));
+        }
     }
 
     function _validateCalls(MERAWalletTypes.Call[] calldata calls) internal view {
