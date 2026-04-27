@@ -70,4 +70,8 @@ interface IBaseMERAWalletErrors {
     error SafeModeNotUsed();
     /// @dev resetSafeMode called before the safe mode period has expired.
     error SafeModeStillActive(uint256 safeModeBefore);
+    /// @dev executeMigrationTransaction called but migrationTarget is not set.
+    error MigrationModeNotActive();
+    /// @dev A call in the migration batch does not match allowed migration selectors or the recipient is not migrationTarget.
+    error MigrationCallNotAllowed(uint256 callIndex);
 }

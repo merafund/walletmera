@@ -7,6 +7,7 @@ import {IBaseMERAWallet} from "./interfaces/IBaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "./interfaces/IBaseMERAWalletErrors.sol";
 import {IBaseMERAWalletEvents} from "./interfaces/IBaseMERAWalletEvents.sol";
 import {IMERAWalletTransactionChecker} from "./interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMigrationCalls} from "./interfaces/external/IMigrationCalls.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
@@ -27,6 +28,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     bool public frozenBackup;
     uint256 public safeModeBefore;
     bool public safeModeUsed;
+    address public migrationTarget;
     mapping(address target => MERAWalletTypes.CallPathPolicy policy) public callPolicyByTarget;
     mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy) public callPolicyBySelector;
     mapping(address target => mapping(bytes4 selector => MERAWalletTypes.CallPathPolicy policy)) public
@@ -335,6 +337,13 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit SafeModeReset(msg.sender);
     }
 
+    function setMigrationTarget(address target) external override {
+        require(msg.sender == emergency, NotEmergency());
+        address previous = migrationTarget;
+        migrationTarget = target;
+        emit MigrationTargetUpdated(previous, target, msg.sender);
+    }
+
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
         external
         payable
@@ -352,6 +361,29 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _executeCallsWithHooks(calls, operationId);
 
         emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
+    }
+
+    function executeMigrationTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
+        external
+        payable
+        override
+        whenLifeAlive
+    {
+        require(_coreRole(msg.sender) != MERAWalletTypes.Role.None, Unauthorized());
+        require(migrationTarget != address(0), MigrationModeNotActive());
+        _validateMigrationCalls(calls);
+
+        bytes32 operationId = _computeOperationId(calls, salt);
+        uint256 n = calls.length;
+        for (uint256 i = 0; i < n;) {
+            MERAWalletTypes.Call calldata c = calls[i];
+            (bool success, bytes memory result) = c.target.call{value: c.value}(c.data);
+            require(success, CallExecutionFailed(i, result));
+            unchecked {
+                ++i;
+            }
+        }
+        emit MigrationTransactionExecuted(operationId, salt, msg.sender);
     }
 
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
@@ -1021,6 +1053,31 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _invokeAfterOptionalCheckerWithCallMemory(callData, operationId, callId);
     }
 
+    function _validateMigrationCalls(MERAWalletTypes.Call[] calldata calls) internal view {
+        require(calls.length > 0, EmptyCalls());
+        uint256 n = calls.length;
+        for (uint256 i = 0; i < n;) {
+            if (!_isMigrationCall(calls[i])) revert MigrationCallNotAllowed(i);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _isMigrationCall(MERAWalletTypes.Call calldata call) internal view returns (bool) {
+        bytes4 sel = _extractSelectorFromCalldataBytes(call.data);
+
+        // transferOwnership(address) — address is first arg at data[4:36]
+        if (sel == IMigrationCalls.transferOwnership.selector) {
+            return call.data.length >= 36 && address(uint160(uint256(bytes32(call.data[4:36])))) == migrationTarget;
+        }
+        // grantRole(bytes32,address) — address is second arg at data[36:68]
+        if (sel == IMigrationCalls.grantRole.selector) {
+            return call.data.length >= 68 && address(uint160(uint256(bytes32(call.data[36:68])))) == migrationTarget;
+        }
+        return false;
+    }
+
     function _onlyEmergencyOrSelf() internal view {
         require(msg.sender == address(this) || (_guardian == address(0) && msg.sender == emergency), NotEmergency());
     }
@@ -1252,7 +1309,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             || selector == IBaseMERAWallet.setControllerAgents.selector
             || selector == IBaseMERAWallet.setFrozenPrimary.selector
             || selector == IBaseMERAWallet.setFrozenBackup.selector
-            || selector == IBaseMERAWallet.set1271Signer.selector;
+            || selector == IBaseMERAWallet.set1271Signer.selector
+            || selector == IBaseMERAWallet.setMigrationTarget.selector;
     }
 
     function _rolePolicySlice(MERAWalletTypes.CallPathPolicy memory policy, MERAWalletTypes.Role callerRole)

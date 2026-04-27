@@ -18,6 +18,7 @@ import {IMERAWalletBlacklistErrors} from "../src/checkers/errors/IMERAWalletBlac
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";
+import {IBaseMERAWalletEvents} from "../src/interfaces/IBaseMERAWalletEvents.sol";
 
 contract BaseMERAWalletTest is Test {
     uint256 internal primaryPk = 0xA11CE;
@@ -1996,5 +1997,238 @@ contract BaseMERAWalletTest is Test {
     function _signDigest(uint256 privateKey, bytes32 digest) internal pure returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         return abi.encodePacked(r, s, v);
+    }
+
+    // ─── Migration Mode ───────────────────────────────────────────────────────
+
+    function test_SetMigrationTarget_OnlyEmergency() public {
+        address newTarget = address(0xCAFE);
+
+        vm.prank(primary);
+        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        wallet.setMigrationTarget(newTarget);
+
+        vm.prank(backup);
+        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        wallet.setMigrationTarget(newTarget);
+    }
+
+    function test_SetMigrationTarget_EmitsEvent() public {
+        address newTarget = address(0xCAFE);
+        vm.prank(emergency);
+        vm.expectEmit(true, true, true, true);
+        emit IBaseMERAWalletEvents.MigrationTargetUpdated(address(0), newTarget, emergency);
+        wallet.setMigrationTarget(newTarget);
+        assertEq(wallet.migrationTarget(), newTarget);
+    }
+
+    function test_SetMigrationTarget_Deactivate() public {
+        address newTarget = address(0xCAFE);
+        vm.startPrank(emergency);
+        wallet.setMigrationTarget(newTarget);
+        wallet.setMigrationTarget(address(0));
+        vm.stopPrank();
+        assertEq(wallet.migrationTarget(), address(0));
+    }
+
+    function test_ExecuteMigration_NoTargetSet_Reverts() public {
+        OwnableMock ext = new OwnableMock();
+        address someTarget = address(0x1111);
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", someTarget));
+
+        vm.prank(primary);
+        vm.expectRevert(IBaseMERAWalletErrors.MigrationModeNotActive.selector);
+        wallet.executeMigrationTransaction(calls, 1);
+    }
+
+    function test_ExecuteMigration_NonCoreController_Reverts() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x2222);
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        vm.prank(outsider);
+        vm.expectRevert(IBaseMERAWalletErrors.Unauthorized.selector);
+        wallet.executeMigrationTransaction(calls, 1);
+    }
+
+    function test_ExecuteMigration_TransferOwnership_Primary_Immediate() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x3333);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        // global timelock set — migration should bypass it
+        vm.prank(emergency);
+        wallet.setGlobalTimelock(7 days);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        vm.prank(primary);
+        wallet.executeMigrationTransaction(calls, 1);
+
+        assertEq(ext.owner(), target);
+    }
+
+    function test_ExecuteMigration_TransferOwnership_Backup_Immediate() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x4444);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        vm.prank(backup);
+        wallet.executeMigrationTransaction(calls, 1);
+
+        assertEq(ext.owner(), target);
+    }
+
+    function test_ExecuteMigration_TransferOwnership_Emergency_Immediate() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x5555);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        vm.prank(emergency);
+        wallet.executeMigrationTransaction(calls, 1);
+
+        assertEq(ext.owner(), target);
+    }
+
+    function test_ExecuteMigration_GrantRole_Immediate() public {
+        AccessControlMock ac = new AccessControlMock();
+        bytes32 role = keccak256("ADMIN_ROLE");
+        address target = address(0x6666);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ac), 0, abi.encodeWithSignature("grantRole(bytes32,address)", role, target));
+
+        vm.prank(primary);
+        wallet.executeMigrationTransaction(calls, 1);
+
+        assertTrue(ac.roles(role, target));
+    }
+
+    function test_ExecuteMigration_WrongRecipient_Reverts() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x7777);
+        address wrong = address(0x8888);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", wrong));
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.MigrationCallNotAllowed.selector, uint256(0)));
+        wallet.executeMigrationTransaction(calls, 1);
+    }
+
+    function test_ExecuteMigration_UnknownSelector_Reverts() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x9999);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("someOtherFn(address)", target));
+
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.MigrationCallNotAllowed.selector, uint256(0)));
+        wallet.executeMigrationTransaction(calls, 1);
+    }
+
+    function test_ExecuteMigration_DeactivateTarget_Reverts() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0xAAAA);
+
+        vm.startPrank(emergency);
+        wallet.setMigrationTarget(target);
+        wallet.setMigrationTarget(address(0));
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        vm.prank(primary);
+        vm.expectRevert(IBaseMERAWalletErrors.MigrationModeNotActive.selector);
+        wallet.executeMigrationTransaction(calls, 1);
+    }
+
+    function test_ExecuteMigration_Reusable() public {
+        OwnableMock ext1 = new OwnableMock();
+        OwnableMock ext2 = new OwnableMock();
+        address target1 = address(0xBBBB);
+        address target2 = address(0xCCCC);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target1);
+
+        MERAWalletTypes.Call[] memory calls1 =
+            _singleCall(address(ext1), 0, abi.encodeWithSignature("transferOwnership(address)", target1));
+        vm.prank(primary);
+        wallet.executeMigrationTransaction(calls1, 1);
+        assertEq(ext1.owner(), target1);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target2);
+
+        MERAWalletTypes.Call[] memory calls2 =
+            _singleCall(address(ext2), 0, abi.encodeWithSignature("transferOwnership(address)", target2));
+        vm.prank(primary);
+        wallet.executeMigrationTransaction(calls2, 2);
+        assertEq(ext2.owner(), target2);
+    }
+
+    function test_ExecuteMigration_EmitsEvent() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0xDDDD);
+
+        vm.prank(emergency);
+        wallet.setMigrationTarget(target);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        bytes32 expectedOpId = wallet.getOperationId(calls, 1);
+
+        vm.prank(primary);
+        vm.expectEmit(true, false, true, true);
+        emit IBaseMERAWalletEvents.MigrationTransactionExecuted(expectedOpId, 1, primary);
+        wallet.executeMigrationTransaction(calls, 1);
+    }
+}
+
+contract OwnableMock {
+    address public owner;
+
+    function transferOwnership(address newOwner) external {
+        owner = newOwner;
+    }
+}
+
+contract AccessControlMock {
+    mapping(bytes32 => mapping(address => bool)) public roles;
+
+    function grantRole(bytes32 role, address account) external {
+        roles[role][account] = true;
     }
 }

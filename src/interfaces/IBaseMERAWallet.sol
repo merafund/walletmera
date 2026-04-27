@@ -41,6 +41,7 @@ interface IBaseMERAWallet {
     function frozenBackup() external view returns (bool);
     function safeModeBefore() external view returns (uint256);
     function safeModeUsed() external view returns (bool);
+    function migrationTarget() external view returns (address);
 
     function initializeFromImmutableArgs() external;
     function setPrimary(address newPrimary) external;
@@ -75,8 +76,12 @@ interface IBaseMERAWallet {
     function enterSafeMode(uint256 duration) external;
     /// @notice Reset safe mode flag after expiry, re-enabling future use. Only callable by emergency after safeModeBefore has passed.
     function resetSafeMode() external;
+    /// @notice Set the migration target address. Only callable by emergency. Set to address(0) to deactivate.
+    function setMigrationTarget(address target) external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
+    /// @notice Execute migration calls (transferOwnership / grantRole to migrationTarget) immediately without timelock.
+    function executeMigrationTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     function proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
         external
         returns (bytes32 operationId);

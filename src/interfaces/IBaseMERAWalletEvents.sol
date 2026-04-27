@@ -67,4 +67,6 @@ interface IBaseMERAWalletEvents {
     event LifeHeartbeatConfirmed(address indexed controller, uint256 timestamp);
     event SafeModeEntered(uint256 safeModeBefore, address indexed caller);
     event SafeModeReset(address indexed caller);
+    event MigrationTargetUpdated(address indexed previousTarget, address indexed newTarget, address indexed caller);
+    event MigrationTransactionExecuted(bytes32 indexed operationId, uint256 salt, address indexed caller);
 }
