@@ -9,7 +9,7 @@ export POLYGONSCAN_API_KEY
 export BSCSCAN_API_KEY
 
 FORGE ?= forge
-SCRIPT := script/DeployMERAWalletCreate2Factory.s.sol:DeployMERAWalletCreate2Factory
+SCRIPT := script/DeployMERAWalletMetaProxyCloneFactory.s.sol:DeployMERAWalletMetaProxyCloneFactory
 
 .PHONY: deploy-factory-polygon deploy-factory-amoy deploy-factory-bsc deploy-factory
 .PHONY: deploy-meta-proxy-clone-factory deploy-meta-proxy-clone-factory-polygon deploy-meta-proxy-clone-factory-amoy deploy-meta-proxy-clone-factory-bsc
@@ -19,7 +19,7 @@ SCRIPT := script/DeployMERAWalletCreate2Factory.s.sol:DeployMERAWalletCreate2Fac
 .PHONY: deploy-target-blacklist-checker-polygon deploy-target-blacklist-checker-amoy deploy-target-blacklist-checker-bsc
 .PHONY: deploy-target-whitelist-checker-polygon deploy-target-whitelist-checker-amoy deploy-target-whitelist-checker-bsc
 .PHONY: deploy-uniswap-v2-oracle-slippage-checker-polygon deploy-uniswap-v2-oracle-slippage-checker-amoy deploy-uniswap-v2-oracle-slippage-checker-bsc
-.PHONY: verify-json-factory verify-json-base-wallet
+.PHONY: verify-json-base-wallet
 
 # Standard JSON for Polygonscan "Solidity (Standard-Json-Input)" (matches foundry.toml: via_ir, runs 1000, solc 0.8.34).
 OUT_VERIFY_JSON_DIR ?= verification
@@ -27,7 +27,6 @@ VERIFY_JSON_CHAIN_ID ?= 137
 VERIFY_JSON_SOLC := 0.8.34+commit.80d5c536
 VERIFY_JSON_COMPILE := --via-ir --optimizer-runs 1000 --evm-version prague --compiler-version $(VERIFY_JSON_SOLC)
 
-VERIFY_JSON_FACTORY_ADDR ?= 0xe6f40634c24e9bcab4239d8ada5afae85724907f
 VERIFY_JSON_BASE_WALLET_ADDR ?= 0x60F307B4e7E6F26Adf01FF3C647193B98DFA3c57
 
 # BaseMERAWallet constructor tuple; override in .env or set VERIFY_JSON_BASE_WALLET_CTOR to a single ABI-encoded hex string.
@@ -138,14 +137,6 @@ deploy-uniswap-v2-oracle-slippage-checker-amoy:
 
 deploy-uniswap-v2-oracle-slippage-checker-bsc:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2OracleSlippageChecker.s.sol:DeployMERAWalletUniswapV2OracleSlippageChecker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
-
-verify-json-factory:
-	@mkdir -p $(OUT_VERIFY_JSON_DIR)
-	@$(FORGE) verify-contract $(VERIFY_JSON_FACTORY_ADDR) \
-		src/MERAWalletCreate2Factory.sol:MERAWalletCreate2Factory \
-		--chain $(VERIFY_JSON_CHAIN_ID) $(VERIFY_JSON_COMPILE) \
-		--show-standard-json-input > $(OUT_VERIFY_JSON_DIR)/MERAWalletCreate2Factory.chain-$(VERIFY_JSON_CHAIN_ID).standard.json
-	@echo Wrote $(OUT_VERIFY_JSON_DIR)/MERAWalletCreate2Factory.chain-$(VERIFY_JSON_CHAIN_ID).standard.json
 
 verify-json-base-wallet:
 	@mkdir -p $(OUT_VERIFY_JSON_DIR)

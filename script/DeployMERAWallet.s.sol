@@ -2,11 +2,11 @@
 pragma solidity 0.8.34;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
+import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 
-/// @notice Deploys MERAWalletFull. Set env vars before running (see README).
+/// @notice Deploys BaseMERAWallet. Set env vars before running (see README).
 contract DeployMERAWallet is Script {
-    function run() external returns (MERAWalletFull wallet) {
+    function run() external returns (BaseMERAWallet wallet) {
         address primary = vm.envAddress("WALLET_PRIMARY");
         address backup = vm.envAddress("WALLET_BACKUP");
         address emergency = vm.envAddress("WALLET_EMERGENCY");
@@ -14,9 +14,9 @@ contract DeployMERAWallet is Script {
         address guardianAddr = vm.envOr("WALLET_GUARDIAN", address(0));
 
         vm.startBroadcast();
-        wallet = new MERAWalletFull(primary, backup, emergency, eip1271Signer, guardianAddr);
+        wallet = new BaseMERAWallet(primary, backup, emergency, eip1271Signer, guardianAddr);
         vm.stopBroadcast();
 
-        console2.log("MERAWalletFull deployed at:", address(wallet));
+        console2.log("BaseMERAWallet deployed at:", address(wallet));
     }
 }

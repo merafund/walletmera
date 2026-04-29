@@ -97,7 +97,7 @@ library MERAWalletTypes {
         uint64 activeUntil;
     }
 
-    /// @notice Constructor arguments for `BaseMERAWallet` (factory) or `MERAWalletFull` when deployed directly.
+    /// @notice Constructor arguments for `BaseMERAWallet` (factory or direct deployment).
     struct WalletInitParams {
         address initialPrimary;
         address initialBackup;

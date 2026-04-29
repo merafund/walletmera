@@ -4,7 +4,7 @@ pragma solidity 0.8.34;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {MERAWalletFull} from "../src/extensions/MERAWalletFull.sol";
+import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletERC20TransferWhitelistChecker} from "../src/checkers/MERAWalletERC20TransferWhitelistChecker.sol";
 import {MERAWalletERC20ApproveWhitelistChecker} from "../src/checkers/MERAWalletERC20ApproveWhitelistChecker.sol";
@@ -23,7 +23,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     address internal pauseAgent = address(0xBEEF);
     address internal recipient = address(0xB0B0);
     address internal spender = address(0x51ED);
-    MERAWalletFull internal wallet;
+    BaseMERAWallet internal wallet;
     MERAWalletERC20TransferWhitelistChecker internal transferChecker;
     MERAWalletERC20ApproveWhitelistChecker internal approveChecker;
     ERC20Mock internal token;
@@ -40,7 +40,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     }
 
     function setUp() public {
-        wallet = new MERAWalletFull(primary, backup, emergency, address(0), address(0));
+        wallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
         transferChecker = new MERAWalletERC20TransferWhitelistChecker(emergency);
         approveChecker = new MERAWalletERC20ApproveWhitelistChecker(emergency);
         token = new ERC20Mock();
@@ -114,6 +114,22 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         });
     }
 
+    /// @dev Mirrors `MERAWalletERC20.transferERC20` routing (single IERC20.transfer via `executeTransaction`).
+    function _transferErc20Calls(address token_, address to, uint256 amount, address checker)
+        internal
+        pure
+        returns (MERAWalletTypes.Call[] memory calls)
+    {
+        calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: token_,
+            value: 0,
+            data: abi.encodeWithSelector(IERC20.transfer.selector, to, amount),
+            checker: checker,
+            checkerData: ""
+        });
+    }
+
     function test_Transfer_HappyPath() public {
         _allowTokenAndCounterparty();
         vm.prank(emergency);
@@ -121,7 +137,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
 
         token.mint(address(wallet), 1000);
         vm.prank(primary);
-        wallet.transferERC20(address(token), recipient, 100, address(transferChecker), "", 1);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 100, address(transferChecker)), 1);
         assertEq(token.balanceOf(recipient), 100);
     }
 
@@ -149,7 +165,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
                 uint256(0)
             )
         );
-        wallet.transferERC20(address(token), recipient, 100, address(transferChecker), "", 1);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 100, address(transferChecker)), 1);
     }
 
     function test_Transfer_RevertsWhenRecipientNotAllowed() public {
@@ -173,7 +189,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
                 uint256(0)
             )
         );
-        wallet.transferERC20(address(token), badRecipient, 100, address(transferChecker), "", 1);
+        wallet.executeTransaction(_transferErc20Calls(address(token), badRecipient, 100, address(transferChecker)), 1);
     }
 
     function test_Transfer_RevertsOnWrongSelector() public {
@@ -259,7 +275,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         token.mint(address(wallet), 1000);
         vm.prank(primary);
         vm.expectRevert();
-        wallet.transferERC20(address(token), recipient, 100, address(transferChecker), "", 1);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 100, address(transferChecker)), 1);
     }
 
     function test_Transfer_UsesDefaultWhitelistsWhenWalletConfigZero() public {
@@ -289,7 +305,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
 
         token.mint(address(wallet), 1000);
         vm.prank(primary);
-        wallet.transferERC20(address(token), recipient, 50, address(transferChecker), "", 2);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 2);
         assertEq(token.balanceOf(recipient), 50);
     }
 
