@@ -1276,11 +1276,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         view
         returns (uint256)
     {
-        if (callerRole == MERAWalletTypes.Role.Emergency) {
-            if (_isEmergencyTimelockExemptSelfCall(callData)) {
-                return 0;
-            }
-        }
         return _getCallDelayForPolicyRole(callerRole, callData.target, callData.data);
     }
 
@@ -1320,14 +1315,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         uint256 a = uint256(targetRole.delay);
         uint256 b = uint256(selectorRole.delay);
         return a > b ? a : b;
-    }
-
-    /// @dev Zero extra delay for emergency-driven self-calls that only reconfigure the wallet (role / freeze / policies / life).
-    function _isEmergencyTimelockExemptSelfCall(MERAWalletTypes.Call calldata callData) internal view returns (bool) {
-        if (callData.target != address(this)) {
-            return false;
-        }
-        return _isEmergencyConfigSelector(_extractSelectorFromCalldataBytes(callData.data));
     }
 
     function _requireLifeAliveForStateChanges() internal view {
@@ -1466,23 +1453,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return MERAWalletTypes.Role.Primary;
         }
         return MERAWalletTypes.Role.None;
-    }
-
-    function _isEmergencyConfigSelector(bytes4 selector) internal pure returns (bool) {
-        // Compare against IBaseMERAWallet so selectors stay aligned with the external API.
-        return selector == IBaseMERAWallet.setGuardian.selector || selector == IBaseMERAWallet.setRoleTimelock.selector
-            || selector == IBaseMERAWallet.setEmergencyAgentLifetime.selector
-            || selector == IBaseMERAWallet.setLifeControl.selector
-            || selector == IBaseMERAWallet.setLifeControllers.selector
-            || selector == IBaseMERAWallet.setTargetCallPolicies.selector
-            || selector == IBaseMERAWallet.setSelectorCallPolicies.selector
-            || selector == IBaseMERAWallet.setTargetSelectorCallPolicies.selector
-            || selector == IBaseMERAWallet.setRequiredCheckers.selector
-            || selector == IBaseMERAWallet.setOptionalCheckers.selector
-            || selector == IBaseMERAWallet.setFrozenPrimary.selector
-            || selector == IBaseMERAWallet.setFrozenBackup.selector
-            || selector == IBaseMERAWallet.set1271Signer.selector
-            || selector == IBaseMERAWallet.setMigrationTarget.selector;
     }
 
     function _rolePolicySlice(MERAWalletTypes.CallPathPolicy memory policy, MERAWalletTypes.Role callerRole)

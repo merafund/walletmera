@@ -25,27 +25,11 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
         return _getCallDelayForPolicyRoleFromSelector(policyRole, target, _extractSelectorFromMemoryBytes(data));
     }
 
-    function _isEmergencyTimelockExemptSelfCallWithCallMemory(MERAWalletTypes.Call memory callData)
-        internal
-        view
-        returns (bool)
-    {
-        if (callData.target != address(this)) {
-            return false;
-        }
-        return _isEmergencyConfigSelector(_extractSelectorFromMemoryBytes(callData.data));
-    }
-
     function _getCallDelayWithCallMemory(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call memory callData)
         internal
         view
         returns (uint256)
     {
-        if (callerRole == MERAWalletTypes.Role.Emergency) {
-            if (_isEmergencyTimelockExemptSelfCallWithCallMemory(callData)) {
-                return 0;
-            }
-        }
         return _getCallDelayForPolicyRoleFromMemoryData(callerRole, callData.target, callData.data);
     }
 
