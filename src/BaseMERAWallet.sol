@@ -800,26 +800,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    /// @dev Same as { _executeCallsWithHooks } for batches built in memory (extensions).
-    function _executeCallsWithHooksWithCallsMemory(
-        MERAWalletTypes.Call[] memory calls,
-        bytes32 operationId,
-        address contextCaller,
-        MERAWalletTypes.Role contextRole
-    ) internal {
-        uint256 callsLength = calls.length;
-        for (uint256 i = 0; i < callsLength;) {
-            MERAWalletTypes.Call memory callData = calls[i];
-            _beforeExecuteWithCallMemory(callData, operationId, i);
-            (bool success, bytes memory result) = _callWithExecutionContextMemory(callData, contextCaller, contextRole);
-            require(success, CallExecutionFailed(i, result));
-            _afterExecuteWithCallMemory(callData, operationId, i);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
     function _setRequiredBeforeChecker(address checker, bool enabled) internal {
         bool current = _requiredBeforeIndexPlusOne[checker] != 0;
         if (current == enabled) {
@@ -1100,20 +1080,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _clearExecutionContext();
     }
 
-    function _callWithExecutionContextMemory(
-        MERAWalletTypes.Call memory callData,
-        address contextCaller,
-        MERAWalletTypes.Role contextRole
-    ) internal returns (bool success, bytes memory result) {
-        if (callData.target != address(this)) {
-            return callData.target.call{value: callData.value}(callData.data);
-        }
-
-        _storeExecutionContext(contextCaller, contextRole);
-        (success, result) = callData.target.call{value: callData.value}(callData.data);
-        _clearExecutionContext();
-    }
-
     function _storeExecutionContext(address contextCaller, MERAWalletTypes.Role contextRole) internal {
         bytes32 callerSlot = MERAWalletConstants.EXECUTION_CONTEXT_CALLER_SLOT;
         bytes32 roleSlot = MERAWalletConstants.EXECUTION_CONTEXT_ROLE_SLOT;
@@ -1155,9 +1121,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _beforePropose(MERAWalletTypes.Call[] calldata calls, bytes32 operationId) internal virtual {}
-
-    /// @dev Hook for extension batches built in memory (`MERAWalletMemoryBatches`); default no-op.
-    function _beforeProposeWithCallsMemory(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal virtual {}
 
     function _beforeExecute(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal

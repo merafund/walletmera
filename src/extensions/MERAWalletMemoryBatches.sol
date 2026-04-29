@@ -3,10 +3,10 @@ pragma solidity 0.8.34;
 
 import {MERAWalletConstants} from "../constants/MERAWalletConstants.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
-import {BaseMERAWallet} from "../BaseMERAWallet.sol";
+import {MERAWalletMemoryBatchExecution} from "./MERAWalletMemoryBatchExecution.sol";
 
 /// @notice Memory-built `Call[]` helpers for extensions (ERC20 / native convenience entrypoints).
-abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
+abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
     /// @dev First 4 bytes of ABI-encoded calldata (`bytes memory` has no slice operator in Solidity).
     function _extractSelectorFromMemoryBytes(bytes memory data) internal pure returns (bytes4 selector) {
         if (data.length < MERAWalletConstants.FUNCTION_SELECTOR_LENGTH) {
