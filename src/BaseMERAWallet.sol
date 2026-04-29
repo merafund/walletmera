@@ -46,9 +46,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     mapping(address checker => uint256 indexPlusOne) internal _requiredAfterIndexPlusOne;
     mapping(address controller => bool) internal _isLifeController;
 
-    /// @dev When GUARDIAN is unset, emergency may call directly; when set, only self-calls (e.g. batched execute) may reach gated config.
-    modifier onlyEmergencyOrSelf() {
-        _onlyEmergencyOrSelf();
+    /// @dev Only self-calls (e.g. batched execute) may reach gated config.
+    modifier onlySelf() {
+        _onlySelf();
         _;
     }
     modifier whenLifeAlive() {
@@ -149,7 +149,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setGuardian(address newGuardian)
         external
         override
-        onlyEmergencyOrSelf
+        onlySelf
         whenLifeAlive
         whenControllerCoreUnfrozen
     {
@@ -161,7 +161,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setRoleTimelock(MERAWalletTypes.Role role, uint256 delay)
         external
         override
-        onlyEmergencyOrSelf
+        onlySelf
         whenLifeAlive
     {
         require(role != MERAWalletTypes.Role.None, InvalidRole());
@@ -174,7 +174,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit RoleTimelockUpdated(role, previousDelay, delay, msg.sender);
     }
 
-    function setEmergencyAgentLifetime(uint256 lifetime) external override onlyEmergencyOrSelf whenLifeAlive {
+    function setEmergencyAgentLifetime(uint256 lifetime) external override onlySelf whenLifeAlive {
         uint256 previousLifetime = emergencyAgentLifetime;
         emergencyAgentLifetime = lifetime;
         emit EmergencyAgentLifetimeUpdated(previousLifetime, lifetime, msg.sender);
@@ -224,7 +224,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setTargetCallPolicies(address[] calldata targets, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlyEmergencyOrSelf
+        onlySelf
         whenLifeAlive
     {
         uint256 n = targets.length;
@@ -240,7 +240,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setSelectorCallPolicies(bytes4[] calldata selectors, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlyEmergencyOrSelf
+        onlySelf
         whenLifeAlive
     {
         uint256 n = selectors.length;
@@ -257,7 +257,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address[] calldata targets,
         bytes4[] calldata selectors,
         MERAWalletTypes.CallPathPolicy[] calldata policies
-    ) external override onlyEmergencyOrSelf whenLifeAlive {
+    ) external override onlySelf whenLifeAlive {
         uint256 n = targets.length;
         require(n == selectors.length, ArrayLengthMismatch(n, selectors.length));
         require(n == policies.length, ArrayLengthMismatch(n, policies.length));
@@ -272,7 +272,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled)
         external
         override
-        onlyEmergencyOrSelf
+        onlySelf
         whenLifeAlive
     {
         uint256 n = checkers.length;
@@ -288,7 +288,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates)
         external
         override
-        onlyEmergencyOrSelf
+        onlySelf
         whenLifeAlive
     {
         uint256 n = updates.length;
@@ -496,13 +496,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionCancelled(operationId, operation.salt, msg.sender);
     }
 
-    function set1271Signer(address signer)
-        external
-        override
-        onlyEmergencyOrSelf
-        whenLifeAlive
-        whenControllerCoreUnfrozen
-    {
+    function set1271Signer(address signer) external override onlySelf whenLifeAlive {
         _set1271Signer(signer);
     }
 
@@ -1140,8 +1134,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return false;
     }
 
-    function _onlyEmergencyOrSelf() internal view {
-        require(msg.sender == address(this) || (_guardian == address(0) && msg.sender == emergency), NotEmergency());
+    function _onlySelf() internal view {
+        require(msg.sender == address(this), NotEmergency());
     }
 
     function _requireControllerCoreUnfrozen() internal view {

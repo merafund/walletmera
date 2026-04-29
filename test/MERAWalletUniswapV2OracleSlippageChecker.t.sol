@@ -53,8 +53,8 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         vm.startPrank(emergency);
         _setAllRoleTimelocks(0);
-        wallet.setOptionalCheckers(_mkWl(address(0), true, ""));
-        wallet.setOptionalCheckers(_mkWl(address(checker), true, ""));
+        _setOptionalCheckers(_mkWl(address(0), true, ""));
+        _setOptionalCheckers(_mkWl(address(checker), true, ""));
         address[] memory routers = new address[](1);
         routers[0] = address(router);
         bool[] memory routerAllowed = new bool[](1);
@@ -81,9 +81,33 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function _setAllRoleTimelocks(uint256 delay) internal {
-        wallet.setRoleTimelock(MERAWalletTypes.Role.Primary, delay);
-        wallet.setRoleTimelock(MERAWalletTypes.Role.Backup, delay);
-        wallet.setRoleTimelock(MERAWalletTypes.Role.Emergency, delay);
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Primary, delay), 7101
+        );
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Backup, delay), 7102
+        );
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Emergency, delay), 7103
+        );
+    }
+
+    function _setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] memory updates) internal {
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setOptionalCheckers.selector, updates), 7201);
+    }
+
+    function _executeWalletSelfCall(bytes memory data, uint256 salt) internal {
+        wallet.executeTransaction(_singleCall(address(wallet), 0, data), salt);
+    }
+
+    function _singleCall(address target, uint256 value, bytes memory data)
+        internal
+        pure
+        returns (MERAWalletTypes.Call[] memory calls)
+    {
+        calls = new MERAWalletTypes.Call[](1);
+        calls[0] =
+            MERAWalletTypes.Call({target: target, value: value, data: data, checker: address(0), checkerData: ""});
     }
 
     function _approveAndSwapCalls() internal view returns (MERAWalletTypes.Call[] memory calls) {
@@ -130,7 +154,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
         vm.prank(emergency);
-        wallet.setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
 

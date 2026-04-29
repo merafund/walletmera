@@ -32,7 +32,7 @@ contract MERAWalletFullTest is Test {
 
         vm.startPrank(emergency);
         _setAllRoleTimelocks(0);
-        wallet.setOptionalCheckers(_mkWl(address(0), true, ""));
+        _setOptionalCheckers(_mkWl(address(0), true, ""));
         vm.stopPrank();
     }
 
@@ -93,7 +93,7 @@ contract MERAWalletFullTest is Test {
         targetWhitelistChecker.setAllowedTarget(address(token), true);
         {
             (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
-            wallet.setRequiredCheckers(__rqA, __rqB);
+            _setRequiredCheckers(__rqA, __rqB);
         }
         vm.stopPrank();
 
@@ -127,8 +127,36 @@ contract MERAWalletFullTest is Test {
     }
 
     function _setAllRoleTimelocks(uint256 delay) internal {
-        wallet.setRoleTimelock(MERAWalletTypes.Role.Primary, delay);
-        wallet.setRoleTimelock(MERAWalletTypes.Role.Backup, delay);
-        wallet.setRoleTimelock(MERAWalletTypes.Role.Emergency, delay);
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Primary, delay), 7101
+        );
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Backup, delay), 7102
+        );
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Emergency, delay), 7103
+        );
+    }
+
+    function _setRequiredCheckers(address[] memory checkers, bool[] memory enabled) internal {
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setRequiredCheckers.selector, checkers, enabled), 7201);
+    }
+
+    function _setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] memory updates) internal {
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setOptionalCheckers.selector, updates), 7202);
+    }
+
+    function _executeWalletSelfCall(bytes memory data, uint256 salt) internal {
+        wallet.executeTransaction(_singleCall(address(wallet), 0, data), salt);
+    }
+
+    function _singleCall(address target, uint256 value, bytes memory data)
+        internal
+        pure
+        returns (MERAWalletTypes.Call[] memory calls)
+    {
+        calls = new MERAWalletTypes.Call[](1);
+        calls[0] =
+            MERAWalletTypes.Call({target: target, value: value, data: data, checker: address(0), checkerData: ""});
     }
 }
