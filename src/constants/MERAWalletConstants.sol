@@ -25,6 +25,8 @@ library MERAWalletConstants {
     uint256 internal constant DEFAULT_PRIMARY_TIMELOCK = 24 hours;
     uint256 internal constant DEFAULT_BACKUP_TIMELOCK = 12 hours;
     uint256 internal constant DEFAULT_EMERGENCY_TIMELOCK = 0;
+    /// @dev Emergency-only delay for `transferOwnership` / `grantRole` call-path policies installed in wallet init (primary/backup forbidden for those selectors).
+    uint256 internal constant OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY = 12 hours;
 
     // --- Batch execution ---
     /// @dev Upper bound on `calls.length` for propose/execute paths to limit gas griefing.

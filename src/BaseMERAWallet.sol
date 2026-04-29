@@ -593,7 +593,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit TargetCallPolicyUpdated(target, previousPolicy, policy, msg.sender);
     }
 
-    function _setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy calldata policy) internal {
+    function _setSelectorCallPolicy(bytes4 selector, MERAWalletTypes.CallPathPolicy memory policy) internal {
         MERAWalletTypes.CallPathPolicy memory previousPolicy = callPolicyBySelector[selector];
         callPolicyBySelector[selector] = policy;
         emit SelectorCallPolicyUpdated(selector, previousPolicy, policy, msg.sender);
@@ -902,6 +902,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         lastLifeHeartbeatAt = block.timestamp;
 
         _set1271Signer(initialSigner);
+
+        // Dangerous cross-contract ops: only emergency may use them, via per-selector timelock; primary/backup forbidden.
+        MERAWalletTypes.CallPathPolicy memory ownershipAndGrantRolePolicy = MERAWalletTypes.CallPathPolicy({
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            emergencyDelay: uint56(MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY),
+            exists: true
+        });
+        _setSelectorCallPolicy(IMigrationCalls.transferOwnership.selector, ownershipAndGrantRolePolicy);
+        _setSelectorCallPolicy(IMigrationCalls.grantRole.selector, ownershipAndGrantRolePolicy);
     }
 
     function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
