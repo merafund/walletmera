@@ -12,11 +12,6 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors {
-    bytes32 private constant _EXECUTION_CONTEXT_CALLER_SLOT =
-        0xbee33e04303e91d6d66213e008b6f34bb5194a5980f98e9d63c759cdbe8c4491;
-    bytes32 private constant _EXECUTION_CONTEXT_ROLE_SLOT =
-        0xdf1e3697be8f7b1604174aa39a190b5cb8c551bb48779e976da283700a7eba49;
-
     /// @dev Optional recovery / multisig; address(0) disables guardian-only path for {setEmergency}.
     address private _guardian;
 
@@ -1120,8 +1115,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _storeExecutionContext(address contextCaller, MERAWalletTypes.Role contextRole) internal {
-        bytes32 callerSlot = _EXECUTION_CONTEXT_CALLER_SLOT;
-        bytes32 roleSlot = _EXECUTION_CONTEXT_ROLE_SLOT;
+        bytes32 callerSlot = MERAWalletConstants.EXECUTION_CONTEXT_CALLER_SLOT;
+        bytes32 roleSlot = MERAWalletConstants.EXECUTION_CONTEXT_ROLE_SLOT;
         assembly ("memory-safe") {
             tstore(callerSlot, contextCaller)
             tstore(roleSlot, contextRole)
@@ -1129,8 +1124,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _clearExecutionContext() internal {
-        bytes32 callerSlot = _EXECUTION_CONTEXT_CALLER_SLOT;
-        bytes32 roleSlot = _EXECUTION_CONTEXT_ROLE_SLOT;
+        bytes32 callerSlot = MERAWalletConstants.EXECUTION_CONTEXT_CALLER_SLOT;
+        bytes32 roleSlot = MERAWalletConstants.EXECUTION_CONTEXT_ROLE_SLOT;
         assembly ("memory-safe") {
             tstore(callerSlot, 0)
             tstore(roleSlot, 0)
@@ -1138,7 +1133,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _effectiveCaller() internal view returns (address contextCaller) {
-        bytes32 callerSlot = _EXECUTION_CONTEXT_CALLER_SLOT;
+        bytes32 callerSlot = MERAWalletConstants.EXECUTION_CONTEXT_CALLER_SLOT;
         assembly ("memory-safe") {
             contextCaller := tload(callerSlot)
         }
@@ -1148,7 +1143,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _effectiveCoreRole() internal view returns (MERAWalletTypes.Role role) {
-        bytes32 roleSlot = _EXECUTION_CONTEXT_ROLE_SLOT;
+        bytes32 roleSlot = MERAWalletConstants.EXECUTION_CONTEXT_ROLE_SLOT;
         uint256 rawRole;
         assembly ("memory-safe") {
             rawRole := tload(roleSlot)
