@@ -103,7 +103,7 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
         whenControllerCoreUnfrozen
         returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
     {
-        callerRole = _coreRole(msg.sender);
+        callerRole = _effectiveCoreRole();
 
         _validateCallsMemory(memoryCalls);
 
@@ -116,7 +116,7 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
 
         executeAfter = block.timestamp + requiredDelay;
         _operations[operationId] = MERAWalletTypes.PendingOperation({
-            creator: msg.sender,
+            creator: _effectiveCaller(),
             creatorRole: callerRole,
             createdAt: uint64(block.timestamp),
             executeAfter: uint64(executeAfter),
@@ -126,7 +126,7 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
 
         _beforeProposeWithCallsMemory(memoryCalls, operationId);
 
-        emit TransactionProposed(operationId, salt, msg.sender, callerRole, executeAfter, requiredDelay);
+        emit TransactionProposed(operationId, salt, _effectiveCaller(), callerRole, executeAfter, requiredDelay);
     }
 
     function _executePendingFromMemory(
@@ -154,7 +154,7 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
 
         operation.status = MERAWalletTypes.OperationStatus.Executed;
 
-        _executeCallsWithHooksWithCallsMemory(memoryCalls, operationId);
+        _executeCallsWithHooksWithCallsMemory(memoryCalls, operationId, operation.creator, operation.creatorRole);
         _payoutRelayReward(relayOperation);
 
         emit PendingTransactionExecuted(operationId, salt, msg.sender);
@@ -168,10 +168,11 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
         _validateCallsMemory(calls);
 
         bytes32 operationId = _computeOperationIdMemory(calls, salt);
-        uint256 requiredDelay = _getRequiredDelayMemory(_coreRole(msg.sender), calls);
+        MERAWalletTypes.Role callerRole = _effectiveCoreRole();
+        uint256 requiredDelay = _getRequiredDelayMemory(callerRole, calls);
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
 
-        _executeCallsWithHooksWithCallsMemory(calls, operationId);
+        _executeCallsWithHooksWithCallsMemory(calls, operationId, _effectiveCaller(), callerRole);
 
         emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
     }
