@@ -487,9 +487,9 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_UsesGlobalWhenPerRoleDelaysAreZero() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _inactiveCallPathPolicy(0, false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -502,8 +502,8 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_TargetPrimaryDelayApplies() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -516,11 +516,11 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_EmergencyPolicySliceApplies() public {
         vm.startPrank(emergency);
+        _policyTarget(address(receiver), _callPathPolicy(uint56(0), false, 0, false, uint56(5 hours)));
         _executeWalletSelfCall(
             abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Emergency, uint256(2 hours)),
             904
         );
-        _policyTarget(address(receiver), _callPathPolicy(uint56(0), false, 0, false, uint56(5 hours)));
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -549,9 +549,9 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_UsesMaxOfTargetAndSelectorPrimaryDelays() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -564,9 +564,9 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_UsesMaxWhenSelectorPrimaryDelayIsHigher() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(5 days), false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -579,9 +579,9 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_UsesMaxDelayWhenBothDimensionsSet() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(2 days), false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(3 days), false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -594,12 +594,12 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_PairPolicyOverridesSeparateTargetAndSelector() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
         _policyPair(
             address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(uint56(1 days), false, 0, false)
         );
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -611,13 +611,13 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_AfterClearPairPolicy_UsesMaxOfTargetAndSelector() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
         _policyPair(
             address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(uint56(1 days), false, 0, false)
         );
         _policyPair(address(receiver), ReceiverMock.setValue.selector, _inactiveCallPathPolicy(0, false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -629,10 +629,10 @@ contract BaseMERAWalletTest is Test {
 
     function test_GetRequiredDelay_PairPolicyZeroPrimaryDelayReturnsZero() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
         _policyTarget(address(receiver), _callPathPolicy(uint56(5 days), false, 0, false));
         _policySelector(ReceiverMock.setValue.selector, _callPathPolicy(uint56(2 days), false, 0, false));
         _policyPair(address(receiver), ReceiverMock.setValue.selector, _pairCallPathPolicy(0, false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -1025,15 +1025,15 @@ contract BaseMERAWalletTest is Test {
     }
 
     function test_TargetWhitelistChecker_IsCheckedWhenExecutePending() public {
-        vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
-        vm.stopPrank();
-
         vm.prank(emergency);
         {
             (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
             _setRequiredCheckers(__rqA, __rqB);
         }
+
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
@@ -1088,15 +1088,12 @@ contract BaseMERAWalletTest is Test {
 
     function test_TargetBlacklistChecker_IsCheckedWhenExecutePending() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
-        vm.stopPrank();
-
-        vm.startPrank(emergency);
         targetBlacklistChecker.setBlockedTarget(address(receiver), true);
         {
             (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
             _setRequiredCheckers(__rqA, __rqB);
         }
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
