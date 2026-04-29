@@ -22,6 +22,9 @@ library MERAWalletConstants {
     // --- Timelock bounds (aligned with uint56 per-path delays in call policies) ---
     uint256 internal constant MIN_TIMELOCK_DELAY = 0;
     uint256 internal constant MAX_TIMELOCK_DELAY = type(uint56).max;
+    uint256 internal constant DEFAULT_PRIMARY_TIMELOCK = 24 hours;
+    uint256 internal constant DEFAULT_BACKUP_TIMELOCK = 12 hours;
+    uint256 internal constant DEFAULT_EMERGENCY_TIMELOCK = 0;
 
     // --- Batch execution ---
     /// @dev Upper bound on `calls.length` for propose/execute paths to limit gas griefing.
@@ -34,4 +37,7 @@ library MERAWalletConstants {
     // --- Safe mode ---
     uint256 internal constant SAFE_MODE_MIN_DURATION = 30 days;
     uint256 internal constant SAFE_MODE_MAX_DURATION = 90 days;
+
+    // --- Emergency agents ---
+    uint256 internal constant DEFAULT_EMERGENCY_AGENT_LIFETIME = 30 days;
 }

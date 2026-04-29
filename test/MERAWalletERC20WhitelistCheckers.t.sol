@@ -53,6 +53,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         bool[] memory agentAllowed = new bool[](1);
         agentAllowed[0] = true;
         vm.startPrank(emergency);
+        _setAllRoleTimelocks(0);
         transferChecker.setPauseAgents(agents, agentAllowed);
         approveChecker.setPauseAgents(agents, agentAllowed);
         wallet.setOptionalCheckers(_mkWl(address(0), true, ""));
@@ -75,6 +76,12 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         ok2[1] = true;
         vm.prank(emergency);
         counterpartyWl.setAllowedAssets(c, ok2);
+    }
+
+    function _setAllRoleTimelocks(uint256 delay) internal {
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Primary, delay);
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Backup, delay);
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Emergency, delay);
     }
 
     function _cfg() internal view returns (MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory) {

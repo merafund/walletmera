@@ -8,7 +8,9 @@ interface IBaseMERAWalletEvents {
     event PrimaryUpdated(address indexed previousPrimary, address indexed newPrimary, address indexed caller);
     event BackupUpdated(address indexed previousBackup, address indexed newBackup, address indexed caller);
     event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
-    event GlobalTimelockUpdated(uint256 previousDelay, uint256 newDelay, address indexed caller);
+    event RoleTimelockUpdated(
+        MERAWalletTypes.Role indexed role, uint256 previousDelay, uint256 newDelay, address indexed caller
+    );
     event TargetCallPolicyUpdated(
         address indexed target,
         MERAWalletTypes.CallPathPolicy previousPolicy,
@@ -57,9 +59,10 @@ interface IBaseMERAWalletEvents {
     event PendingTransactionVetoCleared(bytes32 indexed operationId, uint256 indexed salt, address indexed clearedBy);
     event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed salt, address indexed executor);
     event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner, address indexed caller);
-    event ControllerAgentUpdated(
-        address indexed agent, bool enabled, MERAWalletTypes.Role roleLevel, address indexed caller
+    event AgentUpdated(
+        address indexed agent, MERAWalletTypes.Role roleLevel, uint64 activeUntil, address indexed caller
     );
+    event EmergencyAgentLifetimeUpdated(uint256 previousLifetime, uint256 newLifetime, address indexed caller);
     event PrimaryFreezeUpdated(bool frozen, address indexed caller);
     event BackupFreezeUpdated(bool frozen, address indexed caller);
     event LifeControlUpdated(bool enabled, uint256 timeout, address indexed caller);

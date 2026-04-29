@@ -31,6 +31,7 @@ contract MERAWalletFullTest is Test {
         targetWhitelistChecker = new MERAWalletTargetWhitelistChecker(emergency);
 
         vm.startPrank(emergency);
+        _setAllRoleTimelocks(0);
         wallet.setOptionalCheckers(_mkWl(address(0), true, ""));
         vm.stopPrank();
     }
@@ -123,5 +124,11 @@ contract MERAWalletFullTest is Test {
     {
         u = new MERAWalletTypes.OptionalCheckerUpdate[](1);
         u[0] = MERAWalletTypes.OptionalCheckerUpdate({checker: checker, allowed: allowed, config: config});
+    }
+
+    function _setAllRoleTimelocks(uint256 delay) internal {
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Primary, delay);
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Backup, delay);
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Emergency, delay);
     }
 }

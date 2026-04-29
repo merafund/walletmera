@@ -24,8 +24,8 @@ interface IBaseMERAWalletErrors {
     error OperationNotPending(bytes32 operationId);
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
+    error CannotVetoOperation(bytes32 operationId);
     error CannotClearVeto(bytes32 operationId);
-    error OperationAlreadyVetoed(bytes32 operationId);
     error OperationNotVetoed(bytes32 operationId);
     error InvalidRelayConfig();
     /// @dev {proposeTransactionWithRelay} requires a non-zero execution deadline.
@@ -44,7 +44,7 @@ interface IBaseMERAWalletErrors {
     error NoopTargetSelectorCallPolicy();
     error NotCoreController();
     error AgentRemovalNotAuthorized();
-    error NoopControllerAgent();
+    error NoopAgent();
     /// @dev Core controller attempted an action while their role level is frozen.
     error RoleFrozen(MERAWalletTypes.Role role);
     /// @dev Caller is not allowed to change freeze flags (wrong role for this flag).
@@ -54,8 +54,7 @@ interface IBaseMERAWalletErrors {
     error LifeHeartbeatExpired(uint256 lastHeartbeatAt, uint256 timeout, uint256 currentTime);
     error EmergencyMustStayLifeController();
     error TooManyRequiredCheckers(uint256 length, uint256 maxAllowed);
-    /// @dev Controller agents cannot veto a pending op created by the emergency role.
-    error AgentCannotVetoEmergencyOperation();
+    error AgentExpired(address agent, uint256 activeUntil);
     /// @dev Parallel calldata arrays for a batch setter had different lengths.
     error ArrayLengthMismatch(uint256 a, uint256 b);
     /// @dev Caller is not allowed to enter safe mode (not emergency or emergency-level agent).

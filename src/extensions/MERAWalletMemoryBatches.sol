@@ -45,7 +45,6 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
             if (_isEmergencyTimelockExemptSelfCallWithCallMemory(callData)) {
                 return 0;
             }
-            return _getCallDelayForPolicyRoleFromMemoryData(MERAWalletTypes.Role.Backup, callData.target, callData.data);
         }
         return _getCallDelayForPolicyRoleFromMemoryData(callerRole, callData.target, callData.data);
     }
@@ -59,8 +58,10 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
         );
         uint256 n = calls.length;
         for (uint256 i = 0; i < n;) {
-            address checker = calls[i].checker;
-            require(whitelistOptionalChecker[checker].allowed, OptionalCheckerNotAllowed(checker, i));
+            if (calls[i].target != address(this)) {
+                address checker = calls[i].checker;
+                require(whitelistOptionalChecker[checker].allowed, OptionalCheckerNotAllowed(checker, i));
+            }
             unchecked {
                 ++i;
             }
@@ -299,4 +300,3 @@ abstract contract MERAWalletMemoryBatches is BaseMERAWallet {
         _executePendingFromMemory(calls, salt, empty);
     }
 }
-

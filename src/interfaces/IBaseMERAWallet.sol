@@ -12,7 +12,8 @@ interface IBaseMERAWallet {
     function emergency() external view returns (address);
     function GUARDIAN() external view returns (address);
     function eip1271Signer() external view returns (address);
-    function globalTimelock() external view returns (uint256);
+    function roleTimelock(MERAWalletTypes.Role role) external view returns (uint256);
+    function emergencyAgentLifetime() external view returns (uint256);
     function lifeHeartbeatTimeout() external view returns (uint256);
     function lastLifeHeartbeatAt() external view returns (uint256);
     function lifeControlEnabled() external view returns (bool);
@@ -36,7 +37,7 @@ interface IBaseMERAWallet {
             bytes32 executorSetHash,
             uint64 relayExecuteBefore
         );
-    function controllerAgents(address agent) external view returns (bool enabled, MERAWalletTypes.Role roleLevel);
+    function agents(address agent) external view returns (MERAWalletTypes.Role roleLevel, uint64 activeUntil);
     function frozenPrimary() external view returns (bool);
     function frozenBackup() external view returns (bool);
     function safeModeBefore() external view returns (uint256);
@@ -47,7 +48,8 @@ interface IBaseMERAWallet {
     function setPrimary(address newPrimary) external;
     function setBackup(address newBackup) external;
     function setEmergency(address newEmergency) external;
-    function setGlobalTimelock(uint256 delay) external;
+    function setRoleTimelock(MERAWalletTypes.Role role, uint256 delay) external;
+    function setEmergencyAgentLifetime(uint256 lifetime) external;
     function setLifeControl(bool enabled, uint256 timeout) external;
     function setLifeControllers(address[] calldata controllers, bool enabled) external;
     function confirmAlive() external;
@@ -65,11 +67,11 @@ interface IBaseMERAWallet {
     function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled) external;
     /// @dev `config` is passed to `applyConfig` when allowed and non-empty (same rules as each single entry in the batch).
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates) external;
-    /// @notice Enable or disable veto agents (may {vetoPending}). On enable, `roleLevel` follows the caller's core role.
-    function setControllerAgents(address[] calldata agents, bool[] calldata enabled) external;
-    /// @notice Backup or Emergency may set any value. Enabled controller agents may set primary freeze to true only via the same function (no unfreeze).
+    /// @notice Configure controller agents. `Role.None` disables an agent.
+    function setAgents(address[] calldata agentAddresses, MERAWalletTypes.Role[] calldata roleLevels) external;
+    /// @notice Same-or-higher agents/core controllers may freeze; only strictly higher core controllers may unfreeze; guardian may freeze only.
     function setFrozenPrimary(bool frozen) external;
-    /// @notice Emergency may set any value. Backup-scoped controller agents may set backup freeze to true only via the same function (no unfreeze).
+    /// @notice Same-or-higher agents/core controllers may freeze; only strictly higher core controllers may unfreeze; guardian may freeze only.
     function setFrozenBackup(bool frozen) external;
     /// @notice Enter safe mode: blocks all transaction execution/proposal for `duration` seconds. One-time use.
     /// @dev Callable only by emergency address or emergency-level controller agent.
@@ -94,16 +96,19 @@ interface IBaseMERAWallet {
     function executePending(MERAWalletTypes.Call[] calldata calls, uint256 salt, address[] calldata executorWhitelist)
         external
         payable;
+    /// @notice Same-or-higher agents/core controllers may veto.
     function vetoPending(bytes32 operationId) external;
-    /// @notice Unfrozen core controller; role rank Primary=1 .. Emergency=3 (see MERAWalletConstants). Requires `_roleRank(caller) >= _roleRank(operation.creatorRole)`.
+    /// @notice Unfrozen core controller; role rank Primary=1 .. Emergency=3 (see MERAWalletConstants). Requires `_roleRank(caller) > _roleRank(operation.creatorRole)`.
     function clearVeto(bytes32 operationId) external;
     /// @notice Unfrozen core controller; role rank Primary=1 .. Emergency=3. Cancel if caller rank is at most operation creator rank; agents use {vetoPending} instead.
     function cancelPending(bytes32 operationId) external;
 
     function getOperationId(MERAWalletTypes.Call[] calldata calls, uint256 salt) external view returns (bytes32);
     function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view returns (uint256);
-    function getRequiredBeforeCheckers() external view returns (address[] memory);
-    function getRequiredAfterCheckers() external view returns (address[] memory);
+    function getRequiredCheckers()
+        external
+        view
+        returns (address[] memory beforeCheckers, address[] memory afterCheckers);
     function isLifeController(address controller) external view returns (bool);
 
     function set1271Signer(address signer) external;

@@ -52,6 +52,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         feedB = new MockAggregatorV3(1e8, 8);
 
         vm.startPrank(emergency);
+        _setAllRoleTimelocks(0);
         wallet.setOptionalCheckers(_mkWl(address(0), true, ""));
         wallet.setOptionalCheckers(_mkWl(address(checker), true, ""));
         address[] memory routers = new address[](1);
@@ -77,6 +78,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         tokenA.mint(address(wallet), 10 ether);
         tokenB.mint(address(router), 1000 ether);
+    }
+
+    function _setAllRoleTimelocks(uint256 delay) internal {
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Primary, delay);
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Backup, delay);
+        wallet.setRoleTimelock(MERAWalletTypes.Role.Emergency, delay);
     }
 
     function _approveAndSwapCalls() internal view returns (MERAWalletTypes.Call[] memory calls) {

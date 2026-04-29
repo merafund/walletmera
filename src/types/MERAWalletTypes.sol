@@ -11,7 +11,7 @@ library MERAWalletTypes {
     struct CallPathPolicy {
         RoleCallPolicy primary;
         RoleCallPolicy backup;
-        /// @dev If true: for pair map, entry overrides merge; for target/selector maps, policy participates in merge delay (otherwise merge treats both as unset and uses `globalTimelock`).
+        uint56 emergencyDelay;
         bool exists;
     }
 
@@ -90,11 +90,11 @@ library MERAWalletTypes {
         uint64 relayExecuteBefore;
     }
 
-    /// @notice Optional veto delegate: may apply {vetoPending} on any pending operation (not {cancelPending}).
-    /// @dev `roleLevel` is the assigner's core role at enable time; only core controllers at or above this rank may disable the agent (veto-only delegate).
-    struct ControllerAgent {
-        bool enabled;
+    /// @notice Optional controller delegate. `Role.None` disables the agent.
+    /// @dev Emergency agents expire at `activeUntil`; other agent roles ignore it.
+    struct Agent {
         Role roleLevel;
+        uint64 activeUntil;
     }
 
     /// @notice Constructor arguments for `BaseMERAWallet` (factory) or `MERAWalletFull` when deployed directly.
