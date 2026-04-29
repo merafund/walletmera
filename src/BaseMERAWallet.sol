@@ -144,6 +144,20 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit EmergencyUpdated(previousEmergency, newEmergency, msg.sender);
     }
 
+    /// @notice Rotates the optional guardian address; address(0) disables guardian-only paths.
+    /// @dev Batch self-calls use `msg.sender == address(this)`, which fails `whenControllerCoreUnfrozen`; use direct `emergency` calls only while guardian is unset.
+    function setGuardian(address newGuardian)
+        external
+        override
+        onlyEmergencyOrSelf
+        whenLifeAlive
+        whenControllerCoreUnfrozen
+    {
+        address previousGuardian = _guardian;
+        _guardian = newGuardian;
+        emit GuardianUpdated(previousGuardian, newGuardian, msg.sender);
+    }
+
     function setRoleTimelock(MERAWalletTypes.Role role, uint256 delay)
         external
         override
@@ -1387,7 +1401,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function _isEmergencyConfigSelector(bytes4 selector) internal pure returns (bool) {
         // Compare against IBaseMERAWallet so selectors stay aligned with the external API.
         return selector == IBaseMERAWallet.setPrimary.selector || selector == IBaseMERAWallet.setBackup.selector
-            || selector == IBaseMERAWallet.setEmergency.selector || selector == IBaseMERAWallet.setRoleTimelock.selector
+            || selector == IBaseMERAWallet.setEmergency.selector || selector == IBaseMERAWallet.setGuardian.selector
+            || selector == IBaseMERAWallet.setRoleTimelock.selector
             || selector == IBaseMERAWallet.setEmergencyAgentLifetime.selector
             || selector == IBaseMERAWallet.setLifeControl.selector
             || selector == IBaseMERAWallet.setLifeControllers.selector

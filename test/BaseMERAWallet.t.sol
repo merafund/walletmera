@@ -161,6 +161,63 @@ contract BaseMERAWalletTest is Test {
         wallet.setEmergency(newEmergency);
     }
 
+    function test_SetGuardian_EmergencySucceedsWhenNoGuardian() public {
+        address newGuardian = address(0xC001);
+        vm.prank(emergency);
+        wallet.setGuardian(newGuardian);
+        assertEq(wallet.GUARDIAN(), newGuardian);
+    }
+
+    function test_SetGuardian_EmergencyRevertsWhenGuardianSet() public {
+        address guardianAddr = vm.addr(0xCAFE);
+        BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
+
+        vm.prank(emergency);
+        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        w.setGuardian(address(0xD00D));
+    }
+
+    function test_SetGuardian_BatchedSelfCallRevertsUnauthorizedWhenGuardianSet() public {
+        address guardianAddr = vm.addr(0xCAFE);
+        address newGuardian = address(0xD00D);
+        BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(w), 0, abi.encodeWithSelector(BaseMERAWallet.setGuardian.selector, newGuardian));
+        vm.prank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallExecutionFailed.selector,
+                uint256(0),
+                abi.encodeWithSelector(IBaseMERAWalletErrors.Unauthorized.selector)
+            )
+        );
+        w.executeTransaction(calls, 42);
+    }
+
+    function test_SetGuardian_BatchedSelfCallToZeroRevertsUnauthorizedWhenGuardianSet() public {
+        address guardianAddr = vm.addr(0xCAFE);
+        BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(w), 0, abi.encodeWithSelector(BaseMERAWallet.setGuardian.selector, address(0)));
+        vm.prank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallExecutionFailed.selector,
+                uint256(0),
+                abi.encodeWithSelector(IBaseMERAWalletErrors.Unauthorized.selector)
+            )
+        );
+        w.executeTransaction(calls, 777);
+    }
+
+    function test_SetGuardian_OutsiderReverts() public {
+        vm.prank(outsider);
+        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        wallet.setGuardian(address(0xABCD));
+    }
+
     function test_LifeControllers_InitialEmergencyIncluded() public view {
         assertTrue(wallet.isLifeController(emergency));
     }

@@ -8,6 +8,7 @@ interface IBaseMERAWalletEvents {
     event PrimaryUpdated(address indexed previousPrimary, address indexed newPrimary, address indexed caller);
     event BackupUpdated(address indexed previousBackup, address indexed newBackup, address indexed caller);
     event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
+    event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian, address indexed caller);
     event RoleTimelockUpdated(
         MERAWalletTypes.Role indexed role, uint256 previousDelay, uint256 newDelay, address indexed caller
     );

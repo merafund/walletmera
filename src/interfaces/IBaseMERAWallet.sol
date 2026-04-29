@@ -48,6 +48,7 @@ interface IBaseMERAWallet {
     function setPrimary(address newPrimary) external;
     function setBackup(address newBackup) external;
     function setEmergency(address newEmergency) external;
+    function setGuardian(address newGuardian) external;
     function setRoleTimelock(MERAWalletTypes.Role role, uint256 delay) external;
     function setEmergencyAgentLifetime(uint256 lifetime) external;
     function setLifeControl(bool enabled, uint256 timeout) external;
