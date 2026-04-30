@@ -181,31 +181,28 @@ contract MERAWalletLoginMerkleGuardian {
     }
 
     function _computeRoot(bytes32[] calldata loginHashes) internal pure returns (bytes32 root) {
-        uint256 levelLength = loginHashes.length;
-        bytes32[] memory level = new bytes32[](levelLength);
-        for (uint256 i = 0; i < levelLength;) {
-            level[i] = loginHashes[i];
+        uint256 leafCount = loginHashes.length;
+        require(leafCount != 0, EmptyLoginList());
+        uint256 internalCount = leafCount - 1;
+        if (internalCount == 0) {
+            return loginHashes[0];
+        }
+
+        bytes32[] memory nodes = new bytes32[](internalCount);
+        uint256 treeLength = (leafCount << 1) - 1;
+
+        // Match OpenZeppelin's @openzeppelin/merkle-tree heap layout while storing only internal nodes.
+        for (uint256 i = internalCount; i > 0;) {
             unchecked {
-                ++i;
+                --i;
             }
+            uint256 leftIndex = (i << 1) + 1;
+            uint256 rightIndex = leftIndex + 1;
+            bytes32 left = leftIndex < internalCount ? nodes[leftIndex] : loginHashes[treeLength - 1 - leftIndex];
+            bytes32 right = rightIndex < internalCount ? nodes[rightIndex] : loginHashes[treeLength - 1 - rightIndex];
+            nodes[i] = Hashes.commutativeKeccak256(left, right);
         }
 
-        while (levelLength > 1) {
-            uint256 nextLength = (levelLength + 1) >> 1;
-            for (uint256 i = 0; i < nextLength;) {
-                uint256 pairIndex = i << 1;
-                if (pairIndex + 1 < levelLength) {
-                    level[i] = Hashes.commutativeKeccak256(level[pairIndex], level[pairIndex + 1]);
-                } else {
-                    level[i] = level[pairIndex];
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-            levelLength = nextLength;
-        }
-
-        return level[0];
+        return nodes[0];
     }
 }

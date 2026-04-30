@@ -364,24 +364,22 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
     function _computeRoot(bytes32[] memory hashes) internal pure returns (bytes32 root) {
         uint256 leafCount = hashes.length;
-        bytes32[] memory nodes = new bytes32[](leafCount);
-
-        for (uint256 i = 0; i < leafCount;) {
-            nodes[leafCount - 1 - i] = hashes[i];
-            unchecked {
-                ++i;
-            }
+        uint256 internalCount = leafCount - 1;
+        if (internalCount == 0) {
+            return hashes[0];
         }
 
-        uint256 leafOffset = leafCount - 1;
-        for (uint256 i = leafCount - 1; i > 0;) {
+        bytes32[] memory nodes = new bytes32[](internalCount);
+        uint256 treeLength = (leafCount << 1) - 1;
+
+        for (uint256 i = internalCount; i > 0;) {
             unchecked {
                 --i;
             }
             uint256 leftIndex = (i << 1) + 1;
             uint256 rightIndex = leftIndex + 1;
-            bytes32 left = leftIndex < leafOffset ? nodes[leftIndex] : nodes[leftIndex - leafOffset];
-            bytes32 right = rightIndex < leafOffset ? nodes[rightIndex] : nodes[rightIndex - leafOffset];
+            bytes32 left = leftIndex < internalCount ? nodes[leftIndex] : hashes[treeLength - 1 - leftIndex];
+            bytes32 right = rightIndex < internalCount ? nodes[rightIndex] : hashes[treeLength - 1 - rightIndex];
             nodes[i] = Hashes.commutativeKeccak256(left, right);
         }
 
