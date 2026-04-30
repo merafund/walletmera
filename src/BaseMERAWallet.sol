@@ -6,6 +6,7 @@ import {MERAWalletTypes} from "./types/MERAWalletTypes.sol";
 import {IBaseMERAWallet} from "./interfaces/IBaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "./interfaces/IBaseMERAWalletErrors.sol";
 import {IBaseMERAWalletEvents} from "./interfaces/IBaseMERAWalletEvents.sol";
+import {IMERAWalletLoginRegistryMigration} from "./interfaces/IMERAWalletLoginRegistryMigration.sol";
 import {IMERAWalletTransactionChecker} from "./interfaces/extensions/IMERAWalletTransactionChecker.sol";
 import {IMigrationCalls} from "./interfaces/external/IMigrationCalls.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
@@ -912,6 +913,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         });
         _setSelectorCallPolicy(IMigrationCalls.transferOwnership.selector, ownershipAndGrantRolePolicy);
         _setSelectorCallPolicy(IMigrationCalls.grantRole.selector, ownershipAndGrantRolePolicy);
+        _setSelectorCallPolicy(
+            IMERAWalletLoginRegistryMigration.requestLoginMigration.selector, ownershipAndGrantRolePolicy
+        );
+        _setSelectorCallPolicy(
+            IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
+        );
     }
 
     function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)

@@ -6,15 +6,38 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @title MERAWalletLoginRegistry
 /// @notice Stores MERA login ownership and the factories allowed to register new logins.
 contract MERAWalletLoginRegistry is Ownable {
+    struct PendingLoginMigration {
+        address previousWallet;
+        address newWallet;
+        bytes32 newLoginHash;
+    }
+
     mapping(address factory => bool allowed) public isFactory;
     mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
     mapping(address wallet => bytes32 loginHash) public loginHashByWallet;
+    mapping(bytes32 oldLoginHash => PendingLoginMigration migration) public pendingLoginMigrationByOldLoginHash;
     mapping(bytes32 loginHash => string login) private _loginByHash;
 
     event FactoryAdded(address indexed factory);
     event LoginRegistered(bytes32 indexed loginHash, string login, address indexed wallet, address indexed factory);
     event LoginTransferred(
         bytes32 indexed loginHash, string login, address indexed previousWallet, address indexed newWallet
+    );
+    event LoginMigrationRequested(
+        bytes32 indexed oldLoginHash,
+        string oldLogin,
+        bytes32 indexed newLoginHash,
+        string newLogin,
+        address indexed previousWallet,
+        address newWallet
+    );
+    event LoginMigrationConfirmed(
+        bytes32 indexed oldLoginHash,
+        string oldLogin,
+        bytes32 indexed newLoginHash,
+        string newLogin,
+        address indexed previousWallet,
+        address newWallet
     );
 
     error EmptyLogin();
@@ -23,6 +46,11 @@ contract MERAWalletLoginRegistry is Ownable {
     error LoginAlreadyRegistered();
     error LoginNotOwned();
     error AddressAlreadyHasLogin();
+    error SameWallet();
+    error LoginMigrationAlreadyPending();
+    error LoginMigrationNotFound();
+    error LoginMigrationNotConfirmingWallet();
+    error LoginMigrationStale();
 
     modifier onlyFactory() {
         _onlyFactory();
@@ -51,18 +79,53 @@ contract MERAWalletLoginRegistry is Ownable {
         emit LoginRegistered(loginHash, login, wallet, msg.sender);
     }
 
-    function transferLogin(string calldata login, address newWallet) external {
+    function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet) external {
         require(newWallet != address(0), InvalidAddress());
-        bytes32 loginHash = _requireLoginHash(login);
-        require(walletByLoginHash[loginHash] == msg.sender, LoginNotOwned());
-        require(loginHashByWallet[newWallet] == bytes32(0), AddressAlreadyHasLogin());
+        require(newWallet != msg.sender, SameWallet());
+        bytes32 oldLoginHash = _requireLoginHash(oldLogin);
+        bytes32 newLoginHash = _requireLoginHash(newLogin);
+        require(oldLoginHash != newLoginHash, LoginAlreadyRegistered());
+        require(walletByLoginHash[oldLoginHash] == msg.sender, LoginNotOwned());
+        require(walletByLoginHash[newLoginHash] == newWallet, LoginNotOwned());
+        require(loginHashByWallet[newWallet] == newLoginHash, LoginNotOwned());
+        require(
+            pendingLoginMigrationByOldLoginHash[oldLoginHash].previousWallet == address(0),
+            LoginMigrationAlreadyPending()
+        );
 
-        address previousWallet = msg.sender;
-        walletByLoginHash[loginHash] = newWallet;
-        loginHashByWallet[previousWallet] = bytes32(0);
-        loginHashByWallet[newWallet] = loginHash;
+        pendingLoginMigrationByOldLoginHash[oldLoginHash] =
+            PendingLoginMigration({previousWallet: msg.sender, newWallet: newWallet, newLoginHash: newLoginHash});
 
-        emit LoginTransferred(loginHash, login, previousWallet, newWallet);
+        emit LoginMigrationRequested(oldLoginHash, oldLogin, newLoginHash, newLogin, msg.sender, newWallet);
+    }
+
+    function confirmLoginMigration(string calldata oldLogin) external {
+        bytes32 oldLoginHash = _requireLoginHash(oldLogin);
+        PendingLoginMigration memory migration = pendingLoginMigrationByOldLoginHash[oldLoginHash];
+        require(migration.previousWallet != address(0), LoginMigrationNotFound());
+        require(msg.sender == migration.newWallet, LoginMigrationNotConfirmingWallet());
+
+        address previousWallet = migration.previousWallet;
+        address newWallet = migration.newWallet;
+        bytes32 newLoginHash = migration.newLoginHash;
+        // Both registrations must still match the request before the final login swap.
+        require(
+            walletByLoginHash[oldLoginHash] == previousWallet && walletByLoginHash[newLoginHash] == newWallet
+                && loginHashByWallet[previousWallet] == oldLoginHash && loginHashByWallet[newWallet] == newLoginHash,
+            LoginMigrationStale()
+        );
+
+        string memory newLogin = _loginByHash[newLoginHash];
+
+        walletByLoginHash[oldLoginHash] = newWallet;
+        walletByLoginHash[newLoginHash] = previousWallet;
+        loginHashByWallet[previousWallet] = newLoginHash;
+        loginHashByWallet[newWallet] = oldLoginHash;
+        delete pendingLoginMigrationByOldLoginHash[oldLoginHash];
+
+        emit LoginMigrationConfirmed(oldLoginHash, oldLogin, newLoginHash, newLogin, previousWallet, newWallet);
+        emit LoginTransferred(oldLoginHash, oldLogin, previousWallet, newWallet);
+        emit LoginTransferred(newLoginHash, newLogin, newWallet, previousWallet);
     }
 
     function walletOf(string calldata login) external view returns (address) {

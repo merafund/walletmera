@@ -97,31 +97,64 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         factory.deployWallet(login, p);
     }
 
-    function test_registry_transfer_login_to_new_address() public {
+    function test_registry_migrates_login_to_new_wallet_after_confirmation() public {
         string memory login = "carol";
+        string memory newLogin = "carol-new";
         MERAWalletTypes.WalletInitParams memory p = _params();
         address deployed = factory.deployWallet(login, p);
-        address newWallet = address(0x123456);
-
-        vm.expectEmit(true, true, true, true);
-        emit MERAWalletLoginRegistry.LoginTransferred(keccak256(bytes(login)), login, deployed, newWallet);
+        address newWallet = factory.deployWallet(newLogin, p);
 
         vm.prank(deployed);
-        registry.transferLogin(login, newWallet);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+        vm.expectEmit(true, true, true, true);
+        emit MERAWalletLoginRegistry.LoginTransferred(keccak256(bytes(login)), login, deployed, newWallet);
+        vm.prank(newWallet);
+        registry.confirmLoginMigration(login);
 
         assertEq(registry.walletOf(login), newWallet);
-        assertEq(registry.loginHashByWallet(deployed), bytes32(0));
+        assertEq(registry.walletOf(newLogin), deployed);
+        assertEq(registry.loginHashByWallet(deployed), keccak256(bytes(newLogin)));
         assertEq(registry.loginHashByWallet(newWallet), keccak256(bytes(login)));
+        assertEq(registry.loginOf(deployed), newLogin);
         assertEq(registry.loginOf(newWallet), login);
     }
 
-    function test_registry_transfer_reverts_when_not_current_wallet() public {
+    function test_registry_migration_request_reverts_when_not_current_wallet() public {
         string memory login = "carol";
+        string memory newLogin = "carol-new";
         MERAWalletTypes.WalletInitParams memory p = _params();
         factory.deployWallet(login, p);
+        address newWallet = factory.deployWallet(newLogin, p);
 
         vm.expectRevert(MERAWalletLoginRegistry.LoginNotOwned.selector);
-        registry.transferLogin(login, address(0x123456));
+        registry.requestLoginMigration(login, newLogin, newWallet);
+    }
+
+    function test_registry_migration_confirm_reverts_without_pending_request() public {
+        string memory login = "carol";
+        string memory newLogin = "carol-new";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        factory.deployWallet(login, p);
+        address newWallet = factory.deployWallet(newLogin, p);
+
+        vm.prank(newWallet);
+        vm.expectRevert(MERAWalletLoginRegistry.LoginMigrationNotFound.selector);
+        registry.confirmLoginMigration(login);
+    }
+
+    function test_registry_migration_confirm_reverts_from_wrong_wallet() public {
+        string memory login = "carol";
+        string memory newLogin = "carol-new";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = factory.deployWallet(login, p);
+        address newWallet = factory.deployWallet(newLogin, p);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+
+        vm.prank(address(0x123456));
+        vm.expectRevert(MERAWalletLoginRegistry.LoginMigrationNotConfirmingWallet.selector);
+        registry.confirmLoginMigration(login);
     }
 
     function test_registry_only_factory_can_register_login() public {

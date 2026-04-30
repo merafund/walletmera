@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
+import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletTargetWhitelistChecker} from "../src/checkers/MERAWalletTargetWhitelistChecker.sol";
 import {MERAWalletTargetBlacklistChecker} from "../src/checkers/MERAWalletTargetBlacklistChecker.sol";
@@ -2540,6 +2541,95 @@ contract BaseMERAWalletTest is Test {
         wallet.setMigrationTarget(address(0));
         vm.stopPrank();
         assertEq(wallet.migrationTarget(), address(0));
+    }
+
+    function test_LoginMigrationRegistryCalls_DefaultToEmergencyOnly() public {
+        MERAWalletLoginRegistry registry = new MERAWalletLoginRegistry(address(this));
+        registry.addFactory(address(this));
+
+        BaseMERAWallet newWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
+        registry.registerLogin("old", address(wallet));
+        registry.registerLogin("new", address(newWallet));
+
+        vm.prank(emergency);
+        _executeWalletSelfCallOn(
+            newWallet, abi.encodeWithSelector(newWallet.setOptionalCheckers.selector, _mkWl(address(0), true, "")), 7601
+        );
+
+        MERAWalletTypes.Call[] memory requestCalls = _singleCall(
+            address(registry),
+            0,
+            abi.encodeWithSelector(
+                MERAWalletLoginRegistry.requestLoginMigration.selector, "old", "new", address(newWallet)
+            )
+        );
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallPathForbiddenForRole.selector, MERAWalletTypes.Role.Primary
+            )
+        );
+        wallet.executeTransaction(requestCalls, 7602);
+
+        vm.prank(backup);
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.CallPathForbiddenForRole.selector, MERAWalletTypes.Role.Backup)
+        );
+        wallet.executeTransaction(requestCalls, 7603);
+
+        vm.prank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.TimelockRequired.selector,
+                MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY
+            )
+        );
+        wallet.executeTransaction(requestCalls, 7604);
+        vm.prank(emergency);
+        bytes32 requestOperationId = wallet.proposeTransaction(requestCalls, 7604);
+        (,,, uint64 requestExecuteAfter,,,,,,,) = wallet.operations(requestOperationId);
+        vm.warp(requestExecuteAfter);
+        vm.prank(emergency);
+        wallet.executePending(requestCalls, 7604);
+
+        MERAWalletTypes.Call[] memory confirmCalls = _singleCall(
+            address(registry), 0, abi.encodeWithSelector(MERAWalletLoginRegistry.confirmLoginMigration.selector, "old")
+        );
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallPathForbiddenForRole.selector, MERAWalletTypes.Role.Primary
+            )
+        );
+        newWallet.executeTransaction(confirmCalls, 7605);
+
+        vm.prank(backup);
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.CallPathForbiddenForRole.selector, MERAWalletTypes.Role.Backup)
+        );
+        newWallet.executeTransaction(confirmCalls, 7606);
+
+        vm.prank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.TimelockRequired.selector,
+                MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY
+            )
+        );
+        newWallet.executeTransaction(confirmCalls, 7607);
+        vm.prank(emergency);
+        bytes32 confirmOperationId = newWallet.proposeTransaction(confirmCalls, 7607);
+        (,,, uint64 confirmExecuteAfter,,,,,,,) = newWallet.operations(confirmOperationId);
+        vm.warp(confirmExecuteAfter);
+        vm.prank(emergency);
+        newWallet.executePending(confirmCalls, 7607);
+
+        assertEq(registry.walletOf("old"), address(newWallet));
+        assertEq(registry.walletOf("new"), address(wallet));
+        assertEq(registry.loginHashByWallet(address(wallet)), keccak256(bytes("new")));
+        assertEq(registry.loginHashByWallet(address(newWallet)), keccak256(bytes("old")));
     }
 
     function test_ExecuteMigration_NoTargetSet_Reverts() public {

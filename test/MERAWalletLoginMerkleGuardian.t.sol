@@ -16,6 +16,8 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     address internal aliceWallet = vm.addr(0xA11);
     address internal bobWallet = vm.addr(0xB0B1);
     address internal carolWallet = vm.addr(0xCA);
+    address internal daveWallet = vm.addr(0xDA);
+    address internal erinWallet = vm.addr(0xE12);
     address internal outsider = vm.addr(0x4444);
     address internal guardianAddress = address(0xA11CEB0BCAFE);
 
@@ -131,6 +133,34 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         acGuardian.publishLoginList(aliceCarol);
     }
 
+    function test_PublishLoginList_SupportsOZCompatibleOddLengthTree() public {
+        bytes32[] memory fiveLogins = new bytes32[](5);
+        fiveLogins[0] = _loginHash("alice");
+        fiveLogins[1] = _loginHash("bob");
+        fiveLogins[2] = _loginHash("carol");
+        fiveLogins[3] = _loginHash("dave");
+        fiveLogins[4] = _loginHash("erin");
+
+        registry.registerLogin("dave", daveWallet);
+        registry.registerLogin("erin", erinWallet);
+
+        bytes32 expectedRoot = Hashes.commutativeKeccak256(
+            Hashes.commutativeKeccak256(Hashes.commutativeKeccak256(fiveLogins[0], fiveLogins[1]), fiveLogins[4]),
+            Hashes.commutativeKeccak256(fiveLogins[2], fiveLogins[3])
+        );
+        bytes32 ozCompatibleRoot = _computeRoot(fiveLogins);
+        MERAWalletLoginMerkleGuardian fiveLoginGuardian =
+            new MERAWalletLoginMerkleGuardian(address(registry), ozCompatibleRoot, 2, PROPOSAL_LIFETIME);
+
+        assertEq(ozCompatibleRoot, expectedRoot);
+
+        vm.prank(aliceWallet);
+        fiveLoginGuardian.publishLoginList(fiveLogins);
+
+        assertTrue(fiveLoginGuardian.loginListPublished());
+        assertTrue(fiveLoginGuardian.publishedLoginHash(_loginHash("erin")));
+    }
+
     function test_Propose_AutoApprovesCurrentLoginOwner() public {
         vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
@@ -190,8 +220,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
         vm.prank(aliceWallet);
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0005));
-        vm.prank(aliceWallet);
-        registry.transferLogin("alice", newAliceWallet);
+        _migrateLogin("alice", aliceWallet, "alice-new", newAliceWallet);
 
         vm.prank(newAliceWallet);
         vm.expectRevert(
@@ -209,8 +238,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
         vm.prank(aliceWallet);
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0006));
-        vm.prank(bobWallet);
-        registry.transferLogin("bob", newBobWallet);
+        _migrateLogin("bob", bobWallet, "bob-new", newBobWallet);
 
         vm.prank(newBobWallet);
         guardian.approveProposal(proposalId);
@@ -320,36 +348,43 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         registry.registerLogin("carol", carolWallet);
     }
 
+    function _migrateLogin(string memory oldLogin, address oldWallet, string memory newLogin, address newWallet)
+        internal
+    {
+        registry.registerLogin(newLogin, newWallet);
+        vm.prank(oldWallet);
+        registry.requestLoginMigration(oldLogin, newLogin, newWallet);
+        vm.prank(newWallet);
+        registry.confirmLoginMigration(oldLogin);
+    }
+
     function _loginHash(string memory login) internal pure returns (bytes32) {
         return keccak256(bytes(login));
     }
 
     function _computeRoot(bytes32[] memory hashes) internal pure returns (bytes32 root) {
-        uint256 levelLength = hashes.length;
-        bytes32[] memory level = new bytes32[](levelLength);
-        for (uint256 i = 0; i < levelLength;) {
-            level[i] = hashes[i];
+        uint256 leafCount = hashes.length;
+        bytes32[] memory nodes = new bytes32[](leafCount);
+
+        for (uint256 i = 0; i < leafCount;) {
+            nodes[leafCount - 1 - i] = hashes[i];
             unchecked {
                 ++i;
             }
         }
 
-        while (levelLength > 1) {
-            uint256 nextLength = (levelLength + 1) >> 1;
-            for (uint256 i = 0; i < nextLength;) {
-                uint256 pairIndex = i << 1;
-                if (pairIndex + 1 < levelLength) {
-                    level[i] = Hashes.commutativeKeccak256(level[pairIndex], level[pairIndex + 1]);
-                } else {
-                    level[i] = level[pairIndex];
-                }
-                unchecked {
-                    ++i;
-                }
+        uint256 leafOffset = leafCount - 1;
+        for (uint256 i = leafCount - 1; i > 0;) {
+            unchecked {
+                --i;
             }
-            levelLength = nextLength;
+            uint256 leftIndex = (i << 1) + 1;
+            uint256 rightIndex = leftIndex + 1;
+            bytes32 left = leftIndex < leafOffset ? nodes[leftIndex] : nodes[leftIndex - leafOffset];
+            bytes32 right = rightIndex < leafOffset ? nodes[rightIndex] : nodes[rightIndex - leafOffset];
+            nodes[i] = Hashes.commutativeKeccak256(left, right);
         }
 
-        return level[0];
+        return nodes[0];
     }
 }
