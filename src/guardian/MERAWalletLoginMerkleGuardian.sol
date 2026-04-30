@@ -12,7 +12,6 @@ contract MERAWalletLoginMerkleGuardian {
         address newEmergency;
         address proposer;
         uint64 createdAt;
-        uint64 deadline;
         uint16 approvals;
         bool executed;
         bool cancelled;
@@ -120,7 +119,6 @@ contract MERAWalletLoginMerkleGuardian {
         proposal.newEmergency = newEmergency;
         proposal.proposer = msg.sender;
         proposal.createdAt = uint64(block.timestamp);
-        proposal.deadline = uint64(block.timestamp) + PROPOSAL_LIFETIME;
         proposal.approvals = 1;
 
         hasApproved[proposalId][loginHash] = true;
@@ -170,11 +168,7 @@ contract MERAWalletLoginMerkleGuardian {
         require(loginListPublished, LoginListNotPublished());
 
         loginHash = LOGIN_REGISTRY.loginHashByWallet(owner);
-        require(
-            loginHash != bytes32(0) && publishedLoginHash[loginHash]
-                && LOGIN_REGISTRY.walletByLoginHash(loginHash) == owner,
-            LoginNotEligible(owner, loginHash)
-        );
+        require(loginHash != bytes32(0) && publishedLoginHash[loginHash], LoginNotEligible(owner, loginHash));
     }
 
     function _activeProposal(bytes32 proposalId) internal view returns (Proposal storage proposal) {
@@ -182,7 +176,8 @@ contract MERAWalletLoginMerkleGuardian {
         require(proposal.createdAt != 0, ProposalNotFound(proposalId));
         require(!proposal.executed, ProposalAlreadyExecuted(proposalId));
         require(!proposal.cancelled, ProposalIsCancelled(proposalId));
-        require(block.timestamp <= proposal.deadline, ProposalExpired(proposalId, proposal.deadline, block.timestamp));
+        uint256 expiresAt = uint256(proposal.createdAt) + PROPOSAL_LIFETIME;
+        require(block.timestamp <= expiresAt, ProposalExpired(proposalId, expiresAt, block.timestamp));
     }
 
     function _computeRoot(bytes32[] calldata loginHashes) internal pure returns (bytes32 root) {

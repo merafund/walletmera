@@ -111,7 +111,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.prank(aliceWallet);
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), newEmergency);
 
-        (address target, address storedEmergency, address proposer,,, uint16 approvals,,) =
+        (address target, address storedEmergency, address proposer,, uint16 approvals,,) =
             guardian.proposals(proposalId);
         assertEq(target, address(wallet));
         assertEq(storedEmergency, newEmergency);
@@ -189,7 +189,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.revokeApproval(proposalId);
         assertFalse(guardian.hasApproved(proposalId, _loginHash("bob")));
 
-        (,,,,, uint16 approvals,,) = guardian.proposals(proposalId);
+        (,,,, uint16 approvals,,) = guardian.proposals(proposalId);
         assertEq(approvals, 1);
     }
 
@@ -213,12 +213,13 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.prank(bobWallet);
         guardian.approveProposal(proposalId);
 
-        (,,,, uint64 deadline,,,) = guardian.proposals(proposalId);
+        (,,, uint64 createdAt,,,) = guardian.proposals(proposalId);
+        uint256 expiresAt = uint256(createdAt) + PROPOSAL_LIFETIME;
         vm.warp(block.timestamp + PROPOSAL_LIFETIME + 1);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                MERAWalletLoginMerkleGuardian.ProposalExpired.selector, proposalId, deadline, block.timestamp
+                MERAWalletLoginMerkleGuardian.ProposalExpired.selector, proposalId, expiresAt, block.timestamp
             )
         );
         guardian.executeProposal(proposalId);
