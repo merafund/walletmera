@@ -37,7 +37,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
         wallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
         MERAWalletLoginMerkleGuardian guardianImpl =
-            new MERAWalletLoginMerkleGuardian(address(wallet), address(registry), loginRoot, 2, PROPOSAL_LIFETIME);
+            new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 2, PROPOSAL_LIFETIME);
         vm.etch(guardianAddress, address(guardianImpl).code);
         guardian = MERAWalletLoginMerkleGuardian(guardianAddress);
     }
@@ -79,7 +79,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         bytes32 duplicateRoot = _computeRoot(duplicates);
 
         MERAWalletLoginMerkleGuardian duplicateGuardian =
-            new MERAWalletLoginMerkleGuardian(address(wallet), address(registry), duplicateRoot, 1, PROPOSAL_LIFETIME);
+            new MERAWalletLoginMerkleGuardian(address(registry), duplicateRoot, 1, PROPOSAL_LIFETIME);
 
         vm.expectRevert(
             abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.DuplicateLoginHash.selector, _loginHash("alice"))
@@ -98,7 +98,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         bytes32[] memory oneLogin = new bytes32[](1);
         oneLogin[0] = _loginHash("alice");
         MERAWalletLoginMerkleGuardian smallGuardian =
-            new MERAWalletLoginMerkleGuardian(address(wallet), address(registry), oneLogin[0], 2, PROPOSAL_LIFETIME);
+            new MERAWalletLoginMerkleGuardian(address(registry), oneLogin[0], 2, PROPOSAL_LIFETIME);
 
         vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginListTooSmall.selector, 1, 2));
         smallGuardian.publishLoginList(oneLogin);
@@ -109,9 +109,11 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         address newEmergency = address(0xE0001);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(newEmergency);
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), newEmergency);
 
-        (address storedEmergency, address proposer,,, uint16 approvals,,) = guardian.proposals(proposalId);
+        (address target, address storedEmergency, address proposer,,, uint16 approvals,,) =
+            guardian.proposals(proposalId);
+        assertEq(target, address(wallet));
         assertEq(storedEmergency, newEmergency);
         assertEq(proposer, aliceWallet);
         assertEq(approvals, 1);
@@ -123,7 +125,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         address newEmergency = address(0xE0002);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(newEmergency);
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), newEmergency);
         vm.prank(bobWallet);
         guardian.approveProposal(proposalId);
 
@@ -136,14 +138,14 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     function test_Propose_RevertsBeforeLoginListPublished() public {
         vm.prank(aliceWallet);
         vm.expectRevert(MERAWalletLoginMerkleGuardian.LoginListNotPublished.selector);
-        guardian.proposeEmergencyChange(address(0xE0003));
+        guardian.proposeEmergencyChange(address(wallet), address(0xE0003));
     }
 
     function test_Approve_RequiresCurrentRegisteredOwner() public {
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0004));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0004));
 
         vm.prank(outsider);
         vm.expectRevert(
@@ -157,7 +159,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         address newAliceWallet = vm.addr(0xA12);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0005));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0005));
         vm.prank(aliceWallet);
         registry.transferLogin("alice", newAliceWallet);
 
@@ -175,7 +177,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         address newBobWallet = vm.addr(0xB0B2);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0006));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0006));
         vm.prank(bobWallet);
         registry.transferLogin("bob", newBobWallet);
 
@@ -187,7 +189,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.revokeApproval(proposalId);
         assertFalse(guardian.hasApproved(proposalId, _loginHash("bob")));
 
-        (,,,, uint16 approvals,,) = guardian.proposals(proposalId);
+        (,,,,, uint16 approvals,,) = guardian.proposals(proposalId);
         assertEq(approvals, 1);
     }
 
@@ -195,7 +197,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0007));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0007));
 
         vm.expectRevert(
             abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.ThresholdNotReached.selector, proposalId, 1, 2)
@@ -207,11 +209,11 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0008));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0008));
         vm.prank(bobWallet);
         guardian.approveProposal(proposalId);
 
-        (,,, uint64 deadline,,,) = guardian.proposals(proposalId);
+        (,,,, uint64 deadline,,,) = guardian.proposals(proposalId);
         vm.warp(block.timestamp + PROPOSAL_LIFETIME + 1);
 
         vm.expectRevert(
@@ -226,7 +228,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0009));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0009));
         vm.prank(bobWallet);
         guardian.cancelProposal(proposalId);
 
@@ -238,7 +240,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(0xE0010));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0010));
         vm.prank(bobWallet);
         guardian.approveProposal(proposalId);
         guardian.executeProposal(proposalId);
@@ -250,20 +252,37 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_ConstructorValidation() public {
-        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
-        new MERAWalletLoginMerkleGuardian(address(0), address(registry), loginRoot, 1, PROPOSAL_LIFETIME);
-
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidLoginRegistry.selector);
-        new MERAWalletLoginMerkleGuardian(address(wallet), address(0x1234), loginRoot, 1, PROPOSAL_LIFETIME);
+        new MERAWalletLoginMerkleGuardian(address(0x1234), loginRoot, 1, PROPOSAL_LIFETIME);
 
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidLoginRoot.selector);
-        new MERAWalletLoginMerkleGuardian(address(wallet), address(registry), bytes32(0), 1, PROPOSAL_LIFETIME);
+        new MERAWalletLoginMerkleGuardian(address(registry), bytes32(0), 1, PROPOSAL_LIFETIME);
 
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidThreshold.selector);
-        new MERAWalletLoginMerkleGuardian(address(wallet), address(registry), loginRoot, 0, PROPOSAL_LIFETIME);
+        new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 0, PROPOSAL_LIFETIME);
 
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidProposalLifetime.selector);
-        new MERAWalletLoginMerkleGuardian(address(wallet), address(registry), loginRoot, 1, 0);
+        new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 1, 0);
+
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidProposalLifetime.selector);
+        new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 1, uint64(71 hours));
+    }
+
+    function test_Propose_RevertsWhenTargetWalletIsZero() public {
+        guardian.publishLoginList(loginHashes);
+
+        vm.prank(aliceWallet);
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
+        guardian.proposeEmergencyChange(address(0), address(0xE0011));
+    }
+
+    function test_Propose_RevertsWhenTargetWalletGuardianMismatch() public {
+        guardian.publishLoginList(loginHashes);
+        BaseMERAWallet otherWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0xBEEF));
+
+        vm.prank(aliceWallet);
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.TargetWalletGuardianMismatch.selector);
+        guardian.proposeEmergencyChange(address(otherWallet), address(0xE0012));
     }
 
     function _registerDefaultLogins() internal {

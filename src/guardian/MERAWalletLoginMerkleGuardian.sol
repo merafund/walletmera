@@ -8,6 +8,7 @@ import {Hashes} from "@openzeppelin/contracts/utils/cryptography/Hashes.sol";
 /// @notice Login-based threshold guardian backed by a one-time published Merkle login set.
 contract MERAWalletLoginMerkleGuardian {
     struct Proposal {
+        address targetWallet;
         address newEmergency;
         address proposer;
         uint64 createdAt;
@@ -17,11 +18,12 @@ contract MERAWalletLoginMerkleGuardian {
         bool cancelled;
     }
 
-    address public immutable WALLET;
     MERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
     bytes32 public immutable LOGIN_ROOT;
     uint256 public immutable THRESHOLD;
     uint64 public immutable PROPOSAL_LIFETIME;
+    /// @notice Lower bound enforced in the constructor for `proposalLifetime_` (72 hours).
+    uint64 public constant MIN_PROPOSAL_LIFETIME = 72 hours;
 
     bool public loginListPublished;
     uint256 public proposalNonce;
@@ -44,9 +46,12 @@ contract MERAWalletLoginMerkleGuardian {
     event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
 
     error InvalidWallet();
+    /// @dev Reverts when `wallet_` does not list this contract as its GUARDIAN on IBaseMERAWallet.
+    error TargetWalletGuardianMismatch();
     error InvalidLoginRegistry();
     error InvalidLoginRoot();
     error InvalidThreshold();
+    /// @dev `proposalLifetime_` must be at least `MIN_PROPOSAL_LIFETIME`.
     error InvalidProposalLifetime();
     error EmptyLoginList();
     error LoginListAlreadyPublished();
@@ -64,20 +69,12 @@ contract MERAWalletLoginMerkleGuardian {
     error NotApproved(bytes32 proposalId, bytes32 loginHash);
     error ThresholdNotReached(bytes32 proposalId, uint256 approvals, uint256 threshold);
 
-    constructor(
-        address wallet_,
-        address loginRegistry_,
-        bytes32 loginRoot_,
-        uint256 threshold_,
-        uint64 proposalLifetime_
-    ) {
-        require(wallet_ != address(0), InvalidWallet());
+    constructor(address loginRegistry_, bytes32 loginRoot_, uint256 threshold_, uint64 proposalLifetime_) {
         require(loginRegistry_ != address(0) && loginRegistry_.code.length != 0, InvalidLoginRegistry());
         require(loginRoot_ != bytes32(0), InvalidLoginRoot());
         require(threshold_ != 0 && threshold_ <= type(uint16).max, InvalidThreshold());
-        require(proposalLifetime_ != 0, InvalidProposalLifetime());
+        require(proposalLifetime_ >= MIN_PROPOSAL_LIFETIME, InvalidProposalLifetime());
 
-        WALLET = wallet_;
         LOGIN_REGISTRY = MERAWalletLoginRegistry(loginRegistry_);
         LOGIN_ROOT = loginRoot_;
         THRESHOLD = threshold_;
@@ -107,15 +104,19 @@ contract MERAWalletLoginMerkleGuardian {
         emit LoginListPublished(LOGIN_ROOT, loginCount);
     }
 
-    function proposeEmergencyChange(address newEmergency) external returns (bytes32 proposalId) {
+    function proposeEmergencyChange(address wallet_, address newEmergency) external returns (bytes32 proposalId) {
+        require(wallet_ != address(0), InvalidWallet());
         require(newEmergency != address(0), InvalidEmergency());
 
         bytes32 loginHash = _requireEligibleLoginOwner(msg.sender);
+        require(IBaseMERAWallet(payable(wallet_)).GUARDIAN() == address(this), TargetWalletGuardianMismatch());
+
         uint256 nonce = proposalNonce;
-        proposalId = keccak256(abi.encode(WALLET, newEmergency, nonce));
+        proposalId = keccak256(abi.encode(wallet_, newEmergency, nonce));
         proposalNonce = nonce + 1;
 
         Proposal storage proposal = proposals[proposalId];
+        proposal.targetWallet = wallet_;
         proposal.newEmergency = newEmergency;
         proposal.proposer = msg.sender;
         proposal.createdAt = uint64(block.timestamp);
@@ -161,7 +162,7 @@ contract MERAWalletLoginMerkleGuardian {
         require(proposal.approvals >= THRESHOLD, ThresholdNotReached(proposalId, proposal.approvals, THRESHOLD));
 
         proposal.executed = true;
-        IBaseMERAWallet(payable(WALLET)).setEmergency(proposal.newEmergency);
+        IBaseMERAWallet(payable(proposal.targetWallet)).setEmergency(proposal.newEmergency);
         emit ProposalExecuted(proposalId, msg.sender, proposal.newEmergency);
     }
 
