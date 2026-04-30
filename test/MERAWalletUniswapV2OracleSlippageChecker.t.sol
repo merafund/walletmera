@@ -218,6 +218,63 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         wallet.executeTransaction(calls, 43);
     }
 
+    function test_AssetWhitelist_CustomSourceOverridesBaseFeed() public {
+        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MockAggregatorV3 customFeedA = new MockAggregatorV3(1e8, 8);
+        address[] memory assets = new address[](2);
+        assets[0] = address(tokenA);
+        assets[1] = address(tokenB);
+        bool[] memory allowed = new bool[](2);
+        allowed[0] = true;
+        allowed[1] = true;
+        address[] memory sourceAssets = new address[](1);
+        sourceAssets[0] = address(tokenA);
+        address[] memory sources = new address[](1);
+        sources[0] = address(customFeedA);
+
+        vm.startPrank(emergency);
+        aw.setAllowedAssets(assets, allowed);
+        aw.setAssetSources(sourceAssets, sources);
+        feedA.setAnswer(2e8);
+        vm.stopPrank();
+
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+        vm.prank(emergency);
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
+
+        router.setBadRate(false);
+
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCalls(), 44);
+    }
+
+    function test_AssetWhitelist_UsesBaseFeedWhenCustomSourceUnset() public {
+        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        address[] memory assets = new address[](2);
+        assets[0] = address(tokenA);
+        assets[1] = address(tokenB);
+        bool[] memory allowed = new bool[](2);
+        allowed[0] = true;
+        allowed[1] = true;
+
+        vm.startPrank(emergency);
+        aw.setAllowedAssets(assets, allowed);
+        feedA.setAnswer(2e8);
+        vm.stopPrank();
+
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+        vm.prank(emergency);
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
+
+        router.setBadRate(false);
+
+        vm.prank(primary);
+        vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SwapWorseThanOracle.selector);
+        wallet.executeTransaction(_approveAndSwapCalls(), 45);
+    }
+
     function test_SwapWithinOracleTolerance_Succeeds() public {
         router.setBadRate(false);
 

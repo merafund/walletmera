@@ -55,6 +55,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     struct Snapshot {
         address token0Path;
         address token1Path;
+        address priceFeed0;
+        address priceFeed1;
         uint256 erc20Bal0;
         uint256 erc20Bal1;
         uint256 ethBal;
@@ -170,12 +172,13 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         require(!ethOut || path[path.length - 1] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
 
         address wallet = msg.sender;
-        _requirePathAssetsAllowed(wallet, path, callId);
+        address assetWhitelist = _effectiveAssetWhitelist(wallet);
+        _requirePathAssetsAllowed(assetWhitelist, path, callId);
 
         address t0 = path[0];
         address t1 = path[path.length - 1];
-        _requireFeed(t0);
-        _requireFeed(t1);
+        address feed0 = _effectivePriceFeed(assetWhitelist, t0);
+        address feed1 = _effectivePriceFeed(assetWhitelist, t1);
         uint256 b0 = IERC20(t0).balanceOf(wallet);
         uint256 b1 = IERC20(t1).balanceOf(wallet);
         uint256 ethB = wallet.balance;
@@ -184,6 +187,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         _snapshots[key] = Snapshot({
             token0Path: t0,
             token1Path: t1,
+            priceFeed0: feed0,
+            priceFeed1: feed1,
             erc20Bal0: b0,
             erc20Bal1: b1,
             ethBal: ethB,
@@ -228,8 +233,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
         require(amountIn != 0 && amountOut != 0, InvalidMeasuredAmounts());
 
-        (uint256 answerIn, uint8 fdIn) = _readFeed(snap.token0Path);
-        (uint256 answerOut, uint8 fdOut) = _readFeed(snap.token1Path);
+        (uint256 answerIn, uint8 fdIn) = _readFeed(snap.token0Path, snap.priceFeed0);
+        (uint256 answerOut, uint8 fdOut) = _readFeed(snap.token1Path, snap.priceFeed1);
 
         uint8 tdIn = IERC20Metadata(snap.token0Path).decimals();
         uint8 tdOut = IERC20Metadata(snap.token1Path).decimals();
@@ -253,15 +258,15 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     }
 
     /// @dev No-op when no asset list is configured for `wallet`.
-    function _requirePathAssetsAllowed(address wallet, address[] memory path, uint256 callId) internal view {
-        address wl = _effectiveAssetWhitelist(wallet);
-        if (wl == address(0)) {
+    function _requirePathAssetsAllowed(address assetWhitelist, address[] memory path, uint256 callId) internal view {
+        if (assetWhitelist == address(0)) {
             return;
         }
         uint256 len = path.length;
         for (uint256 i = 0; i < len;) {
             require(
-                IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(path[i]), AssetNotWhitelisted(path[i], callId)
+                IMERAWalletUniswapV2AssetWhitelist(assetWhitelist).isAssetAllowed(path[i]),
+                AssetNotWhitelisted(path[i], callId)
             );
             unchecked {
                 ++i;
@@ -301,8 +306,16 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
     }
 
-    function _requireFeed(address token) internal view {
-        require(tokenPriceFeed[token] != address(0), PriceFeedNotSet(token));
+    function _effectivePriceFeed(address assetWhitelist, address token) internal view returns (address) {
+        if (assetWhitelist != address(0)) {
+            address source = IMERAWalletUniswapV2AssetWhitelist(assetWhitelist).assetSource(token);
+            if (source != address(0)) {
+                return source;
+            }
+        }
+        address feedAddr = tokenPriceFeed[token];
+        require(feedAddr != address(0), PriceFeedNotSet(token));
+        return feedAddr;
     }
 
     /// @dev Matches `keccak256(abi.encode(wallet, operationId, callId))` without `abi.encode` allocation.
@@ -317,8 +330,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
     }
 
-    function _readFeed(address token) internal view returns (uint256 answer, uint8 feedDecimals) {
-        address feedAddr = tokenPriceFeed[token];
+    function _readFeed(address token, address feedAddr) internal view returns (uint256 answer, uint8 feedDecimals) {
         require(feedAddr != address(0), PriceFeedNotSet(token));
         IAggregatorV3 feed = IAggregatorV3(feedAddr);
         feedDecimals = feed.decimals();
