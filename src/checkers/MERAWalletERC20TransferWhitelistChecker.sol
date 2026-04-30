@@ -5,7 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {MERAWalletERC20WhitelistCheckerBase} from "./MERAWalletERC20WhitelistCheckerBase.sol";
 
-/// @notice Validates wallet ERC20 `transfer` calls: optional token and recipient (`to`) allowlists via {IMERAWalletUniswapV2AssetWhitelist}.
+/// @notice Validates wallet ERC20 `transfer` calls: optional token allowlist plus recipient (`to`) allowlist.
 contract MERAWalletERC20TransferWhitelistChecker is MERAWalletERC20WhitelistCheckerBase {
     constructor(address initialOwner) MERAWalletERC20WhitelistCheckerBase(initialOwner) {}
 

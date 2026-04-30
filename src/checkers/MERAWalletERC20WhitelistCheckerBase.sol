@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletERC20RecipientWhitelist} from "../interfaces/checkers/IMERAWalletERC20RecipientWhitelist.sol";
 import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
 import {IMERAWalletERC20WhitelistCheckerErrors} from "./errors/IMERAWalletERC20WhitelistCheckerErrors.sol";
 import {MERAWalletERC20WhitelistCheckerTypes} from "./types/MERAWalletERC20WhitelistCheckerTypes.sol";
@@ -140,14 +141,14 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         );
     }
 
-    /// @dev No-op when no counterparty list is configured for `wallet`. Uses the same interface as token lists (`to` or `spender` as generic address).
+    /// @dev No-op when no counterparty list is configured for `wallet`; `account` is transfer `to` or approve `spender`.
     function _requireCounterpartyAllowed(address wallet, address account, uint256 callId) internal view {
         address wl = _effectiveRecipientWhitelist(wallet);
         if (wl == address(0)) {
             return;
         }
         require(
-            IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(account),
+            IMERAWalletERC20RecipientWhitelist(wl).isRecipientAllowed(account),
             Erc20WhitelistCounterpartyNotAllowed(account, callId)
         );
     }

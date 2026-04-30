@@ -8,7 +8,8 @@ import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletERC20TransferWhitelistChecker} from "../src/checkers/MERAWalletERC20TransferWhitelistChecker.sol";
 import {MERAWalletERC20ApproveWhitelistChecker} from "../src/checkers/MERAWalletERC20ApproveWhitelistChecker.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletERC20RecipientWhitelist} from "../src/checkers/whitelists/MERAWalletERC20RecipientWhitelist.sol";
+import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
 import {MERAWalletERC20WhitelistCheckerTypes} from "../src/checkers/types/MERAWalletERC20WhitelistCheckerTypes.sol";
 import {
     IMERAWalletERC20WhitelistCheckerErrors
@@ -28,7 +29,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     MERAWalletERC20ApproveWhitelistChecker internal approveChecker;
     ERC20Mock internal token;
     MERAWalletUniswapV2AssetWhitelist internal assetWl;
-    MERAWalletUniswapV2AssetWhitelist internal counterpartyWl;
+    MERAWalletERC20RecipientWhitelist internal counterpartyWl;
 
     function _mkWl(address checker, bool allowed, bytes memory config)
         internal
@@ -46,7 +47,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         token = new ERC20Mock();
 
         assetWl = new MERAWalletUniswapV2AssetWhitelist(emergency);
-        counterpartyWl = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        counterpartyWl = new MERAWalletERC20RecipientWhitelist(emergency);
 
         address[] memory agents = new address[](1);
         agents[0] = pauseAgent;
@@ -75,7 +76,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         ok2[0] = true;
         ok2[1] = true;
         vm.prank(emergency);
-        counterpartyWl.setAllowedAssets(c, ok2);
+        counterpartyWl.setAllowedRecipients(c, ok2);
     }
 
     function _setAllRoleTimelocks(uint256 delay) internal {
@@ -147,7 +148,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         bool[] memory ok = new bool[](1);
         ok[0] = true;
         vm.prank(emergency);
-        counterpartyWl.setAllowedAssets(c, ok);
+        counterpartyWl.setAllowedRecipients(c, ok);
 
         MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory cfg =
             MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
@@ -291,7 +292,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         bool[] memory ok2 = new bool[](1);
         ok2[0] = true;
         vm.prank(emergency);
-        counterpartyWl.setAllowedAssets(c, ok2);
+        counterpartyWl.setAllowedRecipients(c, ok2);
 
         vm.startPrank(emergency);
         transferChecker.setDefaultAssetWhitelist(address(assetWl));
@@ -371,7 +372,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         bool[] memory ok2 = new bool[](1);
         ok2[0] = true;
         vm.prank(emergency);
-        counterpartyWl.setAllowedAssets(c, ok);
+        counterpartyWl.setAllowedRecipients(c, ok2);
 
         vm.prank(emergency);
         _setOptionalCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));

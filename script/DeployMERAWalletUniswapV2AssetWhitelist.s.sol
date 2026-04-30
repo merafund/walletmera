@@ -2,7 +2,7 @@
 pragma solidity 0.8.34;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
 
 /// @notice Deploys `MERAWalletUniswapV2AssetWhitelist`. Set `CHECKER_INITIAL_OWNER` or it defaults to the broadcaster.
 contract DeployMERAWalletUniswapV2AssetWhitelist is Script {

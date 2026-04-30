@@ -3,8 +3,8 @@ pragma solidity 0.8.34;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
-import {IMERAWalletUniswapV2AssetWhitelistErrors} from "./errors/IMERAWalletUniswapV2AssetWhitelistErrors.sol";
+import {IMERAWalletUniswapV2AssetWhitelist} from "../../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
+import {IMERAWalletUniswapV2AssetWhitelistErrors} from "../errors/IMERAWalletUniswapV2AssetWhitelistErrors.sol";
 
 /// @title MERAWalletUniswapV2AssetWhitelist
 /// @notice Ownable allowlist for swap path assets with optional fallback list contract.
