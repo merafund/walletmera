@@ -141,8 +141,8 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         fiveLogins[3] = _loginHash("dave");
         fiveLogins[4] = _loginHash("erin");
 
-        registry.registerLogin("dave", daveWallet);
-        registry.registerLogin("erin", erinWallet);
+        _registerLogin("dave", daveWallet);
+        _registerLogin("erin", erinWallet);
 
         bytes32 expectedRoot = Hashes.commutativeKeccak256(
             Hashes.commutativeKeccak256(Hashes.commutativeKeccak256(fiveLogins[0], fiveLogins[1]), fiveLogins[4]),
@@ -343,19 +343,26 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         loginHashes.push(_loginHash("bob"));
         loginHashes.push(_loginHash("carol"));
 
-        registry.registerLogin("alice", aliceWallet);
-        registry.registerLogin("bob", bobWallet);
-        registry.registerLogin("carol", carolWallet);
+        _registerLogin("alice", aliceWallet);
+        _registerLogin("bob", bobWallet);
+        _registerLogin("carol", carolWallet);
     }
 
     function _migrateLogin(string memory oldLogin, address oldWallet, string memory newLogin, address newWallet)
         internal
     {
-        registry.registerLogin(newLogin, newWallet);
+        _registerLogin(newLogin, newWallet);
         vm.prank(oldWallet);
         registry.requestLoginMigration(oldLogin, newLogin, newWallet);
         vm.prank(newWallet);
         registry.confirmLoginMigration(oldLogin);
+    }
+
+    function _registerLogin(string memory login, address wallet_) internal {
+        bytes32 secret = keccak256(abi.encode(login, wallet_));
+        registry.commit(registry.makeCommitment(login, wallet_, address(this), secret, 0, keccak256("")));
+        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        registry.registerLogin{value: registry.priceOf(login)}(login, wallet_, secret, 0, "");
     }
 
     function _loginHash(string memory login) internal pure returns (bytes32) {

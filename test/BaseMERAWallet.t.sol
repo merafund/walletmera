@@ -2548,8 +2548,14 @@ contract BaseMERAWalletTest is Test {
         registry.addFactory(address(this));
 
         BaseMERAWallet newWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
-        registry.registerLogin("old", address(wallet));
-        registry.registerLogin("new", address(newWallet));
+        bytes32 oldSecret = keccak256("old");
+        registry.commit(registry.makeCommitment("old", address(wallet), address(this), oldSecret, 0, keccak256("")));
+        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        registry.registerLogin{value: registry.priceOf("old")}("old", address(wallet), oldSecret, 0, "");
+        bytes32 newSecret = keccak256("new");
+        registry.commit(registry.makeCommitment("new", address(newWallet), address(this), newSecret, 0, keccak256("")));
+        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        registry.registerLogin{value: registry.priceOf("new")}("new", address(newWallet), newSecret, 0, "");
 
         vm.prank(emergency);
         _executeWalletSelfCallOn(

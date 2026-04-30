@@ -18,7 +18,6 @@ contract MERAWalletMetaProxyCloneFactory {
     error LoginAlreadyRegistered();
     error WalletImplementationNotDeployed();
     error LoginRegistryNotDeployed();
-    error NonZeroValue();
 
     constructor(address walletImplementation, address loginRegistry) {
         require(walletImplementation.code.length != 0, WalletImplementationNotDeployed());
@@ -28,12 +27,13 @@ contract MERAWalletMetaProxyCloneFactory {
     }
 
     /// @notice Deploys a new `BaseMERAWallet` meta-proxy clone and stores `login` -> wallet.
-    function deployWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
-        external
-        payable
-        returns (address wallet)
-    {
-        require(msg.value == 0, NonZeroValue());
+    function deployWallet(
+        string calldata login,
+        MERAWalletTypes.WalletInitParams calldata params,
+        bytes32 secret,
+        uint256 deadline,
+        bytes calldata authorization
+    ) external payable returns (address wallet) {
         _requireNonEmptyLogin(login);
 
         bytes32 salt = _salt(login);
@@ -42,7 +42,7 @@ contract MERAWalletMetaProxyCloneFactory {
         wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, _immutableArgs(params), salt);
         BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
 
-        LOGIN_REGISTRY.registerLogin(login, wallet);
+        LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization);
         emit WalletDeployed(salt, login, wallet);
     }
 
