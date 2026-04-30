@@ -11,7 +11,7 @@ contract MERAWalletLoginRegistry is Ownable {
     mapping(address wallet => bytes32 loginHash) public loginHashByWallet;
     mapping(bytes32 loginHash => string login) private _loginByHash;
 
-    event FactoryUpdated(address indexed factory, bool allowed);
+    event FactoryAdded(address indexed factory);
     event LoginRegistered(bytes32 indexed loginHash, string login, address indexed wallet, address indexed factory);
     event LoginTransferred(
         bytes32 indexed loginHash, string login, address indexed previousWallet, address indexed newWallet
@@ -31,10 +31,11 @@ contract MERAWalletLoginRegistry is Ownable {
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
-    function setFactory(address factory, bool allowed) external onlyOwner {
+    /// @notice Whitelist a factory permanently; removal is not supported (avoids bricking deployed factories).
+    function addFactory(address factory) external onlyOwner {
         require(factory != address(0), InvalidAddress());
-        isFactory[factory] = allowed;
-        emit FactoryUpdated(factory, allowed);
+        isFactory[factory] = true;
+        emit FactoryAdded(factory);
     }
 
     function registerLogin(string calldata login, address wallet) external onlyFactory {

@@ -27,7 +27,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         factory = new MERAWalletMetaProxyCloneFactory(address(implementation), address(registry));
 
         vm.prank(owner);
-        registry.setFactory(address(factory), true);
+        registry.addFactory(address(factory));
     }
 
     function _params() internal view returns (MERAWalletTypes.WalletInitParams memory p) {
@@ -133,10 +133,10 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address otherFactory = address(0xFAc70);
 
         vm.expectRevert();
-        registry.setFactory(otherFactory, true);
+        registry.addFactory(otherFactory);
 
         vm.prank(owner);
-        registry.setFactory(otherFactory, true);
+        registry.addFactory(otherFactory);
 
         assertTrue(registry.isFactory(otherFactory));
     }

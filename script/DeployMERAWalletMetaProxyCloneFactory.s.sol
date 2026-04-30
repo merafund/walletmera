@@ -23,7 +23,7 @@ contract DeployMERAWalletMetaProxyCloneFactory is Script {
         implementation = new BaseMERAWallet(address(1), address(2), address(3), address(0), address(0));
         registry = new MERAWalletLoginRegistry(deployer);
         factory = new MERAWalletMetaProxyCloneFactory(address(implementation), address(registry));
-        registry.setFactory(address(factory), true);
+        registry.addFactory(address(factory));
 
         vm.stopBroadcast();
 
