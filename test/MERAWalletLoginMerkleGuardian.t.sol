@@ -43,6 +43,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_PublishLoginList_Succeeds() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         assertTrue(guardian.loginListPublished());
@@ -84,13 +85,16 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.DuplicateLoginHash.selector, _loginHash("alice"))
         );
+        vm.prank(aliceWallet);
         duplicateGuardian.publishLoginList(duplicates);
     }
 
     function test_PublishLoginList_RejectsSecondPublish() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         vm.expectRevert(MERAWalletLoginMerkleGuardian.LoginListAlreadyPublished.selector);
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
     }
 
@@ -104,7 +108,31 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         smallGuardian.publishLoginList(oneLogin);
     }
 
+    function test_PublishLoginList_RejectsUnregisteredPublisher() public {
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.PublisherNotRegistered.selector, outsider));
+        guardian.publishLoginList(loginHashes);
+    }
+
+    function test_PublishLoginList_RejectsPublisherNotInList() public {
+        bytes32[] memory aliceCarol = new bytes32[](2);
+        aliceCarol[0] = _loginHash("alice");
+        aliceCarol[1] = _loginHash("carol");
+        bytes32 acRoot = _computeRoot(aliceCarol);
+        MERAWalletLoginMerkleGuardian acGuardian =
+            new MERAWalletLoginMerkleGuardian(address(registry), acRoot, 2, PROPOSAL_LIFETIME);
+
+        vm.prank(bobWallet);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MERAWalletLoginMerkleGuardian.PublisherNotInLoginList.selector, bobWallet, _loginHash("bob")
+            )
+        );
+        acGuardian.publishLoginList(aliceCarol);
+    }
+
     function test_Propose_AutoApprovesCurrentLoginOwner() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
         address newEmergency = address(0xE0001);
 
@@ -120,6 +148,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Approve_ExecuteChangesEmergencyWhenThresholdReached() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
         address newEmergency = address(0xE0002);
 
@@ -141,6 +170,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Approve_RequiresCurrentRegisteredOwner() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
@@ -154,6 +184,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Approve_SameLoginCannotApproveTwiceAfterTransfer() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
         address newAliceWallet = vm.addr(0xA12);
 
@@ -172,6 +203,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_TransferLogin_NewOwnerCanApproveAndRevoke() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
         address newBobWallet = vm.addr(0xB0B2);
 
@@ -193,6 +225,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Execute_BeforeThresholdReverts() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
@@ -205,6 +238,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Execute_AfterLifetimeReverts() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
@@ -225,6 +259,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Execute_SecondTimeReverts() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
@@ -257,6 +292,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Propose_RevertsWhenTargetWalletIsZero() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
 
         vm.prank(aliceWallet);
@@ -265,6 +301,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Propose_RevertsWhenTargetWalletGuardianMismatch() public {
+        vm.prank(aliceWallet);
         guardian.publishLoginList(loginHashes);
         BaseMERAWallet otherWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0xBEEF));
 

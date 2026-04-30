@@ -55,6 +55,10 @@ contract MERAWalletLoginMerkleGuardian {
     error DuplicateLoginHash(bytes32 loginHash);
     error LoginRootMismatch(bytes32 expected, bytes32 actual);
     error LoginListTooSmall(uint256 loginCount, uint256 threshold);
+    /// @dev `publishLoginList` caller must be a wallet registered in `LOGIN_REGISTRY`.
+    error PublisherNotRegistered(address publisher);
+    /// @dev Caller must include their own login hash (from the registry) in `loginHashes`.
+    error PublisherNotInLoginList(address publisher, bytes32 loginHash);
     error LoginListNotPublished();
     error InvalidEmergency();
     error LoginNotEligible(address owner, bytes32 loginHash);
@@ -87,14 +91,22 @@ contract MERAWalletLoginMerkleGuardian {
         bytes32 root = _computeRoot(loginHashes);
         require(root == LOGIN_ROOT, LoginRootMismatch(LOGIN_ROOT, root));
 
+        bytes32 senderLoginHash = LOGIN_REGISTRY.loginHashByWallet(msg.sender);
+        require(senderLoginHash != bytes32(0), PublisherNotRegistered(msg.sender));
+
+        bool senderInList;
         for (uint256 i = 0; i < loginCount;) {
             bytes32 loginHash = loginHashes[i];
+            if (loginHash == senderLoginHash) {
+                senderInList = true;
+            }
             require(!publishedLoginHash[loginHash], DuplicateLoginHash(loginHash));
             publishedLoginHash[loginHash] = true;
             unchecked {
                 ++i;
             }
         }
+        require(senderInList, PublisherNotInLoginList(msg.sender, senderLoginHash));
 
         loginListPublished = true;
         emit LoginListPublished(LOGIN_ROOT, loginCount);
