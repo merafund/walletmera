@@ -7,14 +7,9 @@ import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
-import {MERAWalletTargetWhitelistChecker} from "../src/checkers/MERAWalletTargetWhitelistChecker.sol";
-import {MERAWalletTargetBlacklistChecker} from "../src/checkers/MERAWalletTargetBlacklistChecker.sol";
-import {MERAWalletWhitelistTypes} from "../src/checkers/types/MERAWalletWhitelistTypes.sol";
-import {IMERAWalletWhitelistErrors} from "../src/checkers/errors/IMERAWalletWhitelistErrors.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
 import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
 import {MERAWalletUniswapV2SlippageTypes} from "../src/checkers/types/MERAWalletUniswapV2SlippageTypes.sol";
-import {IMERAWalletBlacklistErrors} from "../src/checkers/errors/IMERAWalletBlacklistErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";
@@ -34,8 +29,6 @@ contract BaseMERAWalletTest is Test {
     BaseMERAWallet internal wallet;
     ReceiverMock internal receiver;
     ERC20Mock internal token;
-    MERAWalletTargetWhitelistChecker internal targetWhitelistChecker;
-    MERAWalletTargetBlacklistChecker internal targetBlacklistChecker;
     ConfigurableTransactionChecker internal checkerBothHooks;
     ConfigurableTransactionChecker internal checkerAfterOnly;
     ConfigurableTransactionChecker internal checkerBeforeOnly;
@@ -45,8 +38,6 @@ contract BaseMERAWalletTest is Test {
         wallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
         receiver = new ReceiverMock();
         token = new ERC20Mock();
-        targetWhitelistChecker = new MERAWalletTargetWhitelistChecker(emergency);
-        targetBlacklistChecker = new MERAWalletTargetBlacklistChecker(emergency, address(wallet));
         checkerBothHooks = new ConfigurableTransactionChecker(true, true, address(wallet));
         checkerAfterOnly = new ConfigurableTransactionChecker(false, true, address(wallet));
         checkerBeforeOnly = new ConfigurableTransactionChecker(true, false, address(wallet));
@@ -1008,128 +999,6 @@ contract BaseMERAWalletTest is Test {
         assertEq(afterList[0], address(checkerBothHooks));
     }
 
-    function test_TargetWhitelistChecker_BlocksDisallowedTarget() public {
-        vm.prank(emergency);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 777));
-
-        vm.prank(primary);
-        vm.expectRevert(
-            abi.encodeWithSelector(IMERAWalletWhitelistErrors.TargetNotAllowed.selector, address(receiver), 0)
-        );
-        wallet.executeTransaction(calls, 1);
-    }
-
-    function test_TargetWhitelistChecker_IsCheckedWhenExecutePending() public {
-        vm.prank(emergency);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetWhitelistChecker), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
-
-        vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
-        vm.stopPrank();
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
-
-        vm.prank(primary);
-        bytes32 operationId = wallet.proposeTransaction(calls, 1);
-
-        (,, uint64 createdAt, uint64 executeAfter,,,,,,,) = wallet.operations(operationId);
-        assertEq(uint256(executeAfter), uint256(createdAt) + 1 days);
-
-        vm.warp(executeAfter);
-        vm.prank(primary);
-        vm.expectRevert(
-            abi.encodeWithSelector(IMERAWalletWhitelistErrors.TargetNotAllowed.selector, address(receiver), 0)
-        );
-        wallet.executePending(calls, 1);
-    }
-
-    function test_TargetBlacklistChecker_BlocksListedTarget() public {
-        vm.startPrank(emergency);
-        targetBlacklistChecker.setBlockedTarget(address(receiver), true);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
-        vm.stopPrank();
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 888));
-
-        vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(IMERAWalletBlacklistErrors.TargetBlocked.selector, address(receiver), 0));
-        wallet.executeTransaction(calls, 1);
-    }
-
-    function test_TargetBlacklistChecker_AllowsNonBlockedTargets() public {
-        vm.startPrank(emergency);
-        targetBlacklistChecker.setBlockedTarget(outsider, true);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
-        vm.stopPrank();
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 42));
-
-        vm.prank(primary);
-        wallet.executeTransaction(calls, 1);
-        assertEq(receiver.value(), 42);
-    }
-
-    function test_TargetBlacklistChecker_IsCheckedWhenExecutePending() public {
-        vm.startPrank(emergency);
-        targetBlacklistChecker.setBlockedTarget(address(receiver), true);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
-        _setAllRoleTimelocks(1 days);
-        vm.stopPrank();
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
-
-        vm.prank(primary);
-        bytes32 operationId = wallet.proposeTransaction(calls, 1);
-
-        (,, uint64 createdAt, uint64 executeAfter,,,,,,,) = wallet.operations(operationId);
-        assertEq(uint256(executeAfter), uint256(createdAt) + 1 days);
-
-        vm.warp(executeAfter);
-        vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(IMERAWalletBlacklistErrors.TargetBlocked.selector, address(receiver), 0));
-        wallet.executePending(calls, 1);
-    }
-
-    function test_TargetBlacklistChecker_UnblockAllowsAgain() public {
-        vm.startPrank(emergency);
-        targetBlacklistChecker.setBlockedTarget(address(receiver), true);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(targetBlacklistChecker), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
-        targetBlacklistChecker.setBlockedTarget(address(receiver), false);
-        vm.stopPrank();
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 100));
-
-        vm.prank(primary);
-        wallet.executeTransaction(calls, 1);
-        assertEq(receiver.value(), 100);
-    }
-
     function test_AfterChecker_RevertsAndRollsBackExecution() public {
         vm.prank(emergency);
         {
@@ -1699,20 +1568,6 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    function test_SetOptionalChecker_AppliesConfigToTargetWhitelistChecker() public {
-        MERAWalletTargetWhitelistChecker wl = new MERAWalletTargetWhitelistChecker(emergency);
-        MERAWalletWhitelistTypes.TargetPermission[] memory perms = new MERAWalletWhitelistTypes.TargetPermission[](1);
-        perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
-
-        vm.prank(emergency);
-        _setOptionalCheckers(_mkWl(address(wl), true, abi.encode(perms)));
-
-        assertTrue(wl.walletAllowedTarget(address(wallet), address(receiver)));
-        assertFalse(wl.allowedTarget(address(receiver)));
-        (bool allowed,,) = wallet.whitelistOptionalChecker(address(wl));
-        assertTrue(allowed);
-    }
-
     function test_SetOptionalChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
         MERAWalletUniswapV2OracleSlippageChecker slip =
             new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
@@ -1726,22 +1581,6 @@ contract BaseMERAWalletTest is Test {
 
         (address storedWl) = slip.walletSlippageCheckerConfig(address(wallet));
         assertEq(storedWl, address(aw));
-    }
-
-    function test_TargetWhitelistChecker_ApplyConfig_EmptyNoOp() public {
-        assertFalse(targetWhitelistChecker.allowedTarget(address(receiver)));
-        targetWhitelistChecker.applyConfig("");
-        assertFalse(targetWhitelistChecker.allowedTarget(address(receiver)));
-    }
-
-    function test_TargetWhitelistChecker_ApplyConfig_PersonalDoesNotAffectOtherWallet() public {
-        MERAWalletWhitelistTypes.TargetPermission[] memory perms = new MERAWalletWhitelistTypes.TargetPermission[](1);
-        perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
-
-        vm.prank(outsider);
-        targetWhitelistChecker.applyConfig(abi.encode(perms));
-        assertTrue(targetWhitelistChecker.walletAllowedTarget(outsider, address(receiver)));
-        assertFalse(targetWhitelistChecker.walletAllowedTarget(address(wallet), address(receiver)));
     }
 
     function test_SetOptionalChecker_AppliesConfigToConfigurableChecker() public {
