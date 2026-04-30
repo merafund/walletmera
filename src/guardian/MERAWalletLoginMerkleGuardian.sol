@@ -14,7 +14,6 @@ contract MERAWalletLoginMerkleGuardian {
         uint64 createdAt;
         uint16 approvals;
         bool executed;
-        bool cancelled;
     }
 
     MERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
@@ -41,7 +40,6 @@ contract MERAWalletLoginMerkleGuardian {
     event ProposalApprovalRevoked(
         bytes32 indexed proposalId, bytes32 indexed loginHash, address indexed owner, uint256 approvals
     );
-    event ProposalCancelled(bytes32 indexed proposalId, address indexed by, bytes32 indexed loginHash);
     event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
 
     error InvalidWallet();
@@ -63,7 +61,6 @@ contract MERAWalletLoginMerkleGuardian {
     error ProposalNotFound(bytes32 proposalId);
     error ProposalExpired(bytes32 proposalId, uint256 deadline, uint256 currentTime);
     error ProposalAlreadyExecuted(bytes32 proposalId);
-    error ProposalIsCancelled(bytes32 proposalId);
     error AlreadyApproved(bytes32 proposalId, bytes32 loginHash);
     error NotApproved(bytes32 proposalId, bytes32 loginHash);
     error ThresholdNotReached(bytes32 proposalId, uint256 approvals, uint256 threshold);
@@ -147,14 +144,6 @@ contract MERAWalletLoginMerkleGuardian {
         emit ProposalApprovalRevoked(proposalId, loginHash, msg.sender, proposal.approvals);
     }
 
-    function cancelProposal(bytes32 proposalId) external {
-        bytes32 loginHash = _requireEligibleLoginOwner(msg.sender);
-        Proposal storage proposal = _activeProposal(proposalId);
-
-        proposal.cancelled = true;
-        emit ProposalCancelled(proposalId, msg.sender, loginHash);
-    }
-
     function executeProposal(bytes32 proposalId) external {
         Proposal storage proposal = _activeProposal(proposalId);
         require(proposal.approvals >= THRESHOLD, ThresholdNotReached(proposalId, proposal.approvals, THRESHOLD));
@@ -175,7 +164,6 @@ contract MERAWalletLoginMerkleGuardian {
         proposal = proposals[proposalId];
         require(proposal.createdAt != 0, ProposalNotFound(proposalId));
         require(!proposal.executed, ProposalAlreadyExecuted(proposalId));
-        require(!proposal.cancelled, ProposalIsCancelled(proposalId));
         uint256 expiresAt = uint256(proposal.createdAt) + PROPOSAL_LIFETIME;
         require(block.timestamp <= expiresAt, ProposalExpired(proposalId, expiresAt, block.timestamp));
     }

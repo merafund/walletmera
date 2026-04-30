@@ -111,8 +111,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.prank(aliceWallet);
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), newEmergency);
 
-        (address target, address storedEmergency, address proposer,, uint16 approvals,,) =
-            guardian.proposals(proposalId);
+        (address target, address storedEmergency, address proposer,, uint16 approvals,) = guardian.proposals(proposalId);
         assertEq(target, address(wallet));
         assertEq(storedEmergency, newEmergency);
         assertEq(proposer, aliceWallet);
@@ -189,7 +188,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.revokeApproval(proposalId);
         assertFalse(guardian.hasApproved(proposalId, _loginHash("bob")));
 
-        (,,,, uint16 approvals,,) = guardian.proposals(proposalId);
+        (,,,, uint16 approvals,) = guardian.proposals(proposalId);
         assertEq(approvals, 1);
     }
 
@@ -213,7 +212,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.prank(bobWallet);
         guardian.approveProposal(proposalId);
 
-        (,,, uint64 createdAt,,,) = guardian.proposals(proposalId);
+        (,,, uint64 createdAt,,) = guardian.proposals(proposalId);
         uint256 expiresAt = uint256(createdAt) + PROPOSAL_LIFETIME;
         vm.warp(block.timestamp + PROPOSAL_LIFETIME + 1);
 
@@ -222,18 +221,6 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
                 MERAWalletLoginMerkleGuardian.ProposalExpired.selector, proposalId, expiresAt, block.timestamp
             )
         );
-        guardian.executeProposal(proposalId);
-    }
-
-    function test_Execute_AfterCancelReverts() public {
-        guardian.publishLoginList(loginHashes);
-
-        vm.prank(aliceWallet);
-        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0009));
-        vm.prank(bobWallet);
-        guardian.cancelProposal(proposalId);
-
-        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.ProposalIsCancelled.selector, proposalId));
         guardian.executeProposal(proposalId);
     }
 
