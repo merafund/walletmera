@@ -2,7 +2,7 @@
 pragma solidity 0.8.34;
 
 import {MERAWalletTypes} from "../../src/types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../../src/interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletTransactionChecker} from "../../src/interfaces/checkers/IMERAWalletTransactionChecker.sol";
 
 contract ConfigurableTransactionChecker is IMERAWalletTransactionChecker {
     error BeforeCheckFailed();

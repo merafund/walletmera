@@ -4,7 +4,7 @@ pragma solidity 0.8.34;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletERC20RecipientWhitelist} from "../interfaces/checkers/IMERAWalletERC20RecipientWhitelist.sol";
 import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
 import {IMERAWalletERC20WhitelistCheckerErrors} from "./errors/IMERAWalletERC20WhitelistCheckerErrors.sol";

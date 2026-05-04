@@ -7,7 +7,7 @@ import {IBaseMERAWallet} from "./interfaces/IBaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "./interfaces/IBaseMERAWalletErrors.sol";
 import {IBaseMERAWalletEvents} from "./interfaces/IBaseMERAWalletEvents.sol";
 import {IMERAWalletLoginRegistryMigration} from "./interfaces/IMERAWalletLoginRegistryMigration.sol";
-import {IMERAWalletTransactionChecker} from "./interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletTransactionChecker} from "./interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMigrationCalls} from "./interfaces/external/IMigrationCalls.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
