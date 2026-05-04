@@ -274,16 +274,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
     }
 
-    function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled)
+    function setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] calldata updates)
         external
         override
         onlySelf
         whenLifeAlive
     {
-        uint256 n = checkers.length;
-        require(n == enabled.length, ArrayLengthMismatch(n, enabled.length));
+        uint256 n = updates.length;
         for (uint256 i = 0; i < n;) {
-            _setRequiredChecker(checkers[i], enabled[i]);
+            MERAWalletTypes.RequiredCheckerUpdate calldata u = updates[i];
+            _setRequiredChecker(u.checker, u.enabled, u.config);
             unchecked {
                 ++i;
             }
@@ -626,7 +626,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit TargetSelectorCallPolicyUpdated(target, selector, previousPolicy, policy, policy.exists, msg.sender);
     }
 
-    function _setRequiredChecker(address checker, bool enabled) internal {
+    function _setRequiredChecker(address checker, bool enabled, bytes calldata config) internal {
         require(checker != address(0), InvalidCheckerAddress());
 
         bool wasConfigured = _requiredBeforeIndexPlusOne[checker] != 0 || _requiredAfterIndexPlusOne[checker] != 0;
@@ -637,6 +637,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             _setRequiredAfterChecker(checker, false);
             emit RequiredCheckerUpdated(checker, false, false, msg.sender);
             return;
+        }
+
+        if (config.length > 0) {
+            IMERAWalletTransactionChecker(checker).applyConfig(config);
         }
 
         (bool enableBefore, bool enableAfter) = IMERAWalletTransactionChecker(checker).hookModes();

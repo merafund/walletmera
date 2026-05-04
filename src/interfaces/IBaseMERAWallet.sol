@@ -66,8 +66,9 @@ interface IBaseMERAWallet {
         bytes4[] calldata selectors,
         MERAWalletTypes.CallPathPolicy[] calldata policies
     ) external;
-    /// @param enabled Per checker: if true, registers or syncs from `checker.hookModes()`; if false, removes from required lists.
-    function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled) external;
+    /// @param updates Per entry: if `enabled` is true, registers or syncs from `checker.hookModes()`; if false, removes from required lists.
+    /// @dev `config` is passed to `applyConfig` when `enabled` and non-empty (same rules as each single entry in the batch).
+    function setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] calldata updates) external;
     /// @dev `config` is passed to `applyConfig` when allowed and non-empty (same rules as each single entry in the batch).
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates) external;
     /// @notice Configure controller agents. `Role.None` disables an agent.

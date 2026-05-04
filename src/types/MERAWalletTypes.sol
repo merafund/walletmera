@@ -37,6 +37,13 @@ library MERAWalletTypes {
         bytes config;
     }
 
+    /// @notice One entry for {setRequiredCheckers} batch updates.
+    struct RequiredCheckerUpdate {
+        address checker;
+        bool enabled;
+        bytes config;
+    }
+
     enum Role {
         None,
         Primary,

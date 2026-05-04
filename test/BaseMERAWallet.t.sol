@@ -1425,16 +1425,10 @@ contract BaseMERAWalletTest is Test {
     function test_SetRequiredChecker_OnlyEmergencyAndSupportsBothMode() public {
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerBothHooks), true);
-            wallet.setRequiredCheckers(__rqA, __rqB);
-        }
+        wallet.setRequiredCheckers(_mkReq(address(checkerBothHooks), true, ""));
 
         vm.prank(emergency);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerBothHooks), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
+        _setRequiredCheckers(_mkReq(address(checkerBothHooks), true, ""));
 
         (address[] memory beforeList, address[] memory afterList) = wallet.getRequiredCheckers();
         assertEq(beforeList.length, 1);
@@ -1445,10 +1439,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_AfterChecker_RevertsAndRollsBackExecution() public {
         vm.prank(emergency);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerAfterOnly), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
+        _setRequiredCheckers(_mkReq(address(checkerAfterOnly), true, ""));
 
         checkerAfterOnly.configure(false, true);
 
@@ -1464,10 +1455,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_CheckersSkippedForSelfCalls() public {
         vm.startPrank(emergency);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerBeforeOnly), true);
-            _setRequiredCheckers(__rqA, __rqB);
-        }
+        _setRequiredCheckers(_mkReq(address(checkerBeforeOnly), true, ""));
         checkerBeforeOnly.configure(true, false);
         vm.stopPrank();
 
@@ -1993,14 +1981,19 @@ contract BaseMERAWalletTest is Test {
 
     function test_SetRequiredChecker_RevertsForNoopConfig() public {
         vm.prank(emergency);
-        {
-            (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerNoHooks), true);
-            _expectWalletSelfCallRevert(
-                abi.encodeWithSelector(IBaseMERAWalletErrors.NoopCheckerConfig.selector),
-                abi.encodeWithSelector(wallet.setRequiredCheckers.selector, __rqA, __rqB),
-                908
-            );
-        }
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.NoopCheckerConfig.selector),
+            abi.encodeWithSelector(wallet.setRequiredCheckers.selector, _mkReq(address(checkerNoHooks), true, "")),
+            908
+        );
+    }
+
+    function test_SetRequiredChecker_AppliesConfigToConfigurableChecker() public {
+        bytes memory cfg = abi.encode(true, false);
+        vm.prank(emergency);
+        _setRequiredCheckers(_mkReq(address(checkerBeforeOnly), true, cfg));
+        assertTrue(checkerBeforeOnly.revertBefore());
+        assertFalse(checkerBeforeOnly.revertAfter());
     }
 
     function test_SetOptionalChecker_RevertsForNoopConfigOnNonZeroChecker() public {
@@ -2639,11 +2632,13 @@ contract BaseMERAWalletTest is Test {
         }
     }
 
-    function _mkReq(address c, bool e) internal pure returns (address[] memory cc, bool[] memory ee) {
-        cc = new address[](1);
-        ee = new bool[](1);
-        cc[0] = c;
-        ee[0] = e;
+    function _mkReq(address checker, bool enabled, bytes memory config)
+        internal
+        pure
+        returns (MERAWalletTypes.RequiredCheckerUpdate[] memory u)
+    {
+        u = new MERAWalletTypes.RequiredCheckerUpdate[](1);
+        u[0] = MERAWalletTypes.RequiredCheckerUpdate({checker: checker, enabled: enabled, config: config});
     }
 
     function _mkAgents(address a, MERAWalletTypes.Role role)
@@ -2729,8 +2724,8 @@ contract BaseMERAWalletTest is Test {
         u[0] = MERAWalletTypes.OptionalCheckerUpdate({checker: checker, allowed: allowed, config: config});
     }
 
-    function _setRequiredCheckers(address[] memory checkers, bool[] memory enabled) internal {
-        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setRequiredCheckers.selector, checkers, enabled), 7401);
+    function _setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] memory updates) internal {
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setRequiredCheckers.selector, updates), 7401);
     }
 
     function _setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] memory updates) internal {
