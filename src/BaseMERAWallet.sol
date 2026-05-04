@@ -1550,15 +1550,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     {
         require(relayConfig.relayExecuteBefore != 0, RelayDeadlineRequired());
 
-        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
-            require(relayReward == 0, RelayRewardNotAllowed());
-            require(
-                relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),
-                InvalidRelayConfig()
-            );
-            return;
-        }
-
         if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Anyone) {
             require(
                 relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),
@@ -1576,6 +1567,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Whitelist) {
             require(
                 relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash != bytes32(0),
+                InvalidRelayConfig()
+            );
+            return;
+        }
+
+        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
+            require(relayReward == 0, RelayRewardNotAllowed());
+            require(
+                relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),
                 InvalidRelayConfig()
             );
             return;
