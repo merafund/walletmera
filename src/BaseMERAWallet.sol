@@ -471,9 +471,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoCleared(operationId, operation.salt, msg.sender);
     }
 
-    /// @notice Irreversible cancel: unfrozen core controller; uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). Refund still goes to the proposer. Agents cannot call.
+    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). Refund still goes to the proposer. Agents cannot call.
     function cancelPending(bytes32 operationId) external override whenLifeAlive {
-        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
+        // Allow cancellation under freezes/timelocks/SafeMode: only require a core role (not None).
+        MERAWalletTypes.Role callerRole = _requireController();
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
         require(
