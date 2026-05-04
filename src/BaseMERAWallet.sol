@@ -24,6 +24,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     uint256 public lifeHeartbeatTimeout;
     uint256 public lastLifeHeartbeatAt;
     bool public lifeControlEnabled;
+    uint256 public pendingTransactionsCount;
+    uint256 public pendingTransactionsInvalidBefore;
     bool public frozenPrimary;
     bool public frozenBackup;
     uint256 public safeModeBefore;
@@ -132,14 +134,16 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         address previousEmergency = emergency;
         emergency = newEmergency;
-        if (previousEmergency != newEmergency) {
+        bool emergencyChanged = previousEmergency != newEmergency;
+        if (emergencyChanged) {
             _setLifeController(previousEmergency, false, caller);
             _setLifeController(newEmergency, true, caller);
+            _invalidatePendingTransactions(caller);
         }
         if (eip1271Signer == previousEmergency) {
             _set1271Signer(newEmergency);
         }
-        if (calledByGuardian && previousEmergency != newEmergency) {
+        if (calledByGuardian && emergencyChanged) {
             _clearSafeMode(msg.sender);
         }
         emit EmergencyUpdated(previousEmergency, newEmergency, caller);
@@ -358,6 +362,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit MigrationTargetUpdated(previous, target, msg.sender);
     }
 
+    /// @notice Invalidates pending transactions created before the current timestamp and resets the pending counter.
+    function invalidatePendingTransactionsBeforeCurrentTimestamp() external override onlySelf whenLifeAlive {
+        _invalidatePendingTransactions(_effectiveCaller());
+    }
+
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
         external
         payable
@@ -492,6 +501,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _refundRelayReward(operation.creator, relayOperation.relayReward);
         relayOperation.relayReward = 0;
         operation.status = MERAWalletTypes.OperationStatus.Cancelled;
+        _decrementPendingTransactionsCount(operation);
         emit PendingTransactionCancelled(operationId, operation.salt, msg.sender);
     }
 
@@ -711,6 +721,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             salt: salt,
             status: MERAWalletTypes.OperationStatus.Pending
         });
+        ++pendingTransactionsCount;
 
         _beforePropose(calls, operationId);
 
@@ -751,6 +762,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
         require(block.timestamp >= operation.executeAfter, TimelockNotExpired(operation.executeAfter, block.timestamp));
+        // The cutoff invalidates transactions created before this timestamp.
+        // Transactions created in the same block remain valid; intra-block order is intentionally ignored.
+        require(
+            uint256(operation.createdAt) >= pendingTransactionsInvalidBefore, PendingTransactionInvalidated(operationId)
+        );
         _requireRelayExecutionNotExpired(relayOperation);
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
@@ -762,6 +778,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
 
         operation.status = MERAWalletTypes.OperationStatus.Executed;
+        _decrementPendingTransactionsCount(operation);
 
         _executeCallsWithHooks(calls, operationId, operation.creator, operation.creatorRole);
         _payoutRelayReward(relayOperation);
@@ -1041,6 +1058,29 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address previousSigner = eip1271Signer;
         eip1271Signer = signer;
         emit EIP1271SignerUpdated(previousSigner, signer, msg.sender);
+    }
+
+    function _invalidatePendingTransactions(address caller) internal {
+        uint256 previousInvalidBefore = pendingTransactionsInvalidBefore;
+        uint256 previousPendingTransactionsCount = pendingTransactionsCount;
+        uint256 newInvalidBefore = block.timestamp;
+
+        // Only transactions created before this timestamp are cut off.
+        // Same-block transactions stay valid because block.timestamp cannot express intra-block order.
+        pendingTransactionsInvalidBefore = newInvalidBefore;
+        pendingTransactionsCount = 0;
+
+        emit PendingTransactionsInvalidated(
+            previousInvalidBefore, newInvalidBefore, previousPendingTransactionsCount, caller
+        );
+    }
+
+    function _decrementPendingTransactionsCount(MERAWalletTypes.PendingOperation storage operation) internal {
+        if (uint256(operation.createdAt) < pendingTransactionsInvalidBefore || pendingTransactionsCount == 0) {
+            return;
+        }
+
+        --pendingTransactionsCount;
     }
 
     function _payoutRelayReward(MERAWalletTypes.RelayOperation storage relayOperation) internal {

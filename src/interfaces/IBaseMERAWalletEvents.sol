@@ -58,6 +58,12 @@ interface IBaseMERAWalletEvents {
     event PendingTransactionCancelled(bytes32 indexed operationId, uint256 indexed salt, address indexed cancelledBy);
     event PendingTransactionVetoed(bytes32 indexed operationId, uint256 indexed salt, address indexed vetoedBy);
     event PendingTransactionVetoCleared(bytes32 indexed operationId, uint256 indexed salt, address indexed clearedBy);
+    event PendingTransactionsInvalidated(
+        uint256 previousInvalidBefore,
+        uint256 newInvalidBefore,
+        uint256 previousPendingTransactionsCount,
+        address indexed caller
+    );
     event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed salt, address indexed executor);
     event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner, address indexed caller);
     event AgentUpdated(

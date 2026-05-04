@@ -17,6 +17,8 @@ interface IBaseMERAWallet {
     function lifeHeartbeatTimeout() external view returns (uint256);
     function lastLifeHeartbeatAt() external view returns (uint256);
     function lifeControlEnabled() external view returns (bool);
+    function pendingTransactionsCount() external view returns (uint256);
+    function pendingTransactionsInvalidBefore() external view returns (uint256);
     function whitelistOptionalChecker(address checker)
         external
         view
@@ -81,6 +83,8 @@ interface IBaseMERAWallet {
     function resetSafeMode() external;
     /// @notice Set the migration target address. Only callable by emergency. Set to address(0) to deactivate.
     function setMigrationTarget(address target) external;
+    /// @notice Invalidates pending transactions created before the current timestamp and resets the pending counter.
+    function invalidatePendingTransactionsBeforeCurrentTimestamp() external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     /// @notice Execute migration calls (transferOwnership / grantRole to migrationTarget) immediately without timelock.

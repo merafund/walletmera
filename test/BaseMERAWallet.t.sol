@@ -181,6 +181,31 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.emergency(), newEmergency);
     }
 
+    function test_SetEmergency_ResetsPendingTransactionsInvalidBeforeAndCount() public {
+        vm.prank(emergency);
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Primary, uint256(1 days)), 929
+        );
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+
+        vm.prank(primary);
+        wallet.proposeTransaction(calls, 1);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        uint256 resetAt = block.timestamp + 10;
+        vm.warp(resetAt);
+        address newEmergency = address(0xE2E3);
+
+        vm.prank(emergency);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setEmergency.selector, newEmergency), 930);
+
+        assertEq(wallet.emergency(), newEmergency);
+        assertEq(wallet.pendingTransactionsInvalidBefore(), resetAt);
+        assertEq(wallet.pendingTransactionsCount(), 0);
+    }
+
     function test_SetEmergency_TimelockedSelfCallLifecycle() public {
         vm.startPrank(emergency);
         _executeWalletSelfCall(
@@ -906,6 +931,235 @@ contract BaseMERAWalletTest is Test {
         assertEq(receiver.value(), 314);
         (,,,,, MERAWalletTypes.OperationStatus finalStatus,,,,,) = wallet.operations(operationId);
         assertEq(uint256(finalStatus), uint256(MERAWalletTypes.OperationStatus.Executed));
+    }
+
+    function test_PendingTransactionsCount_ProposeAndExecute() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory callsA =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 100));
+        MERAWalletTypes.Call[] memory callsB =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 200));
+
+        vm.prank(primary);
+        wallet.proposeTransaction(callsA, 1);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(primary);
+        wallet.proposeTransaction(callsB, 2);
+        assertEq(wallet.pendingTransactionsCount(), 2);
+
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(primary);
+        wallet.executePending(callsA, 1);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(primary);
+        wallet.executePending(callsB, 2);
+        assertEq(wallet.pendingTransactionsCount(), 0);
+    }
+
+    function test_PendingTransactionsCount_RelayCancelRefundsAndDecrements() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 123));
+        MERAWalletTypes.RelayProposeConfig memory relayConfig = _relayConfig(
+            MERAWalletTypes.RelayExecutorPolicy.Anyone, address(0), bytes32(0), uint64(block.timestamp + 8 days)
+        );
+
+        vm.deal(primary, 1 ether);
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransactionWithRelay{value: 0.25 ether}(calls, 1, relayConfig);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(primary);
+        wallet.cancelPending(operationId);
+
+        assertEq(wallet.pendingTransactionsCount(), 0);
+        assertEq(primary.balance, 1 ether);
+    }
+
+    function test_PendingTransactionsCount_VetoAndClearDoNotChange() public {
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Backup);
+
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 9));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(emergency);
+        wallet.clearVeto(operationId);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(backup);
+        wallet.cancelPending(operationId);
+        assertEq(wallet.pendingTransactionsCount(), 0);
+    }
+
+    function test_InvalidatePendingTransactions_TimelockedSelfCallResetsCounter() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory oldCalls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+
+        vm.prank(primary);
+        wallet.proposeTransaction(oldCalls, 1);
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.prank(primary);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
+        wallet.invalidatePendingTransactionsBeforeCurrentTimestamp();
+
+        MERAWalletTypes.Call[] memory invalidateCalls = _singleCall(
+            address(wallet),
+            0,
+            abi.encodeWithSelector(wallet.invalidatePendingTransactionsBeforeCurrentTimestamp.selector)
+        );
+
+        vm.prank(primary);
+        wallet.proposeTransaction(invalidateCalls, 2);
+        (,,, uint64 executeAfter,,,,,,,) = wallet.operations(wallet.getOperationId(invalidateCalls, 2));
+        assertEq(wallet.pendingTransactionsCount(), 2);
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.TimelockNotExpired.selector, uint256(executeAfter), block.timestamp
+            )
+        );
+        wallet.executePending(invalidateCalls, 2);
+
+        vm.warp(executeAfter);
+        vm.prank(primary);
+        wallet.executePending(invalidateCalls, 2);
+
+        assertEq(wallet.pendingTransactionsInvalidBefore(), uint256(executeAfter));
+        assertEq(wallet.pendingTransactionsCount(), 0);
+    }
+
+    function test_InvalidatePendingTransactions_OlderOperationCannotExecute() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory oldCalls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+        MERAWalletTypes.Call[] memory invalidateCalls = _singleCall(
+            address(wallet),
+            0,
+            abi.encodeWithSelector(wallet.invalidatePendingTransactionsBeforeCurrentTimestamp.selector)
+        );
+
+        vm.prank(primary);
+        bytes32 oldOperationId = wallet.proposeTransaction(oldCalls, 1);
+
+        vm.prank(primary);
+        wallet.proposeTransaction(invalidateCalls, 2);
+        (,,, uint64 executeAfter,,,,,,,) = wallet.operations(wallet.getOperationId(invalidateCalls, 2));
+
+        vm.warp(executeAfter);
+        vm.prank(primary);
+        wallet.executePending(invalidateCalls, 2);
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.PendingTransactionInvalidated.selector, oldOperationId)
+        );
+        wallet.executePending(oldCalls, 1);
+        assertEq(wallet.pendingTransactionsCount(), 0);
+    }
+
+    function test_InvalidatePendingTransactions_SameTimestampOperationCanExecute() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory invalidateCalls = _singleCall(
+            address(wallet),
+            0,
+            abi.encodeWithSelector(wallet.invalidatePendingTransactionsBeforeCurrentTimestamp.selector)
+        );
+
+        vm.prank(primary);
+        wallet.proposeTransaction(invalidateCalls, 1);
+        (,,, uint64 invalidateExecuteAfter,,,,,,,) = wallet.operations(wallet.getOperationId(invalidateCalls, 1));
+
+        vm.warp(invalidateExecuteAfter);
+        MERAWalletTypes.Call[] memory callsBeforeReset =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 555));
+
+        vm.prank(primary);
+        bytes32 beforeResetOperationId = wallet.proposeTransaction(callsBeforeReset, 2);
+        (,, uint64 beforeResetCreatedAt, uint64 beforeResetExecuteAfter,,,,,,,) =
+            wallet.operations(beforeResetOperationId);
+
+        vm.prank(primary);
+        wallet.executePending(invalidateCalls, 1);
+
+        assertEq(uint256(beforeResetCreatedAt), wallet.pendingTransactionsInvalidBefore());
+        assertEq(wallet.pendingTransactionsCount(), 0);
+
+        vm.warp(beforeResetExecuteAfter);
+        vm.prank(primary);
+        wallet.executePending(callsBeforeReset, 2);
+
+        assertEq(receiver.value(), 555);
+        assertEq(wallet.pendingTransactionsCount(), 0);
+    }
+
+    function test_InvalidatePendingTransactions_SameTimestampOperationAfterResetCanExecute() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory invalidateCalls = _singleCall(
+            address(wallet),
+            0,
+            abi.encodeWithSelector(wallet.invalidatePendingTransactionsBeforeCurrentTimestamp.selector)
+        );
+
+        vm.prank(primary);
+        wallet.proposeTransaction(invalidateCalls, 1);
+        (,,, uint64 invalidateExecuteAfter,,,,,,,) = wallet.operations(wallet.getOperationId(invalidateCalls, 1));
+
+        vm.warp(invalidateExecuteAfter);
+        vm.prank(primary);
+        wallet.executePending(invalidateCalls, 1);
+
+        MERAWalletTypes.Call[] memory callsAfterReset =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 777));
+
+        vm.prank(primary);
+        bytes32 operationId = wallet.proposeTransaction(callsAfterReset, 2);
+        (,, uint64 createdAt, uint64 executeAfter,,,,,,,) = wallet.operations(operationId);
+
+        assertEq(uint256(createdAt), wallet.pendingTransactionsInvalidBefore());
+        assertEq(wallet.pendingTransactionsCount(), 1);
+
+        vm.warp(executeAfter);
+        vm.prank(primary);
+        wallet.executePending(callsAfterReset, 2);
+
+        assertEq(receiver.value(), 777);
+        assertEq(wallet.pendingTransactionsCount(), 0);
     }
 
     function test_GetOperationId_DiffersBySalt() public view {

@@ -26,6 +26,7 @@ interface IBaseMERAWalletErrors {
     error OperationAlreadyPending(bytes32 operationId);
     error OperationAlreadyUsed(bytes32 operationId);
     error OperationNotPending(bytes32 operationId);
+    error PendingTransactionInvalidated(bytes32 operationId);
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
     error CannotVetoOperation(bytes32 operationId);
