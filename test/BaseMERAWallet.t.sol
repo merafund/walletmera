@@ -279,7 +279,7 @@ contract BaseMERAWalletTest is Test {
             _singleCall(address(w), 0, abi.encodeWithSelector(BaseMERAWallet.setGuardian.selector, newGuardian));
         vm.prank(emergency);
         w.executeTransaction(calls, 42);
-        assertEq(w.GUARDIAN(), newGuardian);
+        assertEq(w.guardian(), newGuardian);
     }
 
     function test_SetGuardian_BatchedSelfCallToZeroUsesEffectiveEmergencyWhenGuardianSet() public {
@@ -290,7 +290,7 @@ contract BaseMERAWalletTest is Test {
             _singleCall(address(w), 0, abi.encodeWithSelector(BaseMERAWallet.setGuardian.selector, address(0)));
         vm.prank(emergency);
         w.executeTransaction(calls, 777);
-        assertEq(w.GUARDIAN(), address(0));
+        assertEq(w.guardian(), address(0));
     }
 
     function test_SetGuardian_OutsiderReverts() public {

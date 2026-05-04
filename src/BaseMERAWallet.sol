@@ -13,12 +13,10 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors {
-    /// @dev Optional recovery / multisig; address(0) disables guardian-only path for {setEmergency}.
-    address private _guardian;
-
     address public primary;
     address public backup;
     address public emergency;
+    address public guardian;
     address public eip1271Signer;
 
     mapping(MERAWalletTypes.Role role => uint256 delay) public roleTimelock;
@@ -75,10 +73,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     receive() external payable override {}
 
-    function GUARDIAN() external view override returns (address) {
-        return _guardian;
-    }
-
     function initializeFromImmutableArgs() external override {
         require(primary == address(0), AlreadyInitialized());
         MERAWalletTypes.WalletInitParams memory params =
@@ -128,10 +122,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function setEmergency(address newEmergency) external override {
-        bool calledByGuardian = _guardian != address(0) && msg.sender == _guardian;
+        bool calledByGuardian = guardian != address(0) && msg.sender == guardian;
         address caller = calledByGuardian ? msg.sender : _effectiveCaller();
         if (calledByGuardian) {
-            require(_guardian != address(0) && msg.sender == _guardian, NotEmergency());
+            require(guardian != address(0) && msg.sender == guardian, NotEmergency());
         } else {
             _onlySelf();
             require(_canSetEmergency(caller), NotEmergency());
@@ -159,8 +153,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     /// @notice Rotates the optional guardian address; address(0) disables guardian-only paths.
     /// @dev Self-calls use the transient execution context for controller authorization.
     function setGuardian(address newGuardian) external override onlySelf whenLifeAlive whenControllerCoreUnfrozen {
-        address previousGuardian = _guardian;
-        _guardian = newGuardian;
+        address previousGuardian = guardian;
+        guardian = newGuardian;
         emit GuardianUpdated(previousGuardian, newGuardian, msg.sender);
     }
 
@@ -330,7 +324,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function enterSafeMode(uint256 duration) external override {
         require(
-            msg.sender == emergency || (_guardian != address(0) && msg.sender == _guardian)
+            msg.sender == emergency || (guardian != address(0) && msg.sender == guardian)
                 || _agentRole(msg.sender) == MERAWalletTypes.Role.Emergency,
             SafeModeNotAuthorized()
         );
@@ -890,7 +884,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             InvalidAddress()
         );
 
-        _guardian = initialGuardian;
+        guardian = initialGuardian;
 
         primary = initialPrimary;
         backup = initialBackup;
@@ -1335,7 +1329,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function _setFrozenRole(MERAWalletTypes.Role targetRole, bool frozen) internal {
         require(targetRole == MERAWalletTypes.Role.Primary || targetRole == MERAWalletTypes.Role.Backup, InvalidRole());
 
-        bool allowed = _guardian != address(0) && msg.sender == _guardian && frozen;
+        bool allowed = guardian != address(0) && msg.sender == guardian && frozen;
         if (!allowed) {
             allowed = _isRankedRoleActionAllowed(targetRole, frozen);
         }
