@@ -84,7 +84,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
     function _proposeTransactionFromMemory(MERAWalletTypes.Call[] memory memoryCalls, uint256 salt)
         internal
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
         returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
     {
         callerRole = _effectiveCoreRole();
@@ -130,7 +130,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
-            _requireControllerCoreUnfrozen();
+            _requireControllerCoreAvailable();
         } else {
             require(!_isCoreController(msg.sender), CoreExecutorNotAllowed(msg.sender));
             _validateRelayExecutor(relayOperation, executorWhitelist);
@@ -147,7 +147,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
     function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 salt)
         internal
         whenLifeAlive
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
     {
         _validateCallsMemory(calls);
 

@@ -56,8 +56,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @dev Caller must be a core controller and not blocked for their role.
-    modifier whenControllerCoreUnfrozen() {
-        _requireControllerCoreUnfrozen();
+    modifier whenControllerCoreAvailable() {
+        _requireControllerCoreAvailable();
         _;
     }
 
@@ -89,10 +89,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setPrimary(address newPrimary) external override onlySelf whenLifeAlive {
         require(newPrimary != address(0), InvalidAddress());
 
-        MERAWalletTypes.Role callerRole = _effectiveCoreRole();
-        _requireCoreRoleNotFrozen(callerRole);
-
-        require(callerRole != MERAWalletTypes.Role.None, Unauthorized());
+        _requireControllerCoreAvailable();
 
         address previousPrimary = primary;
         primary = newPrimary;
@@ -105,8 +102,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setBackup(address newBackup) external override onlySelf whenLifeAlive {
         require(newBackup != address(0), InvalidAddress());
 
-        MERAWalletTypes.Role callerRole = _effectiveCoreRole();
-        _requireCoreRoleNotFrozen(callerRole);
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
 
         require(
             callerRole == MERAWalletTypes.Role.Backup || callerRole == MERAWalletTypes.Role.Emergency,
@@ -152,7 +148,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     /// @notice Rotates the optional guardian address; address(0) disables guardian-only paths.
     /// @dev Self-calls use the transient execution context for controller authorization.
-    function setGuardian(address newGuardian) external override onlySelf whenLifeAlive whenControllerCoreUnfrozen {
+    function setGuardian(address newGuardian) external override onlySelf whenLifeAlive whenControllerCoreAvailable {
         address previousGuardian = guardian;
         guardian = newGuardian;
         emit GuardianUpdated(previousGuardian, newGuardian, msg.sender);
@@ -363,12 +359,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         payable
         override
         whenLifeAlive
-        whenControllerCoreUnfrozen
     {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         _validateCalls(calls);
 
         bytes32 operationId = _computeOperationId(calls, salt);
-        MERAWalletTypes.Role callerRole = _effectiveCoreRole();
         uint256 requiredDelay = _getRequiredDelay(callerRole, calls);
 
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
@@ -383,7 +378,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         payable
         override
         whenLifeAlive
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
     {
         require(_coreRole(msg.sender) != MERAWalletTypes.Role.None, Unauthorized());
         require(migrationTarget != address(0), MigrationModeNotActive());
@@ -406,21 +401,22 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         external
         override
         whenLifeAlive
-        whenControllerCoreUnfrozen
         returns (bytes32 operationId)
     {
-        (operationId,,,) = _proposeTransaction(calls, salt);
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
+        (operationId,,) = _proposeTransaction(calls, salt, callerRole);
     }
 
     function proposeTransactionWithRelay(
         MERAWalletTypes.Call[] calldata calls,
         uint256 salt,
         MERAWalletTypes.RelayProposeConfig calldata relayConfig
-    ) external payable override whenLifeAlive whenControllerCoreUnfrozen returns (bytes32 operationId) {
+    ) external payable override whenLifeAlive returns (bytes32 operationId) {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         _validateRelayConfig(relayConfig, msg.value);
 
         uint256 executeAfter;
-        (operationId,, executeAfter,) = _proposeTransaction(calls, salt);
+        (operationId, executeAfter,) = _proposeTransaction(calls, salt, callerRole);
         require(
             uint256(relayConfig.relayExecuteBefore) >= executeAfter,
             RelayDeadlineBeforeTimelock(relayConfig.relayExecuteBefore, executeAfter)
@@ -433,7 +429,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         payable
         override
         whenLifeAlive
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
     {
         _executePending(calls, salt, new address[](0));
     }
@@ -443,7 +439,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         payable
         override
         whenLifeAlive
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
     {
         _executePending(calls, salt, executorWhitelist);
     }
@@ -460,18 +456,20 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @notice Resume a vetoed timelock op: unfrozen core controller strictly above the creator role.
-    function clearVeto(bytes32 operationId) external override whenLifeAlive whenControllerCoreUnfrozen {
+    function clearVeto(bytes32 operationId) external override whenLifeAlive {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         require(operation.status == MERAWalletTypes.OperationStatus.Vetoed, OperationNotVetoed(operationId));
 
-        require(_roleRank(_effectiveCoreRole()) > _roleRank(operation.creatorRole), CannotClearVeto(operationId));
+        require(_roleRank(callerRole) > _roleRank(operation.creatorRole), CannotClearVeto(operationId));
 
         operation.status = MERAWalletTypes.OperationStatus.Pending;
         emit PendingTransactionVetoCleared(operationId, operation.salt, msg.sender);
     }
 
     /// @notice Irreversible cancel: unfrozen core controller; uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). Refund still goes to the proposer. Agents cannot call.
-    function cancelPending(bytes32 operationId) external override whenLifeAlive whenControllerCoreUnfrozen {
+    function cancelPending(bytes32 operationId) external override whenLifeAlive {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         MERAWalletTypes.PendingOperation storage operation = _operations[operationId];
         MERAWalletTypes.RelayOperation storage relayOperation = _relayOperations[operationId];
         require(
@@ -480,7 +478,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             OperationNotPending(operationId)
         );
 
-        MERAWalletTypes.Role callerRole = _effectiveCoreRole();
         require(
             callerRole != MERAWalletTypes.Role.Emergency || operation.creatorRole != MERAWalletTypes.Role.Emergency,
             CannotCancelOperation(operationId)
@@ -555,15 +552,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         return _computeOperationId(calls, salt);
     }
 
-    function getRequiredDelay(MERAWalletTypes.Call[] calldata calls)
-        external
-        view
-        override
-        whenControllerCoreUnfrozen
-        returns (uint256)
-    {
+    function getRequiredDelay(MERAWalletTypes.Call[] calldata calls) external view override returns (uint256) {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         _validateCalls(calls);
-        return _getRequiredDelay(_effectiveCoreRole(), calls);
+        return _getRequiredDelay(callerRole, calls);
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
@@ -666,7 +658,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address caller = _effectiveCaller();
         MERAWalletTypes.Role callerCore = _effectiveCoreRole();
         require(callerCore != MERAWalletTypes.Role.None, NotCoreController());
-        _requireCoreRoleNotFrozen(callerCore);
+        _requireCoreRoleAvailable(callerCore);
 
         MERAWalletTypes.Agent storage stored = agents[agent];
 
@@ -692,13 +684,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit AgentUpdated(agent, stored.roleLevel, activeUntil, caller);
     }
 
-    function _proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt)
+    function _proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt, MERAWalletTypes.Role callerRole)
         internal
-        whenControllerCoreUnfrozen
-        returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
+        returns (bytes32 operationId, uint256 executeAfter, uint256 requiredDelay)
     {
-        callerRole = _effectiveCoreRole();
-
         _validateCalls(calls);
 
         operationId = _computeOperationId(calls, salt);
@@ -761,7 +750,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
-            _requireControllerCoreUnfrozen();
+            _requireControllerCoreAvailable();
         } else {
             require(!_isCoreController(msg.sender), CoreExecutorNotAllowed(msg.sender));
             _validateRelayExecutor(relayOperation, executorWhitelist);
@@ -1188,10 +1177,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(msg.sender == address(this), NotSelf());
     }
 
-    function _requireControllerCoreUnfrozen() internal view {
+    function _requireControllerCoreAvailable() internal view returns (MERAWalletTypes.Role callerRole) {
         _requireNotSafeMode();
-        MERAWalletTypes.Role callerRole = _requireController();
+        callerRole = _requireController();
         _requireCoreRoleNotFrozen(callerRole);
+    }
+
+    function _requireCoreRoleAvailable(MERAWalletTypes.Role role) internal view {
+        _requireNotSafeMode();
+        _requireCoreRoleNotFrozen(role);
     }
 
     function _requireNotSafeMode() internal view {
@@ -1348,8 +1342,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     {
         MERAWalletTypes.Role callerCore = _effectiveCoreRole();
         if (callerCore != MERAWalletTypes.Role.None) {
-            _requireNotSafeMode();
-            _requireCoreRoleNotFrozen(callerCore);
+            _requireCoreRoleAvailable(callerCore);
             if (isBlockingAction) {
                 return _roleRank(callerCore) >= _roleRank(targetRole);
             }

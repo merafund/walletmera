@@ -15,6 +15,24 @@ import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChe
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";
 import {IBaseMERAWalletEvents} from "../src/interfaces/IBaseMERAWalletEvents.sol";
 
+contract BaseMERAWalletHarness is BaseMERAWallet {
+    constructor(
+        address initialPrimary,
+        address initialBackup,
+        address initialEmergency,
+        address initialSigner,
+        address initialGuardian
+    ) BaseMERAWallet(initialPrimary, initialBackup, initialEmergency, initialSigner, initialGuardian) {}
+
+    function exposedCallWithExecutionContext(
+        MERAWalletTypes.Call calldata callData,
+        address contextCaller,
+        MERAWalletTypes.Role contextRole
+    ) external returns (bool success, bytes memory result) {
+        return _callWithExecutionContext(callData, contextCaller, contextRole);
+    }
+}
+
 contract BaseMERAWalletTest is Test {
     uint256 internal primaryPk = 0xA11CE;
     uint256 internal backupPk = 0xB0B;
@@ -67,6 +85,26 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.primary(), newPrimary);
     }
 
+    function test_SetPrimary_SelfCallRevertsDuringSafeMode() public {
+        BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
+        vm.prank(emergency);
+        h.enterSafeMode(30 days);
+
+        MERAWalletTypes.Call memory callData = MERAWalletTypes.Call({
+            target: address(h),
+            value: 0,
+            data: abi.encodeWithSelector(h.setPrimary.selector, address(0x9999)),
+            checker: address(0),
+            checkerData: ""
+        });
+
+        (bool success, bytes memory result) =
+            h.exposedCallWithExecutionContext(callData, primary, MERAWalletTypes.Role.Primary);
+
+        assertFalse(success);
+        assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.SafeModeActive.selector, h.safeModeBefore()));
+    }
+
     function test_SetBackup_Matrix() public {
         vm.prank(primary);
         vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
@@ -86,6 +124,26 @@ contract BaseMERAWalletTest is Test {
             abi.encodeWithSelector(wallet.setBackup.selector, newBackup),
             912
         );
+    }
+
+    function test_SetBackup_SelfCallRevertsDuringSafeMode() public {
+        BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
+        vm.prank(emergency);
+        h.enterSafeMode(30 days);
+
+        MERAWalletTypes.Call memory callData = MERAWalletTypes.Call({
+            target: address(h),
+            value: 0,
+            data: abi.encodeWithSelector(h.setBackup.selector, address(0xBEEF)),
+            checker: address(0),
+            checkerData: ""
+        });
+
+        (bool success, bytes memory result) =
+            h.exposedCallWithExecutionContext(callData, backup, MERAWalletTypes.Role.Backup);
+
+        assertFalse(success);
+        assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.SafeModeActive.selector, h.safeModeBefore()));
     }
 
     function test_EmergencyCanReconfigureAllRoles() public {
@@ -1935,7 +1993,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.backup(), newBackup);
     }
 
-    /// @dev `executePending` has `whenControllerCoreUnfrozen`, so outsiders cannot relay-execute.
+    /// @dev `executePending` has `whenControllerCoreAvailable`, so outsiders cannot relay-execute.
     /// For non-{CoreExecute} relay policy, `_executePending` rejects core controllers (`CoreExecutorNotAllowed`).
     /// This test documents reachable reverts around relay execution.
     function test_ProposeWithRelay_Anyone_ExternalExecutorGetsReward() public {
@@ -2136,7 +2194,7 @@ contract BaseMERAWalletTest is Test {
 
         vm.warp(t0 + 1 days + 6);
 
-        // Core controller is required to pass `whenControllerCoreUnfrozen` (outsiders revert with `Unauthorized` first).
+        // Core controller is required to pass `whenControllerCoreAvailable` (outsiders revert with `Unauthorized` first).
         vm.prank(backup);
         vm.expectRevert(
             abi.encodeWithSelector(IBaseMERAWalletErrors.RelayExecutionExpired.selector, relayDeadline, t0 + 1 days + 6)
