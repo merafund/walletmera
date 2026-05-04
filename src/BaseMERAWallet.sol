@@ -862,14 +862,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return;
         }
 
-        if (enabled) {
-            _isLifeController[controller] = true;
-            emit LifeControllerUpdated(controller, true, caller);
-            return;
-        }
-
-        _isLifeController[controller] = false;
-        emit LifeControllerUpdated(controller, false, caller);
+        _isLifeController[controller] = enabled;
+        emit LifeControllerUpdated(controller, enabled, caller);
     }
 
     function _initialize(
