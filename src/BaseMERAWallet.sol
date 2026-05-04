@@ -1559,8 +1559,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return;
         }
 
-        require(relayReward != 0, RelayRewardRequired());
-
         if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.Anyone) {
             require(
                 relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),

@@ -40,7 +40,6 @@ interface IBaseMERAWalletErrors {
     error RelayDeadlineBeforeTimelock(uint64 relayExecuteBefore, uint256 executeAfter);
     error RelayExecutionExpired(uint64 relayExecuteBefore, uint256 currentTime);
     error RelayRewardNotAllowed();
-    error RelayRewardRequired();
     error RelayExecutorNotAllowed(address executor);
     error CoreExecutorNotAllowed(address executor);
     error InvalidExecutorWhitelist();
