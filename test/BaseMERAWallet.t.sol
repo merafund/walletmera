@@ -452,6 +452,11 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
+    function test_MaxTimelockDelay_EqualsNinetyDays() public pure {
+        // Anchor: enforce timelock cap of 90 days
+        assertEq(MERAWalletConstants.MAX_TIMELOCK_DELAY, 90 days);
+    }
+
     function test_ExecuteTransaction_TooManyCallsReverts() public {
         MERAWalletTypes.Call[] memory calls =
             _repeatedCalls(address(receiver), MERAWalletConstants.MAX_CALLS_PER_BATCH + 1);
