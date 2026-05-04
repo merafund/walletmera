@@ -357,6 +357,39 @@ contract BaseMERAWalletTest is Test {
         wallet.setGuardian(address(0xABCD));
     }
 
+    function test_SetGuardian_PrimaryBackupSelfCallRevertsNotEmergency() public {
+        address guardianAddr = vm.addr(0xCAFE);
+        address newGuardian = address(0xD00D);
+        BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
+
+        vm.startPrank(emergency);
+        _setAllRoleTimelocksOn(w, 0);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(w), 0, abi.encodeWithSelector(BaseMERAWallet.setGuardian.selector, newGuardian));
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallExecutionFailed.selector,
+                uint256(0),
+                abi.encodeWithSelector(IBaseMERAWalletErrors.NotEmergency.selector)
+            )
+        );
+        w.executeTransaction(calls, 1001);
+
+        vm.prank(backup);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallExecutionFailed.selector,
+                uint256(0),
+                abi.encodeWithSelector(IBaseMERAWalletErrors.NotEmergency.selector)
+            )
+        );
+        w.executeTransaction(calls, 1002);
+    }
+
     function test_OnlyEmergencyOrSelf_DirectEmergencySetRoleTimelockRevertsWithoutGuardian() public {
         vm.prank(emergency);
         vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);

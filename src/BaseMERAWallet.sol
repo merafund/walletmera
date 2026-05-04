@@ -146,8 +146,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     /// @notice Rotates the optional guardian address; address(0) disables guardian-only paths.
-    /// @dev Self-calls use the transient execution context for controller authorization.
-    function setGuardian(address newGuardian) external override onlySelf whenLifeAlive whenControllerCoreAvailable {
+    /// @dev Only the Emergency core role may rotate guardian; self-calls set the role in transient storage.
+    function setGuardian(address newGuardian) external override onlySelf whenLifeAlive {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
+        require(callerRole == MERAWalletTypes.Role.Emergency, NotEmergency());
         address previousGuardian = guardian;
         guardian = newGuardian;
         emit GuardianUpdated(previousGuardian, newGuardian, msg.sender);
