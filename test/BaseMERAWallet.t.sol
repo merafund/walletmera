@@ -2127,9 +2127,9 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
     }
 
+    /// @dev Primary cannot use immediate execute when non-zero role timelocks apply (no agent entry on core addresses).
     function test_Agent_CoreRoleUnaffectedByVetoSlotOnPrimaryAddress() public {
         vm.startPrank(emergency);
-        _agentsCall(wallet, primary, true);
         _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
@@ -2139,6 +2139,19 @@ contract BaseMERAWalletTest is Test {
         vm.prank(primary);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.TimelockRequired.selector, 1 days));
         wallet.executeTransaction(calls, 1);
+    }
+
+    function test_Agent_CoreControllerAddressesCannotBeAppointed() public {
+        address[3] memory core = [primary, backup, emergency];
+        for (uint256 i = 0; i < 3; i++) {
+            (address[] memory aa, MERAWalletTypes.Role[] memory rr) = _mkAgents(core[i], MERAWalletTypes.Role.Primary);
+            vm.prank(primary);
+            _expectWalletSelfCallRevert(
+                abi.encodeWithSelector(IBaseMERAWalletErrors.CoreControllerCannotBeAgent.selector, core[i]),
+                abi.encodeWithSelector(wallet.setAgents.selector, aa, rr),
+                7510 + i
+            );
+        }
     }
 
     function test_Agent_DisableWhenNotEnabled_Reverts() public {
