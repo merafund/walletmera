@@ -2,6 +2,7 @@
 pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
@@ -67,6 +68,41 @@ contract BaseMERAWalletTest is Test {
             abi.encodeWithSelector(wallet.setOptionalCheckers.selector, _mkWl(address(0), true, "")), 7001
         );
         vm.stopPrank();
+    }
+
+    /// @dev Nested public `executeTransaction` from a self-call in the same batch must revert (reentrancy guard).
+    function test_Reentrancy_BlocksNestedExecuteTransaction() public {
+        MERAWalletTypes.Call[] memory inner =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+        bytes memory innerTx = abi.encodeWithSelector(BaseMERAWallet.executeTransaction.selector, inner, uint256(999));
+        MERAWalletTypes.Call[] memory outer = _singleCall(address(wallet), 0, innerTx);
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallExecutionFailed.selector,
+                uint256(0),
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
+            )
+        );
+        wallet.executeTransaction(outer, 12_001);
+    }
+
+    /// @dev Nested `proposeTransaction` from within `executeTransaction` must revert before body (same guard).
+    function test_Reentrancy_BlocksNestedProposeTransaction() public {
+        MERAWalletTypes.Call[] memory inner =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+        bytes memory innerPropose =
+            abi.encodeWithSelector(BaseMERAWallet.proposeTransaction.selector, inner, uint256(42));
+        MERAWalletTypes.Call[] memory outer = _singleCall(address(wallet), 0, innerPropose);
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallExecutionFailed.selector,
+                uint256(0),
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
+            )
+        );
+        wallet.executeTransaction(outer, 12_002);
     }
 
     function test_SetPrimary_DirectPrimaryReverts() public {

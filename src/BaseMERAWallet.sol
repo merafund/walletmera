@@ -10,9 +10,10 @@ import {IMERAWalletLoginRegistryMigration} from "./interfaces/IMERAWalletLoginRe
 import {IMERAWalletTransactionChecker} from "./interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMigrationCalls} from "./interfaces/external/IMigrationCalls.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors {
+contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors, ReentrancyGuard {
     address public primary;
     address public backup;
     address public emergency;
@@ -383,6 +384,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         payable
         override
         whenLifeAlive
+        nonReentrant
     {
         MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         _validateCalls(calls);
@@ -403,6 +405,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         whenLifeAlive
         whenControllerCoreAvailable
+        nonReentrant
     {
         require(_coreRole(msg.sender) != MERAWalletTypes.Role.None, Unauthorized());
         require(migrationTarget != address(0), MigrationModeNotActive());
@@ -425,6 +428,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         external
         override
         whenLifeAlive
+        nonReentrant
         returns (bytes32 operationId)
     {
         MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
@@ -435,7 +439,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         MERAWalletTypes.Call[] calldata calls,
         uint256 salt,
         MERAWalletTypes.RelayProposeConfig calldata relayConfig
-    ) external payable override whenLifeAlive returns (bytes32 operationId) {
+    ) external payable override whenLifeAlive nonReentrant returns (bytes32 operationId) {
         MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
         _validateRelayConfig(relayConfig, msg.value);
 
@@ -454,6 +458,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         whenLifeAlive
         whenControllerCoreAvailable
+        nonReentrant
     {
         _executePending(calls, salt, new address[](0));
     }
@@ -464,6 +469,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         override
         whenLifeAlive
         whenControllerCoreAvailable
+        nonReentrant
     {
         _executePending(calls, salt, executorWhitelist);
     }
