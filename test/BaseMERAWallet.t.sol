@@ -1901,8 +1901,8 @@ contract BaseMERAWalletTest is Test {
         );
         vm.stopPrank();
 
-        (, uint64 activeUntilBefore) = wallet.agents(agentAddr);
-        assertEq(activeUntilBefore, 0);
+        (, uint64 activeFromBefore) = wallet.agents(agentAddr);
+        assertEq(activeFromBefore, 0);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 7));
@@ -1913,8 +1913,10 @@ contract BaseMERAWalletTest is Test {
         vm.prank(agentAddr);
         wallet.vetoPending(operationId);
 
-        (, uint64 activeUntil) = wallet.agents(agentAddr);
-        assertGt(activeUntil, 0);
+        (, uint64 activeFrom) = wallet.agents(agentAddr);
+        assertGt(activeFrom, 0);
+
+        uint256 expiresAt = uint256(activeFrom) + wallet.emergencyAgentLifetime();
 
         MERAWalletTypes.Call[] memory calls2 =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 8));
@@ -1922,10 +1924,10 @@ contract BaseMERAWalletTest is Test {
         vm.prank(emergency);
         bytes32 operationId2 = wallet.proposeTransaction(calls2, 2);
 
-        vm.warp(uint256(activeUntil) + 1);
+        vm.warp(expiresAt + 1);
 
         vm.prank(agentAddr);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.AgentExpired.selector, agentAddr, activeUntil));
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.AgentExpired.selector, agentAddr, expiresAt));
         wallet.vetoPending(operationId2);
     }
 
@@ -1933,28 +1935,70 @@ contract BaseMERAWalletTest is Test {
         vm.prank(emergency);
         _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Emergency);
 
-        (, uint64 activeUntilBefore) = wallet.agents(agentAddr);
-        assertEq(activeUntilBefore, 0);
+        (, uint64 activeFromBefore) = wallet.agents(agentAddr);
+        assertEq(activeFromBefore, 0);
+
+        uint256 lifetimeBefore = wallet.emergencyAgentLifetime();
 
         vm.prank(agentAddr);
         wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
 
-        (, uint64 activeUntilAfter) = wallet.agents(agentAddr);
-        assertGt(activeUntilAfter, 0);
+        assertEq(wallet.emergencyAgentLifetime(), lifetimeBefore + MERAWalletConstants.SAFE_MODE_MIN_DURATION);
+
+        (, uint64 activeFromAfter) = wallet.agents(agentAddr);
+        assertGt(activeFromAfter, 0);
+    }
+
+    /// @dev Safe mode adds `duration` to global `emergencyAgentLifetime`; already-active agents expire at activeFrom + new lifetime.
+    function test_EmergencyAgent_SafeModeExtendsLifetimeForAlreadyActiveAgent() public {
+        vm.startPrank(emergency);
+        _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls1 =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 41));
+
+        vm.prank(primary);
+        bytes32 operationId1 = wallet.proposeTransaction(calls1, 301);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId1);
+
+        (, uint64 activeFrom) = wallet.agents(agentAddr);
+        uint256 lifetimeBefore = wallet.emergencyAgentLifetime();
+        uint256 previousExpiry = uint256(activeFrom) + lifetimeBefore;
+
+        MERAWalletTypes.Call[] memory calls2 =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 42));
+
+        vm.prank(primary);
+        bytes32 operationId2 = wallet.proposeTransaction(calls2, 302);
+
+        vm.prank(emergency);
+        wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
+
+        assertEq(wallet.emergencyAgentLifetime(), lifetimeBefore + MERAWalletConstants.SAFE_MODE_MIN_DURATION);
+
+        // Past the pre-safe-mode expiry window, but still within extended lifetime.
+        vm.warp(previousExpiry + 1);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId2);
     }
 
     function test_EmergencyAgent_Freeze_StartsLifetime() public {
         vm.prank(emergency);
         _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Emergency);
 
-        (, uint64 activeUntilBefore) = wallet.agents(agentAddr);
-        assertEq(activeUntilBefore, 0);
+        (, uint64 activeFromBefore) = wallet.agents(agentAddr);
+        assertEq(activeFromBefore, 0);
 
         vm.prank(agentAddr);
         wallet.setFrozenPrimary(true);
 
-        (, uint64 activeUntilAfter) = wallet.agents(agentAddr);
-        assertGt(activeUntilAfter, 0);
+        (, uint64 activeFromAfter) = wallet.agents(agentAddr);
+        assertGt(activeFromAfter, 0);
     }
 
     function test_EmergencyAgent_SecondAction_DoesNotExtendLifetime() public {
@@ -1972,8 +2016,8 @@ contract BaseMERAWalletTest is Test {
         vm.prank(agentAddr);
         wallet.vetoPending(operationId1);
 
-        (, uint64 activeUntilFirst) = wallet.agents(agentAddr);
-        assertGt(activeUntilFirst, 0);
+        (, uint64 activeFromFirst) = wallet.agents(agentAddr);
+        assertGt(activeFromFirst, 0);
 
         MERAWalletTypes.Call[] memory calls2 =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 12));
@@ -1986,8 +2030,8 @@ contract BaseMERAWalletTest is Test {
         vm.prank(agentAddr);
         wallet.vetoPending(operationId2);
 
-        (, uint64 activeUntilSecond) = wallet.agents(agentAddr);
-        assertEq(activeUntilSecond, activeUntilFirst);
+        (, uint64 activeFromSecond) = wallet.agents(agentAddr);
+        assertEq(activeFromSecond, activeFromFirst);
     }
 
     function test_Agent_CannotCancelPending() public {

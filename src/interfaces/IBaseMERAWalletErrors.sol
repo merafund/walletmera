@@ -61,7 +61,7 @@ interface IBaseMERAWalletErrors {
     error LifeHeartbeatExpired(uint256 lastHeartbeatAt, uint256 timeout, uint256 currentTime);
     error EmergencyMustStayLifeController();
     error TooManyRequiredCheckers(uint256 length, uint256 maxAllowed);
-    error AgentExpired(address agent, uint256 activeUntil);
+    error AgentExpired(address agent, uint256 expiresAt);
     /// @dev Parallel calldata arrays for a batch setter had different lengths.
     error ArrayLengthMismatch(uint256 a, uint256 b);
     /// @dev Caller is not allowed to enter safe mode (not emergency or emergency-level agent).

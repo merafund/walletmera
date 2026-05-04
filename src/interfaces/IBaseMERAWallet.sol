@@ -39,7 +39,7 @@ interface IBaseMERAWallet {
             bytes32 executorSetHash,
             uint64 relayExecuteBefore
         );
-    function agents(address agent) external view returns (MERAWalletTypes.Role roleLevel, uint64 activeUntil);
+    function agents(address agent) external view returns (MERAWalletTypes.Role roleLevel, uint64 activeFrom);
     function frozenPrimary() external view returns (bool);
     function frozenBackup() external view returns (bool);
     function safeModeBefore() external view returns (uint256);

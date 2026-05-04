@@ -67,7 +67,7 @@ interface IBaseMERAWalletEvents {
     event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed salt, address indexed executor);
     event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner, address indexed caller);
     event AgentUpdated(
-        address indexed agent, MERAWalletTypes.Role roleLevel, uint64 activeUntil, address indexed caller
+        address indexed agent, MERAWalletTypes.Role roleLevel, uint64 activeFrom, address indexed caller
     );
     event EmergencyAgentLifetimeUpdated(uint256 previousLifetime, uint256 newLifetime, address indexed caller);
     event PrimaryFreezeUpdated(bool frozen, address indexed caller);

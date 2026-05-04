@@ -348,7 +348,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             SafeModeDurationOutOfRange(duration)
         );
 
-        // Emergency agent: lifetime starts on first safe mode entry (not on assignment).
+        // Common emergency-agent window is extended for all agents (expiry = activeFrom + this value).
+        emergencyAgentLifetime += duration;
+
         _startEmergencyAgentLifetimeIfNeeded(msg.sender);
 
         safeModeUsed = true;
@@ -705,9 +707,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(agent != address(0), InvalidAddress());
         require(_roleRank(roleLevel) <= _roleRank(callerCore), AgentRemovalNotAuthorized());
 
-        // Emergency agent: `activeUntil` stays 0 until first veto, freeze, or safe mode (see _startEmergencyAgentLifetimeIfNeeded).
+        // Emergency agent: `activeFrom` stays 0 until first veto, freeze, or safe mode (see _startEmergencyAgentLifetimeIfNeeded).
         stored.roleLevel = roleLevel;
-        stored.activeUntil = 0;
+        stored.activeFrom = 0;
 
         emit AgentUpdated(agent, stored.roleLevel, uint64(0), caller);
     }
@@ -1501,21 +1503,24 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function _agentRole(address account) internal view returns (MERAWalletTypes.Role role) {
         MERAWalletTypes.Agent storage agent = agents[account];
         role = agent.roleLevel;
-        // `activeUntil == 0`: Emergency agent assigned but lifetime not started yet.
-        if (role == MERAWalletTypes.Role.Emergency && agent.activeUntil != 0 && block.timestamp > agent.activeUntil) {
-            revert AgentExpired(account, agent.activeUntil);
+        // `activeFrom == 0`: Emergency agent assigned but activity not started yet.
+        if (role == MERAWalletTypes.Role.Emergency && agent.activeFrom != 0) {
+            uint256 expiresAt = uint256(agent.activeFrom) + emergencyAgentLifetime;
+            if (block.timestamp > expiresAt) {
+                revert AgentExpired(account, expiresAt);
+            }
         }
     }
 
-    /// @dev Sets `activeUntil` on first blocking action; no-op if not an Emergency agent or timer already started.
+    /// @dev Sets `activeFrom` on first blocking action; no-op if not an Emergency agent or start already recorded.
     function _startEmergencyAgentLifetimeIfNeeded(address account) internal {
         MERAWalletTypes.Agent storage agent = agents[account];
-        if (agent.roleLevel != MERAWalletTypes.Role.Emergency || agent.activeUntil != 0) {
+        if (agent.roleLevel != MERAWalletTypes.Role.Emergency || agent.activeFrom != 0) {
             return;
         }
-        uint64 until = uint64(block.timestamp + emergencyAgentLifetime);
-        agent.activeUntil = until;
-        emit AgentUpdated(account, MERAWalletTypes.Role.Emergency, until, _effectiveCaller());
+        uint64 startedAt = uint64(block.timestamp);
+        agent.activeFrom = startedAt;
+        emit AgentUpdated(account, MERAWalletTypes.Role.Emergency, startedAt, _effectiveCaller());
     }
 
     function _clearSafeMode(address caller) internal {
