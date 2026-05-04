@@ -1901,7 +1901,8 @@ contract BaseMERAWalletTest is Test {
         );
         vm.stopPrank();
 
-        (, uint64 activeUntil) = wallet.agents(agentAddr);
+        (, uint64 activeUntilBefore) = wallet.agents(agentAddr);
+        assertEq(activeUntilBefore, 0);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 7));
@@ -1909,11 +1910,84 @@ contract BaseMERAWalletTest is Test {
         vm.prank(emergency);
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        (, uint64 activeUntil) = wallet.agents(agentAddr);
+        assertGt(activeUntil, 0);
+
+        MERAWalletTypes.Call[] memory calls2 =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 8));
+
+        vm.prank(emergency);
+        bytes32 operationId2 = wallet.proposeTransaction(calls2, 2);
+
         vm.warp(uint256(activeUntil) + 1);
 
         vm.prank(agentAddr);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.AgentExpired.selector, agentAddr, activeUntil));
-        wallet.vetoPending(operationId);
+        wallet.vetoPending(operationId2);
+    }
+
+    function test_EmergencyAgent_EnterSafeMode_StartsLifetime() public {
+        vm.prank(emergency);
+        _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Emergency);
+
+        (, uint64 activeUntilBefore) = wallet.agents(agentAddr);
+        assertEq(activeUntilBefore, 0);
+
+        vm.prank(agentAddr);
+        wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
+
+        (, uint64 activeUntilAfter) = wallet.agents(agentAddr);
+        assertGt(activeUntilAfter, 0);
+    }
+
+    function test_EmergencyAgent_Freeze_StartsLifetime() public {
+        vm.prank(emergency);
+        _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Emergency);
+
+        (, uint64 activeUntilBefore) = wallet.agents(agentAddr);
+        assertEq(activeUntilBefore, 0);
+
+        vm.prank(agentAddr);
+        wallet.setFrozenPrimary(true);
+
+        (, uint64 activeUntilAfter) = wallet.agents(agentAddr);
+        assertGt(activeUntilAfter, 0);
+    }
+
+    function test_EmergencyAgent_SecondAction_DoesNotExtendLifetime() public {
+        vm.startPrank(emergency);
+        _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls1 =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 11));
+
+        vm.prank(primary);
+        bytes32 operationId1 = wallet.proposeTransaction(calls1, 101);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId1);
+
+        (, uint64 activeUntilFirst) = wallet.agents(agentAddr);
+        assertGt(activeUntilFirst, 0);
+
+        MERAWalletTypes.Call[] memory calls2 =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 12));
+
+        vm.prank(primary);
+        bytes32 operationId2 = wallet.proposeTransaction(calls2, 102);
+
+        vm.warp(block.timestamp + 1 hours);
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId2);
+
+        (, uint64 activeUntilSecond) = wallet.agents(agentAddr);
+        assertEq(activeUntilSecond, activeUntilFirst);
     }
 
     function test_Agent_CannotCancelPending() public {

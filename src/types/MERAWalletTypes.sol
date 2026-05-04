@@ -98,7 +98,8 @@ library MERAWalletTypes {
     }
 
     /// @notice Optional controller delegate. `Role.None` disables the agent.
-    /// @dev Emergency agents expire at `activeUntil`; other agent roles ignore it.
+    /// @dev Emergency agents: `activeUntil == 0` means lifetime not started; once non-zero, expiry is enforced.
+    ///      Other agent roles ignore `activeUntil`.
     struct Agent {
         Role roleLevel;
         uint64 activeUntil;

@@ -348,6 +348,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             SafeModeDurationOutOfRange(duration)
         );
 
+        // Emergency agent: lifetime starts on first safe mode entry (not on assignment).
+        _startEmergencyAgentLifetimeIfNeeded(msg.sender);
+
         safeModeUsed = true;
         safeModeBefore = block.timestamp + duration;
         emit SafeModeEntered(safeModeBefore, msg.sender);
@@ -471,6 +474,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(operation.status == MERAWalletTypes.OperationStatus.Pending, OperationNotPending(operationId));
 
         require(_isRankedRoleActionAllowed(operation.creatorRole, true), CannotVetoOperation(operationId));
+
+        _startEmergencyAgentLifetimeIfNeeded(msg.sender);
 
         operation.status = MERAWalletTypes.OperationStatus.Vetoed;
         emit PendingTransactionVetoed(operationId, operation.salt, msg.sender);
@@ -700,15 +705,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(agent != address(0), InvalidAddress());
         require(_roleRank(roleLevel) <= _roleRank(callerCore), AgentRemovalNotAuthorized());
 
-        uint64 activeUntil;
-        if (roleLevel == MERAWalletTypes.Role.Emergency) {
-            activeUntil = uint64(block.timestamp + emergencyAgentLifetime);
-        }
-
+        // Emergency agent: `activeUntil` stays 0 until first veto, freeze, or safe mode (see _startEmergencyAgentLifetimeIfNeeded).
         stored.roleLevel = roleLevel;
-        stored.activeUntil = activeUntil;
+        stored.activeUntil = 0;
 
-        emit AgentUpdated(agent, stored.roleLevel, activeUntil, caller);
+        emit AgentUpdated(agent, stored.roleLevel, uint64(0), caller);
     }
 
     function _proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt, MERAWalletTypes.Role callerRole)
@@ -1390,6 +1391,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
         require(allowed, FreezeActionNotAuthorized());
 
+        _startEmergencyAgentLifetimeIfNeeded(msg.sender);
+
         if (targetRole == MERAWalletTypes.Role.Primary) {
             frozenPrimary = frozen;
             emit PrimaryFreezeUpdated(frozen, msg.sender);
@@ -1498,9 +1501,21 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function _agentRole(address account) internal view returns (MERAWalletTypes.Role role) {
         MERAWalletTypes.Agent storage agent = agents[account];
         role = agent.roleLevel;
-        if (role == MERAWalletTypes.Role.Emergency && block.timestamp > agent.activeUntil) {
+        // `activeUntil == 0`: Emergency agent assigned but lifetime not started yet.
+        if (role == MERAWalletTypes.Role.Emergency && agent.activeUntil != 0 && block.timestamp > agent.activeUntil) {
             revert AgentExpired(account, agent.activeUntil);
         }
+    }
+
+    /// @dev Sets `activeUntil` on first blocking action; no-op if not an Emergency agent or timer already started.
+    function _startEmergencyAgentLifetimeIfNeeded(address account) internal {
+        MERAWalletTypes.Agent storage agent = agents[account];
+        if (agent.roleLevel != MERAWalletTypes.Role.Emergency || agent.activeUntil != 0) {
+            return;
+        }
+        uint64 until = uint64(block.timestamp + emergencyAgentLifetime);
+        agent.activeUntil = until;
+        emit AgentUpdated(account, MERAWalletTypes.Role.Emergency, until, _effectiveCaller());
     }
 
     function _clearSafeMode(address caller) internal {
