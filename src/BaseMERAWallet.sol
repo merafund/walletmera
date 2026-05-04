@@ -358,14 +358,13 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit SafeModeEntered(safeModeBefore, msg.sender);
     }
 
-    function resetSafeMode() external override {
-        require(msg.sender == emergency, NotEmergency());
+    function resetSafeMode() external override onlySelfAsEmergency {
         require(safeModeUsed, SafeModeNotUsed());
         require(block.timestamp > safeModeBefore, SafeModeStillActive(safeModeBefore));
 
         safeModeUsed = false;
         safeModeBefore = 0;
-        emit SafeModeReset(msg.sender);
+        emit SafeModeReset(_effectiveCaller());
     }
 
     function setMigrationTarget(address target) external override {

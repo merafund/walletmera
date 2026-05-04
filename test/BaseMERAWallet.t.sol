@@ -305,10 +305,24 @@ contract BaseMERAWalletTest is Test {
         // Guardian rotation zeroes the deadline; the one-shot flag clears only via resetSafeMode.
         assertTrue(w.safeModeUsed());
         assertEq(w.safeModeBefore(), 0);
-        vm.prank(newEmergency);
-        w.resetSafeMode();
+        vm.startPrank(newEmergency);
+        _executeWalletSelfCallOn(w, abi.encodeWithSelector(w.resetSafeMode.selector), 2891);
+        vm.stopPrank();
         assertFalse(w.safeModeUsed());
         assertEq(w.safeModeBefore(), 0);
+    }
+
+    function test_ResetSafeMode_DirectEmergencyCallRevertsNotSelf() public {
+        address guardianAddr = vm.addr(0xCAFE);
+        BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
+
+        vm.prank(guardianAddr);
+        w.enterSafeMode(30 days);
+        vm.warp(w.safeModeBefore() + 1);
+
+        vm.prank(emergency);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
+        w.resetSafeMode();
     }
 
     function test_GuardianCanFreezePrimaryAndBackup() public {
