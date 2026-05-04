@@ -1197,7 +1197,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function _onlySelf() internal view {
-        require(msg.sender == address(this), NotEmergency());
+        require(msg.sender == address(this), NotSelf());
     }
 
     function _requireControllerCoreUnfrozen() internal view {

@@ -54,7 +54,7 @@ contract BaseMERAWalletTest is Test {
     function test_SetPrimary_DirectPrimaryReverts() public {
         address newPrimary = address(0x9999);
         vm.prank(primary);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setPrimary(newPrimary);
     }
 
@@ -69,7 +69,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_SetBackup_Matrix() public {
         vm.prank(primary);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setBackup(primary);
 
         address newBackup = address(0xBEEF);
@@ -108,7 +108,7 @@ contract BaseMERAWalletTest is Test {
         address newEmergency = address(0xE2E2);
 
         vm.prank(emergency);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setEmergency(newEmergency);
     }
 
@@ -250,14 +250,14 @@ contract BaseMERAWalletTest is Test {
     function test_SetEmergency_OutsiderRevertsWithoutGuardian() public {
         address newEmergency = address(0xE4E4);
         vm.prank(outsider);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setEmergency(newEmergency);
     }
 
     function test_SetGuardian_EmergencyRevertsWhenNoGuardian() public {
         address newGuardian = address(0xC001);
         vm.prank(emergency);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setGuardian(newGuardian);
     }
 
@@ -266,7 +266,7 @@ contract BaseMERAWalletTest is Test {
         BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
 
         vm.prank(emergency);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         w.setGuardian(address(0xD00D));
     }
 
@@ -295,13 +295,13 @@ contract BaseMERAWalletTest is Test {
 
     function test_SetGuardian_OutsiderReverts() public {
         vm.prank(outsider);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setGuardian(address(0xABCD));
     }
 
     function test_OnlyEmergencyOrSelf_DirectEmergencySetRoleTimelockRevertsWithoutGuardian() public {
         vm.prank(emergency);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setRoleTimelock(MERAWalletTypes.Role.Primary, 2 hours);
     }
 
@@ -980,7 +980,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_SetRequiredChecker_OnlyEmergencyAndSupportsBothMode() public {
         vm.prank(primary);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         {
             (address[] memory __rqA, bool[] memory __rqB) = _mkReq(address(checkerBothHooks), true);
             wallet.setRequiredCheckers(__rqA, __rqB);
@@ -1064,7 +1064,7 @@ contract BaseMERAWalletTest is Test {
         (address[] memory aa, MERAWalletTypes.Role[] memory rr) = _mkAgents(agentAddr, MERAWalletTypes.Role.Primary);
 
         vm.prank(primary);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setAgents(aa, rr);
     }
 

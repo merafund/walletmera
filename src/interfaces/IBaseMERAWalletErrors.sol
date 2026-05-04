@@ -14,6 +14,8 @@ interface IBaseMERAWalletErrors {
     error InvalidRole();
     error Unauthorized();
     error NotAllowedRoleChange();
+    /// @dev Caller must be the wallet contract (delegatecall / batched self-call), not an EOA hitting `onlySelf` entrypoints.
+    error NotSelf();
     error NotEmergency();
     error ZeroDelayNotProposable();
     error TimelockDelayTooLarge(uint256 delay, uint256 maxDelay);
