@@ -14,6 +14,8 @@ interface IBaseMERAWalletErrors {
     error InvalidRole();
     error Unauthorized();
     error NotAllowedRoleChange();
+    /// @dev {setRoleTimelock}: caller core role rank must be >= target role rank (see {_roleRank}; Emergency highest).
+    error RoleTimelockChangeNotAuthorized(MERAWalletTypes.Role callerRole, MERAWalletTypes.Role targetRole);
     /// @dev Caller must be the wallet contract (delegatecall / batched self-call), not an EOA hitting `onlySelf` entrypoints.
     error NotSelf();
     error NotEmergency();

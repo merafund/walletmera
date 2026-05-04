@@ -161,9 +161,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             delay <= MERAWalletConstants.MAX_TIMELOCK_DELAY,
             TimelockDelayTooLarge(delay, MERAWalletConstants.MAX_TIMELOCK_DELAY)
         );
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
+        // `{_roleRank}` increases Primary→Emergency; caller rank must be >= the slot role (Emergency may update any slot).
+        require(_roleRank(callerRole) >= _roleRank(role), RoleTimelockChangeNotAuthorized(callerRole, role));
         uint256 previousDelay = roleTimelock[role];
         roleTimelock[role] = delay;
-        emit RoleTimelockUpdated(role, previousDelay, delay, msg.sender);
+        emit RoleTimelockUpdated(role, previousDelay, delay, _effectiveCaller());
     }
 
     function setEmergencyAgentLifetime(uint256 lifetime) external override onlySelf whenLifeAlive {

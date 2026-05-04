@@ -405,6 +405,19 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.roleTimelock(MERAWalletTypes.Role.Primary), 2 hours);
     }
 
+    function test_SetRoleTimelock_RevertsWhenCallerRankBelowTargetRole() public {
+        vm.prank(primary);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.RoleTimelockChangeNotAuthorized.selector,
+                MERAWalletTypes.Role.Primary,
+                MERAWalletTypes.Role.Backup
+            ),
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Backup, uint256(1 hours)),
+            9100
+        );
+    }
+
     function test_LifeControllers_InitialEmergencyIncluded() public view {
         assertTrue(wallet.isLifeController(emergency));
     }
