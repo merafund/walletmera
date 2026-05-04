@@ -432,7 +432,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         returns (bytes32 operationId)
     {
         MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
-        (operationId,,) = _proposeTransaction(calls, salt, callerRole);
+        (operationId,) = _proposeTransaction(calls, salt, callerRole);
     }
 
     function proposeTransactionWithRelay(
@@ -444,7 +444,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _validateRelayConfig(relayConfig, msg.value);
 
         uint256 executeAfter;
-        (operationId, executeAfter,) = _proposeTransaction(calls, salt, callerRole);
+        (operationId, executeAfter) = _proposeTransaction(calls, salt, callerRole);
         require(
             uint256(relayConfig.relayExecuteBefore) >= executeAfter,
             RelayDeadlineBeforeTimelock(relayConfig.relayExecuteBefore, executeAfter)
@@ -720,12 +720,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function _proposeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt, MERAWalletTypes.Role callerRole)
         internal
-        returns (bytes32 operationId, uint256 executeAfter, uint256 requiredDelay)
+        returns (bytes32 operationId, uint256 executeAfter)
     {
         _validateCalls(calls);
 
         operationId = _computeOperationId(calls, salt);
-        requiredDelay = _getRequiredDelay(callerRole, calls);
+        uint256 requiredDelay = _getRequiredDelay(callerRole, calls);
         require(requiredDelay != 0, ZeroDelayNotProposable());
 
         MERAWalletTypes.OperationStatus existing = _operations[operationId].status;
