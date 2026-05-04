@@ -21,7 +21,7 @@ library MERAWalletConstants {
 
     // --- Timelock bounds (aligned with uint56 per-path delays in call policies) ---
     uint256 internal constant MIN_TIMELOCK_DELAY = 0;
-    uint256 internal constant MAX_TIMELOCK_DELAY = type(uint56).max;
+    uint256 internal constant MAX_TIMELOCK_DELAY = 90 days;
     uint256 internal constant DEFAULT_PRIMARY_TIMELOCK = 24 hours;
     uint256 internal constant DEFAULT_BACKUP_TIMELOCK = 12 hours;
     uint256 internal constant DEFAULT_EMERGENCY_TIMELOCK = 0;
