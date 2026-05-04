@@ -1258,7 +1258,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             calls.length <= MERAWalletConstants.MAX_CALLS_PER_BATCH,
             TooManyCalls(calls.length, MERAWalletConstants.MAX_CALLS_PER_BATCH)
         );
-        _validateCallWhitelist(calls);
+        _validateCheckerWhitelist(calls);
     }
 
     /// @dev Same bytes as `abi.encode(chainId, wallet, calls, salt)`; `keccak256` runs over the length-prefixed buffer in assembly (matches high-level `keccak256(bytes)` hashing).
@@ -1348,7 +1348,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         );
     }
 
-    function _validateCallWhitelist(MERAWalletTypes.Call[] calldata calls) internal view {
+    function _validateCheckerWhitelist(MERAWalletTypes.Call[] calldata calls) internal view {
         uint256 callsLength = calls.length;
         for (uint256 i = 0; i < callsLength;) {
             if (calls[i].target != address(this)) {
