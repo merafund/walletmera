@@ -174,9 +174,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function setEmergencyAgentLifetime(uint256 lifetime) external override onlySelf whenLifeAlive {
+        require(
+            lifetime <= MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME,
+            EmergencyAgentLifetimeTooLarge(lifetime, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME)
+        );
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
+        require(callerRole == MERAWalletTypes.Role.Emergency, NotEmergency());
         uint256 previousLifetime = emergencyAgentLifetime;
         emergencyAgentLifetime = lifetime;
-        emit EmergencyAgentLifetimeUpdated(previousLifetime, lifetime, msg.sender);
+        emit EmergencyAgentLifetimeUpdated(previousLifetime, lifetime, _effectiveCaller());
     }
 
     function setLifeControl(bool enabled, uint256 timeout) external override {

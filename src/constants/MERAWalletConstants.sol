@@ -50,4 +50,6 @@ library MERAWalletConstants {
 
     // --- Emergency agents ---
     uint256 internal constant DEFAULT_EMERGENCY_AGENT_LIFETIME = 30 days;
+    /// @dev Upper bound for `emergencyAgentLifetime` (max active window for emergency-level agents).
+    uint256 internal constant MAX_EMERGENCY_AGENT_LIFETIME = 90 days;
 }

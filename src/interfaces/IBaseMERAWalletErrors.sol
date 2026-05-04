@@ -21,6 +21,8 @@ interface IBaseMERAWalletErrors {
     error NotEmergency();
     error ZeroDelayNotProposable();
     error TimelockDelayTooLarge(uint256 delay, uint256 maxDelay);
+    /// @dev {setEmergencyAgentLifetime}: `lifetime` exceeds {MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME}.
+    error EmergencyAgentLifetimeTooLarge(uint256 lifetime, uint256 maxLifetime);
     error TimelockRequired(uint256 requiredDelay);
     error CallPathForbiddenForRole(MERAWalletTypes.Role role);
     error OperationAlreadyPending(bytes32 operationId);

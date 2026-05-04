@@ -482,6 +482,87 @@ contract BaseMERAWalletTest is Test {
         assertEq(MERAWalletConstants.MAX_TIMELOCK_DELAY, 90 days);
     }
 
+    function test_MaxEmergencyAgentLifetime_EqualsNinetyDays() public pure {
+        assertEq(MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME, 90 days);
+    }
+
+    function test_SetEmergencyAgentLifetime_EmergencySelfCallSetsMax() public {
+        vm.prank(emergency);
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(
+                wallet.setEmergencyAgentLifetime.selector, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME
+            ),
+            9201
+        );
+        assertEq(wallet.emergencyAgentLifetime(), MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME);
+    }
+
+    function test_SetEmergencyAgentLifetime_PrimaryBackupSelfCallRevertsNotEmergency() public {
+        vm.prank(primary);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.NotEmergency.selector),
+            abi.encodeWithSelector(
+                wallet.setEmergencyAgentLifetime.selector, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME
+            ),
+            9202
+        );
+
+        vm.prank(backup);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.NotEmergency.selector),
+            abi.encodeWithSelector(
+                wallet.setEmergencyAgentLifetime.selector, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME
+            ),
+            9203
+        );
+    }
+
+    function test_SetEmergencyAgentLifetime_AboveMaxReverts() public {
+        vm.prank(emergency);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.EmergencyAgentLifetimeTooLarge.selector,
+                MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME + 1,
+                MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME
+            ),
+            abi.encodeWithSelector(
+                wallet.setEmergencyAgentLifetime.selector, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME + 1
+            ),
+            9204
+        );
+    }
+
+    function test_SetEmergencyAgentLifetime_LifeControlExpiredRevertsUntilHeartbeat() public {
+        vm.prank(emergency);
+        wallet.setLifeControl(true, 1 days);
+
+        vm.warp(block.timestamp + 2 days);
+
+        uint256 lastHeartbeatAt = wallet.lastLifeHeartbeatAt();
+        uint256 timeout = wallet.lifeHeartbeatTimeout();
+        vm.prank(emergency);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.LifeHeartbeatExpired.selector, lastHeartbeatAt, timeout, block.timestamp
+            )
+        );
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(
+                wallet.setEmergencyAgentLifetime.selector, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME
+            ),
+            9205
+        );
+
+        vm.prank(emergency);
+        wallet.confirmAlive();
+
+        vm.prank(emergency);
+        _executeWalletSelfCall(
+            abi.encodeWithSelector(wallet.setEmergencyAgentLifetime.selector, uint256(45 days)), 9206
+        );
+        assertEq(wallet.emergencyAgentLifetime(), 45 days);
+    }
+
     function test_ExecuteTransaction_TooManyCallsReverts() public {
         MERAWalletTypes.Call[] memory calls =
             _repeatedCalls(address(receiver), MERAWalletConstants.MAX_CALLS_PER_BATCH + 1);
