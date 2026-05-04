@@ -9,6 +9,24 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
     /// @dev Hook before proposing extension batches built in memory; default no-op.
     function _beforeProposeWithCallsMemory(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal virtual {}
 
+    /// @dev Memory-batch equivalent of { _beforeExecute }; override in extensions if needed.
+    function _beforeExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+        internal
+        virtual
+    {
+        _invokeBeforeRequiredCheckersWithCallMemory(callData, operationId, callId);
+        _invokeBeforeOptionalCheckerWithCallMemory(callData, operationId, callId);
+    }
+
+    /// @dev Memory-batch equivalent of { _afterExecute }; override in extensions if needed.
+    function _afterExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
+        internal
+        virtual
+    {
+        _invokeAfterRequiredCheckersWithCallMemory(callData, operationId, callId);
+        _invokeAfterOptionalCheckerWithCallMemory(callData, operationId, callId);
+    }
+
     /// @dev Same as { _executeCallsWithHooks } for batches built in memory (extensions).
     function _executeCallsWithHooksWithCallsMemory(
         MERAWalletTypes.Call[] memory calls,

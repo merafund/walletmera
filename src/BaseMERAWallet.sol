@@ -1192,28 +1192,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _invokeBeforeOptionalChecker(callData, operationId, callId);
     }
 
-    function _beforeExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
-        internal
-        virtual
-    {
-        _invokeBeforeRequiredCheckersWithCallMemory(callData, operationId, callId);
-        _invokeBeforeOptionalCheckerWithCallMemory(callData, operationId, callId);
-    }
-
     function _afterExecute(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
         internal
         virtual
     {
         _invokeAfterRequiredCheckers(callData, operationId, callId);
         _invokeAfterOptionalChecker(callData, operationId, callId);
-    }
-
-    function _afterExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
-        internal
-        virtual
-    {
-        _invokeAfterRequiredCheckersWithCallMemory(callData, operationId, callId);
-        _invokeAfterOptionalCheckerWithCallMemory(callData, operationId, callId);
     }
 
     function _validateMigrationCalls(MERAWalletTypes.Call[] calldata calls) internal view {
