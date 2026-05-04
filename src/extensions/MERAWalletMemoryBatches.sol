@@ -100,7 +100,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         executeAfter = block.timestamp + requiredDelay;
         _operations[operationId] = MERAWalletTypes.PendingOperation({
-            creator: _effectiveCaller(),
+            creator: msg.sender,
             creatorRole: callerRole,
             createdAt: uint64(block.timestamp),
             executeAfter: uint64(executeAfter),
@@ -110,7 +110,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         _beforeProposeWithCallsMemory(memoryCalls, operationId);
 
-        emit TransactionProposed(operationId, salt, _effectiveCaller(), callerRole, executeAfter, requiredDelay);
+        emit TransactionProposed(operationId, salt, msg.sender, callerRole, executeAfter, requiredDelay);
     }
 
     function _executePendingFromMemory(

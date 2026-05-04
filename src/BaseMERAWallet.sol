@@ -733,7 +733,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         executeAfter = block.timestamp + requiredDelay;
         _operations[operationId] = MERAWalletTypes.PendingOperation({
-            creator: _effectiveCaller(),
+            creator: msg.sender,
             creatorRole: callerRole,
             createdAt: uint64(block.timestamp),
             executeAfter: uint64(executeAfter),
@@ -744,7 +744,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         _beforePropose(calls, operationId);
 
-        emit TransactionProposed(operationId, salt, _effectiveCaller(), callerRole, executeAfter, requiredDelay);
+        emit TransactionProposed(operationId, salt, msg.sender, callerRole, executeAfter, requiredDelay);
     }
 
     function _saveRelayOperation(
