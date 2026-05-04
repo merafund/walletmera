@@ -2979,12 +2979,18 @@ contract BaseMERAWalletTest is Test {
         address newTarget = address(0xCAFE);
 
         vm.prank(primary);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setMigrationTarget(newTarget);
 
         vm.prank(backup);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setMigrationTarget(newTarget);
+    }
+
+    function test_SetMigrationTarget_DirectEmergencyCallRevertsNotSelf() public {
+        vm.prank(emergency);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
+        wallet.setMigrationTarget(address(0xCAFE));
     }
 
     function test_SetMigrationTarget_EmitsEvent() public {
@@ -2992,15 +2998,15 @@ contract BaseMERAWalletTest is Test {
         vm.prank(emergency);
         vm.expectEmit(true, true, true, true);
         emit IBaseMERAWalletEvents.MigrationTargetUpdated(address(0), newTarget, emergency);
-        wallet.setMigrationTarget(newTarget);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, newTarget), 29801);
         assertEq(wallet.migrationTarget(), newTarget);
     }
 
     function test_SetMigrationTarget_Deactivate() public {
         address newTarget = address(0xCAFE);
         vm.startPrank(emergency);
-        wallet.setMigrationTarget(newTarget);
-        wallet.setMigrationTarget(address(0));
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, newTarget), 29802);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(0)), 29803);
         vm.stopPrank();
         assertEq(wallet.migrationTarget(), address(0));
     }
@@ -3116,7 +3122,7 @@ contract BaseMERAWalletTest is Test {
         OwnableMock ext = new OwnableMock();
         address target = address(0x2222);
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31180);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
@@ -3130,7 +3136,7 @@ contract BaseMERAWalletTest is Test {
         OwnableMock ext = new OwnableMock();
         address target = address(0x2222);
         vm.startPrank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31290);
         wallet.enterSafeMode(30 days);
         vm.stopPrank();
 
@@ -3147,7 +3153,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0x3333);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31490);
 
         // global timelock set — migration should bypass it
         vm.startPrank(emergency);
@@ -3168,7 +3174,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0x4444);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31710);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
@@ -3184,7 +3190,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0x5555);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31860);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
@@ -3201,7 +3207,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0x6666);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 32030);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ac), 0, abi.encodeWithSignature("grantRole(bytes32,address)", role, target));
@@ -3218,7 +3224,7 @@ contract BaseMERAWalletTest is Test {
         address wrong = address(0x8888);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 32200);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", wrong));
@@ -3233,7 +3239,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0x9999);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 32350);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ext), 0, abi.encodeWithSignature("someOtherFn(address)", target));
@@ -3248,8 +3254,8 @@ contract BaseMERAWalletTest is Test {
         address target = address(0xAAAA);
 
         vm.startPrank(emergency);
-        wallet.setMigrationTarget(target);
-        wallet.setMigrationTarget(address(0));
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 32510);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(0)), 32511);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -3267,7 +3273,7 @@ contract BaseMERAWalletTest is Test {
         address target2 = address(0xCCCC);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target1);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target1), 32690);
 
         MERAWalletTypes.Call[] memory calls1 =
             _singleCall(address(ext1), 0, abi.encodeWithSignature("transferOwnership(address)", target1));
@@ -3276,7 +3282,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(ext1.owner(), target1);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target2);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target2), 32790);
 
         MERAWalletTypes.Call[] memory calls2 =
             _singleCall(address(ext2), 0, abi.encodeWithSignature("transferOwnership(address)", target2));
@@ -3290,7 +3296,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0xDDDD);
 
         vm.prank(emergency);
-        wallet.setMigrationTarget(target);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 32930);
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));

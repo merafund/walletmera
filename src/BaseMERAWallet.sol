@@ -367,11 +367,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit SafeModeReset(_effectiveCaller());
     }
 
-    function setMigrationTarget(address target) external override {
-        require(msg.sender == emergency, NotEmergency());
+    function setMigrationTarget(address target) external override onlySelfAsEmergency {
         address previous = migrationTarget;
         migrationTarget = target;
-        emit MigrationTargetUpdated(previous, target, msg.sender);
+        emit MigrationTargetUpdated(previous, target, _effectiveCaller());
     }
 
     /// @notice Invalidates pending transactions created before the current timestamp and resets the pending counter.
