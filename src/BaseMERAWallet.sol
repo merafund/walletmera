@@ -52,6 +52,13 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _onlySelf();
         _;
     }
+
+    /// @dev Self-call where the effective caller must hold core `Emergency` (same transient context as {setEmergency}).
+    modifier onlySelfAsEmergency() {
+        _onlySelfAsEmergency();
+        _;
+    }
+
     modifier whenLifeAlive() {
         _requireLifeAliveForStateChanges();
         _;
@@ -125,9 +132,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         if (calledByGuardian) {
             caller = msg.sender;
         } else {
-            _onlySelf();
-            _requireNotSafeMode();
-            require(_effectiveCoreRole() == MERAWalletTypes.Role.Emergency, NotEmergency());
+            _onlySelfAsEmergency();
             caller = _effectiveCaller();
         }
         require(newEmergency != address(0), InvalidAddress());
@@ -151,9 +156,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     /// @notice Rotates the optional guardian address; address(0) disables guardian-only paths.
     /// @dev Only the Emergency core role may rotate guardian; self-calls set the role in transient storage.
-    function setGuardian(address newGuardian) external override onlySelf whenLifeAlive {
-        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
-        require(callerRole == MERAWalletTypes.Role.Emergency, NotEmergency());
+    function setGuardian(address newGuardian) external override onlySelfAsEmergency whenLifeAlive {
         address previousGuardian = guardian;
         guardian = newGuardian;
         emit GuardianUpdated(previousGuardian, newGuardian, msg.sender);
@@ -178,8 +181,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             lifetime <= MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME,
             EmergencyAgentLifetimeTooLarge(lifetime, MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME)
         );
-        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
-        require(callerRole == MERAWalletTypes.Role.Emergency, NotEmergency());
+        _onlySelfAsEmergency();
         uint256 previousLifetime = emergencyAgentLifetime;
         emergencyAgentLifetime = lifetime;
         emit EmergencyAgentLifetimeUpdated(previousLifetime, lifetime, _effectiveCaller());
@@ -229,7 +231,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setTargetCallPolicies(address[] calldata targets, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlySelf
+        onlySelfAsEmergency
         whenLifeAlive
     {
         uint256 n = targets.length;
@@ -245,7 +247,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setSelectorCallPolicies(bytes4[] calldata selectors, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlySelf
+        onlySelfAsEmergency
         whenLifeAlive
     {
         uint256 n = selectors.length;
@@ -262,7 +264,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address[] calldata targets,
         bytes4[] calldata selectors,
         MERAWalletTypes.CallPathPolicy[] calldata policies
-    ) external override onlySelf whenLifeAlive {
+    ) external override onlySelfAsEmergency whenLifeAlive {
         uint256 n = targets.length;
         require(n == selectors.length, ArrayLengthMismatch(n, selectors.length));
         require(n == policies.length, ArrayLengthMismatch(n, policies.length));
@@ -277,7 +279,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] calldata updates)
         external
         override
-        onlySelf
+        onlySelfAsEmergency
         whenLifeAlive
     {
         uint256 n = updates.length;
@@ -293,7 +295,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates)
         external
         override
-        onlySelf
+        onlySelfAsEmergency
         whenLifeAlive
     {
         uint256 n = updates.length;
@@ -913,7 +915,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         _set1271Signer(initialSigner);
 
-        // Dangerous cross-contract ops: only emergency may use them, via per-selector timelock; primary/backup forbidden.
         MERAWalletTypes.CallPathPolicy memory ownershipAndGrantRolePolicy = MERAWalletTypes.CallPathPolicy({
             primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
             backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
@@ -928,6 +929,11 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _setSelectorCallPolicy(
             IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
         );
+        _setSelectorCallPolicy(IBaseMERAWallet.setTargetCallPolicies.selector, ownershipAndGrantRolePolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setSelectorCallPolicies.selector, ownershipAndGrantRolePolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setTargetSelectorCallPolicies.selector, ownershipAndGrantRolePolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setRequiredCheckers.selector, ownershipAndGrantRolePolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setOptionalCheckers.selector, ownershipAndGrantRolePolicy);
     }
 
     function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
@@ -1230,6 +1236,12 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function _onlySelf() internal view {
         require(msg.sender == address(this), NotSelf());
+    }
+
+    function _onlySelfAsEmergency() internal view {
+        _onlySelf();
+        _requireNotSafeMode();
+        require(_effectiveCoreRole() == MERAWalletTypes.Role.Emergency, NotEmergency());
     }
 
     function _requireControllerCoreAvailable() internal view returns (MERAWalletTypes.Role callerRole) {
