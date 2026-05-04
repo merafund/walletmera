@@ -118,16 +118,15 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     }
 
     function setEmergency(address newEmergency) external override {
+        address caller;
         bool calledByGuardian = guardian != address(0) && msg.sender == guardian;
-        address caller = calledByGuardian ? msg.sender : _effectiveCaller();
         if (calledByGuardian) {
-            require(guardian != address(0) && msg.sender == guardian, NotEmergency());
+            caller = msg.sender;
         } else {
             _onlySelf();
-            require(_canSetEmergency(caller), NotEmergency());
-        }
-        if (!calledByGuardian) {
             _requireNotSafeMode();
+            require(_effectiveCoreRole() == MERAWalletTypes.Role.Emergency, NotEmergency());
+            caller = _effectiveCaller();
         }
         require(newEmergency != address(0), InvalidAddress());
 
@@ -1356,11 +1355,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
 
         return false;
-    }
-
-    /// @dev Self-call path: only the current emergency address may rotate emergency.
-    function _canSetEmergency(address caller) internal view returns (bool) {
-        return caller == emergency;
     }
 
     function _validateRelayExecutor(
