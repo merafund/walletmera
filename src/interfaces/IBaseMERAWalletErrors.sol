@@ -51,6 +51,8 @@ interface IBaseMERAWalletErrors {
     error NotCoreController();
     error AgentRemovalNotAuthorized();
     error NoopAgent();
+    /// @dev Primary, backup, and emergency addresses cannot be registered as agents.
+    error CoreControllerCannotBeAgent(address agent);
     /// @dev Core controller attempted an action while their role level is frozen.
     error RoleFrozen(MERAWalletTypes.Role role);
     /// @dev Caller is not allowed to change freeze flags (wrong role for this flag).

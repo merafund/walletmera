@@ -72,6 +72,7 @@ interface IBaseMERAWallet {
     /// @dev `config` is passed to `applyConfig` when allowed and non-empty (same rules as each single entry in the batch).
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates) external;
     /// @notice Configure controller agents. `Role.None` disables an agent.
+    /// @dev `agentAddresses[i]` cannot be the wallet's primary, backup, or emergency address when `roleLevels[i]` is not `None`.
     function setAgents(address[] calldata agentAddresses, MERAWalletTypes.Role[] calldata roleLevels) external;
     /// @notice Same-or-higher agents/core controllers may freeze; only strictly higher core controllers may unfreeze; guardian may freeze only.
     function setFrozenPrimary(bool frozen) external;

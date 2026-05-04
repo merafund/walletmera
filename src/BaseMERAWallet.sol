@@ -709,6 +709,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         }
 
         require(agent != address(0), InvalidAddress());
+        // Core wallet controllers cannot be delegated agents (avoids dual-path authority for the same address).
+        require(agent != primary && agent != backup && agent != emergency, CoreControllerCannotBeAgent(agent));
         require(_roleRank(roleLevel) <= _roleRank(callerCore), AgentRemovalNotAuthorized());
 
         // Emergency agent: `activeFrom` stays 0 until first veto, freeze, or safe mode (see _startEmergencyAgentLifetimeIfNeeded).
