@@ -58,7 +58,7 @@ contract MERAWalletMetaProxyCloneFactory {
         bytes32 loginHash = _loginHash(login);
         require(LOGIN_REGISTRY.walletByLoginHash(loginHash) == address(0), LoginAlreadyRegistered());
 
-        wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, _immutableArgs(params), loginHash);
+        wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, abi.encode(params), loginHash);
         BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
 
         LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization, referrerLogin);
@@ -72,7 +72,7 @@ contract MERAWalletMetaProxyCloneFactory {
         returns (address)
     {
         return Clones.predictDeterministicAddressWithImmutableArgs(
-            WALLET_IMPLEMENTATION, _immutableArgs(params), _loginHash(login), address(this)
+            WALLET_IMPLEMENTATION, abi.encode(params), _loginHash(login), address(this)
         );
     }
 
@@ -82,9 +82,5 @@ contract MERAWalletMetaProxyCloneFactory {
             calldatacopy(ptr, login.offset, login.length)
             loginHash := keccak256(ptr, login.length)
         }
-    }
-
-    function _immutableArgs(MERAWalletTypes.WalletInitParams calldata params) private pure returns (bytes memory) {
-        return abi.encode(params);
     }
 }
