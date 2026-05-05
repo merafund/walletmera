@@ -58,6 +58,7 @@ contract MERAWalletLoginRegistry is Ownable {
         address newWallet
     );
     event BaseLoginPriceUpdated(uint256 previousPrice, uint256 newPrice);
+    event EthWithdrawn(address indexed to, uint256 amount);
 
     error EmptyLogin();
     error InvalidAddress();
@@ -82,6 +83,8 @@ contract MERAWalletLoginRegistry is Ownable {
     error LoginMigrationNotConfirmingWallet();
     error LoginMigrationStale();
     error InvalidBaseLoginPrice();
+    error NothingToWithdraw();
+    error WithdrawFailed();
 
     modifier onlyFactory() {
         _onlyFactory();
@@ -115,6 +118,18 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 previousPrice = baseLoginPrice;
         baseLoginPrice = newBaseLoginPrice;
         emit BaseLoginPriceUpdated(previousPrice, newBaseLoginPrice);
+    }
+
+    /// @notice Withdraws the entire ETH balance accumulated from paid login registrations to the current owner.
+    function withdraw() external onlyOwner {
+        uint256 amount = address(this).balance;
+        require(amount != 0, NothingToWithdraw());
+
+        address to = owner();
+        (bool ok,) = payable(to).call{value: amount}("");
+        require(ok, WithdrawFailed());
+
+        emit EthWithdrawn(to, amount);
     }
 
     function priceOf(string calldata login) external view returns (uint256) {

@@ -411,6 +411,38 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.setBaseLoginPrice(0.01 ether);
     }
 
+    /// @dev Paid registrations accumulate ETH on the registry; owner can withdraw the full balance.
+    function test_withdraw_owner_receives_full_balance() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("abcdefghi", p);
+        _deployCommitted("jklmnopqr", p);
+
+        uint256 price = registry.priceOf("abcdefghi");
+        uint256 total = price * 2;
+        assertEq(address(registry).balance, total);
+
+        uint256 ownerBalBefore = owner.balance;
+        vm.expectEmit(true, false, false, true);
+        emit MERAWalletLoginRegistry.EthWithdrawn(owner, total);
+        vm.prank(owner);
+        registry.withdraw();
+
+        assertEq(address(registry).balance, 0);
+        assertEq(owner.balance, ownerBalBefore + total);
+    }
+
+    function test_withdraw_reverts_when_balance_zero() public {
+        vm.prank(owner);
+        vm.expectRevert(MERAWalletLoginRegistry.NothingToWithdraw.selector);
+        registry.withdraw();
+    }
+
+    function test_withdraw_reverts_not_owner() public {
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, primary));
+        registry.withdraw();
+    }
+
     function test_registry_accepts_ensip15_ascii_subset() public view {
         assertEq(registry.validateLogin("abc"), keccak256(bytes("abc")));
         assertEq(registry.validateLogin("abc123"), keccak256(bytes("abc123")));
