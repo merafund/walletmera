@@ -1468,7 +1468,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(uint32(wallet.isValidSignature(digest, backupSignature))), uint256(uint32(0xffffffff)));
 
         vm.prank(emergency);
-        _executeWalletSelfCall(abi.encodeWithSelector(wallet.set1271Signer.selector, backup), 906);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.set1271Signer.selector, MERAWalletTypes.Role.Backup), 906);
 
         assertEq(uint256(uint32(wallet.isValidSignature(digest, backupSignature))), uint256(uint32(0x1626ba7e)));
         assertEq(uint256(uint32(wallet.isValidSignature(digest, primarySignature))), uint256(uint32(0xffffffff)));

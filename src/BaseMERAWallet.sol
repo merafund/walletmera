@@ -524,8 +524,27 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionCancelled(operationId, operation.salt, msg.sender);
     }
 
-    function set1271Signer(address signer) external override onlySelf whenLifeAlive {
-        _set1271Signer(signer);
+    /// @notice Sets EIP-1271 signer to the live address for `role` (`None` clears the signer to `address(0)`).
+    /// @dev Authorization uses the same rank order as {setRoleTimelock}: require `_roleRank(caller) >= _roleRank(currentSignerRole)` when a signer is set.
+    function set1271Signer(MERAWalletTypes.Role role) external override onlySelf whenLifeAlive {
+        MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
+        address current = eip1271Signer;
+        if (current != address(0)) {
+            MERAWalletTypes.Role signerRole = _coreRole(current);
+            require(_roleRank(callerRole) >= _roleRank(signerRole), Set1271SignerNotAuthorized(callerRole, signerRole));
+        }
+
+        address resolved;
+        if (role == MERAWalletTypes.Role.None) {
+            resolved = address(0);
+        } else if (role == MERAWalletTypes.Role.Primary) {
+            resolved = primary;
+        } else if (role == MERAWalletTypes.Role.Backup) {
+            resolved = backup;
+        } else {
+            resolved = emergency;
+        }
+        _set1271Signer(resolved);
     }
 
     function getRequiredCheckers()

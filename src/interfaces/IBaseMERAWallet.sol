@@ -118,6 +118,7 @@ interface IBaseMERAWallet {
         returns (address[] memory beforeCheckers, address[] memory afterCheckers);
     function isLifeController(address controller) external view returns (bool);
 
-    function set1271Signer(address signer) external;
+    /// @notice Binds `eip1271Signer` to the current `primary` / `backup` / `emergency` address for the given role, or clears it when `role` is `None`.
+    function set1271Signer(MERAWalletTypes.Role role) external;
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4);
 }
