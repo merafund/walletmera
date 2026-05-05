@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Test} from "forge-std/Test.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -374,12 +375,40 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     }
 
     function test_registry_prices_short_logins_and_makes_long_logins_free() public view {
-        assertEq(registry.priceOf("abc"), 5000 ether);
-        assertEq(registry.priceOf("abcd"), 500 ether);
-        assertEq(registry.priceOf("abcde"), 50 ether);
-        assertEq(registry.priceOf("abcdefgh"), 0.05 ether);
-        assertEq(registry.priceOf("abcdefghi"), 0.005 ether);
+        assertEq(registry.priceOf("abc"), 500 ether);
+        assertEq(registry.priceOf("abcd"), 50 ether);
+        assertEq(registry.priceOf("abcde"), 5 ether);
+        assertEq(registry.priceOf("abcdefgh"), 0.005 ether);
+        assertEq(registry.priceOf("abcdefghi"), 0.0005 ether);
         assertEq(registry.priceOf("abcdefghij"), 0);
+    }
+
+    function test_setBaseLoginPrice_owner_updates_within_bounds() public {
+        vm.prank(owner);
+        registry.setBaseLoginPrice(0.001 ether);
+        assertEq(registry.baseLoginPrice(), 0.001 ether);
+        assertEq(registry.priceOf("abcdefghi"), 0.001 ether);
+        assertEq(registry.priceOf("abc"), 1000 ether);
+    }
+
+    function test_setBaseLoginPrice_reverts_below_min() public {
+        uint256 tooLow = registry.MIN_BASE_LOGIN_PRICE() - 1;
+        vm.prank(owner);
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidBaseLoginPrice.selector);
+        registry.setBaseLoginPrice(tooLow);
+    }
+
+    function test_setBaseLoginPrice_reverts_above_max() public {
+        uint256 tooHigh = registry.MAX_BASE_LOGIN_PRICE() + 1;
+        vm.prank(owner);
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidBaseLoginPrice.selector);
+        registry.setBaseLoginPrice(tooHigh);
+    }
+
+    function test_setBaseLoginPrice_reverts_not_owner() public {
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, primary));
+        registry.setBaseLoginPrice(0.01 ether);
     }
 
     function test_registry_accepts_ensip15_ascii_subset() public view {

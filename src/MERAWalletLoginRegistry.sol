@@ -12,7 +12,8 @@ contract MERAWalletLoginRegistry is Ownable {
     uint256 public constant MIN_LOGIN_LENGTH = 3;
     uint256 public constant MAX_LOGIN_LENGTH = 32;
     uint256 public constant PAID_LOGIN_MAX_LENGTH = 9;
-    uint256 public constant BASE_LOGIN_PRICE = 0.005 ether;
+    uint256 public constant MIN_BASE_LOGIN_PRICE = 0.00001 ether;
+    uint256 public constant MAX_BASE_LOGIN_PRICE = 1 ether;
 
     struct PendingLoginMigration {
         address previousWallet;
@@ -28,6 +29,9 @@ contract MERAWalletLoginRegistry is Ownable {
     mapping(bytes32 loginHash => bytes32 referrerLoginHash) public referrerLoginHashByLoginHash;
     mapping(bytes32 oldLoginHash => PendingLoginMigration migration) public pendingLoginMigrationByOldLoginHash;
     mapping(bytes32 loginHash => string login) private _loginByHash;
+
+    /// @notice Base price for the shortest paid login tier (length == PAID_LOGIN_MAX_LENGTH); owner may adjust within [MIN_BASE_LOGIN_PRICE, MAX_BASE_LOGIN_PRICE].
+    uint256 public baseLoginPrice = 0.0005 ether;
 
     event FactoryAdded(address indexed factory);
     event AuthorizationVerifierUpdated(address indexed previousVerifier, address indexed newVerifier);
@@ -53,6 +57,7 @@ contract MERAWalletLoginRegistry is Ownable {
         address indexed previousWallet,
         address newWallet
     );
+    event BaseLoginPriceUpdated(uint256 previousPrice, uint256 newPrice);
 
     error EmptyLogin();
     error InvalidAddress();
@@ -76,6 +81,7 @@ contract MERAWalletLoginRegistry is Ownable {
     error LoginMigrationNotFound();
     error LoginMigrationNotConfirmingWallet();
     error LoginMigrationStale();
+    error InvalidBaseLoginPrice();
 
     modifier onlyFactory() {
         _onlyFactory();
@@ -100,7 +106,18 @@ contract MERAWalletLoginRegistry is Ownable {
         emit AuthorizationVerifierUpdated(previousVerifier, newVerifier);
     }
 
-    function priceOf(string calldata login) external pure returns (uint256) {
+    /// @notice Updates the base login price; must stay within [MIN_BASE_LOGIN_PRICE, MAX_BASE_LOGIN_PRICE].
+    function setBaseLoginPrice(uint256 newBaseLoginPrice) external onlyOwner {
+        require(
+            newBaseLoginPrice >= MIN_BASE_LOGIN_PRICE && newBaseLoginPrice <= MAX_BASE_LOGIN_PRICE,
+            InvalidBaseLoginPrice()
+        );
+        uint256 previousPrice = baseLoginPrice;
+        baseLoginPrice = newBaseLoginPrice;
+        emit BaseLoginPriceUpdated(previousPrice, newBaseLoginPrice);
+    }
+
+    function priceOf(string calldata login) external view returns (uint256) {
         _requireLoginHash(login);
         return _priceOfValidatedLength(bytes(login).length);
     }
@@ -322,11 +339,11 @@ contract MERAWalletLoginRegistry is Ownable {
         require(walletByLoginHash[referrerLoginHash] != address(0), ReferrerLoginNotRegistered());
     }
 
-    function _priceOfValidatedLength(uint256 length) private pure returns (uint256) {
+    function _priceOfValidatedLength(uint256 length) private view returns (uint256) {
         if (length > PAID_LOGIN_MAX_LENGTH) {
             return 0;
         }
-        uint256 price = BASE_LOGIN_PRICE;
+        uint256 price = baseLoginPrice;
         for (uint256 i = length; i < PAID_LOGIN_MAX_LENGTH; ++i) {
             price *= 10;
         }
