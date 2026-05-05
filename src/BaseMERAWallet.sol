@@ -1405,6 +1405,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         if (callerCore != MERAWalletTypes.Role.None) {
             _requireCoreRoleAvailable(callerCore);
             if (isBlockingAction) {
+                if (callerCore == MERAWalletTypes.Role.Emergency && targetRole == MERAWalletTypes.Role.Emergency) {
+                    return false;
+                }
                 return _roleRank(callerCore) >= _roleRank(targetRole);
             }
             return _roleRank(callerCore) > _roleRank(targetRole);

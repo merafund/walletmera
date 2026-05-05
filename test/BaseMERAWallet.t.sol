@@ -1831,6 +1831,22 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Vetoed));
     }
 
+    function test_VetoPending_EmergencyCoreCannotVetoEmergencyCreatorOperation() public {
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 7));
+
+        vm.prank(emergency);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(emergency);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotVetoOperation.selector, operationId));
+        wallet.vetoPending(operationId);
+    }
+
     function test_VetoPending_PrimaryAgentCannotVetoBackupCreatorOperation() public {
         vm.prank(backup);
         _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Primary);
