@@ -55,14 +55,14 @@ contract MERAWalletMetaProxyCloneFactory {
         bytes calldata authorization,
         string memory referrerLogin
     ) private returns (address wallet) {
-        bytes32 salt = _salt(login);
-        require(LOGIN_REGISTRY.walletByLoginHash(salt) == address(0), LoginAlreadyRegistered());
+        bytes32 loginHash = _loginHash(login);
+        require(LOGIN_REGISTRY.walletByLoginHash(loginHash) == address(0), LoginAlreadyRegistered());
 
-        wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, _immutableArgs(params), salt);
+        wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, _immutableArgs(params), loginHash);
         BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
 
         LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization, referrerLogin);
-        emit WalletDeployed(salt, login, wallet);
+        emit WalletDeployed(loginHash, login, wallet);
     }
 
     /// @notice Returns the wallet registered for `login`, or `address(0)` if none.
@@ -70,7 +70,7 @@ contract MERAWalletMetaProxyCloneFactory {
         if (bytes(login).length == 0) {
             return address(0);
         }
-        return LOGIN_REGISTRY.walletByLoginHash(_salt(login));
+        return LOGIN_REGISTRY.walletByLoginHash(_loginHash(login));
     }
 
     function walletByLoginHash(bytes32 loginHash) external view returns (address) {
@@ -84,15 +84,15 @@ contract MERAWalletMetaProxyCloneFactory {
         returns (address)
     {
         return Clones.predictDeterministicAddressWithImmutableArgs(
-            WALLET_IMPLEMENTATION, _immutableArgs(params), _salt(login), address(this)
+            WALLET_IMPLEMENTATION, _immutableArgs(params), _loginHash(login), address(this)
         );
     }
 
-    function _salt(string calldata login) private pure returns (bytes32 salt) {
+    function _loginHash(string calldata login) private pure returns (bytes32 loginHash) {
         assembly ("memory-safe") {
             let ptr := mload(0x40)
             calldatacopy(ptr, login.offset, login.length)
-            salt := keccak256(ptr, login.length)
+            loginHash := keccak256(ptr, login.length)
         }
     }
 
