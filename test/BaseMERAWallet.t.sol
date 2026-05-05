@@ -1094,7 +1094,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.pendingTransactionsCount(), 0);
     }
 
-    function test_PendingTransactionsCount_RelayCancelRefundsAndDecrements() public {
+    function test_PendingTransactionsCount_RelayCancelDecrements() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
         vm.stopPrank();
@@ -1114,7 +1114,8 @@ contract BaseMERAWalletTest is Test {
         wallet.cancelPending(operationId);
 
         assertEq(wallet.pendingTransactionsCount(), 0);
-        assertEq(primary.balance, 1 ether);
+        assertEq(primary.balance, 0.75 ether);
+        assertEq(address(wallet).balance, 0.25 ether);
     }
 
     function test_PendingTransactionsCount_VetoAndClearDoNotChange() public {
@@ -2731,7 +2732,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(address(wallet).balance, 0.4 ether);
     }
 
-    function test_CancelPending_RefundsRelayRewardToCreator() public {
+    function test_CancelPending_KeepsRelayRewardOnWallet() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
         vm.stopPrank();
@@ -2750,8 +2751,8 @@ contract BaseMERAWalletTest is Test {
         vm.prank(primary);
         wallet.cancelPending(operationId);
 
-        assertEq(address(wallet).balance, 0);
-        assertEq(primary.balance, 2 ether);
+        assertEq(address(wallet).balance, 0.6 ether);
+        assertEq(primary.balance, 1.4 ether);
         (,,,,,,, uint256 relayReward,,,) = wallet.operations(operationId);
         assertEq(relayReward, 0);
     }

@@ -499,7 +499,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoCleared(operationId, operation.salt, msg.sender);
     }
 
-    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). Refund still goes to the proposer. Agents cannot call.
+    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). The relay reward stays on the wallet balance. Agents cannot call.
     function cancelPending(bytes32 operationId) external override whenLifeAlive {
         // Allow cancellation under freezes/timelocks/SafeMode: only require a core role (not None).
         MERAWalletTypes.Role callerRole = _requireController();
@@ -514,7 +514,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation(operationId));
         require(_roleRank(callerRole) <= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
 
-        _refundRelayReward(operation.creator, relayOperation.relayReward);
+        // Zero relay reward slot; relay ETH stays on the wallet (no refund to the proposer on cancel).
         relayOperation.relayReward = 0;
         operation.status = MERAWalletTypes.OperationStatus.Cancelled;
         _decrementPendingTransactionsCount(operation);
@@ -1131,13 +1131,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         relayOperation.relayReward = 0;
         _transferReward(payable(msg.sender), reward);
-    }
-
-    function _refundRelayReward(address recipient, uint256 reward) internal {
-        if (reward == 0) {
-            return;
-        }
-        _transferReward(payable(recipient), reward);
     }
 
     function _transferReward(address payable recipient, uint256 amount) internal {
