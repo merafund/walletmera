@@ -15,6 +15,8 @@ import {MockUniV2Router02} from "./mocks/MockUniV2Router02.sol";
 import {MockAggregatorV3} from "./mocks/MockAggregatorV3.sol";
 
 contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
+    uint256 private _optCfgSalt = 10_000;
+
     uint256 internal primaryPk = 0xA11CE;
     address internal primary = vm.addr(primaryPk);
     address internal emergency = vm.addr(0xE911);
@@ -53,8 +55,10 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         vm.startPrank(emergency);
         _setAllRoleTimelocks(0);
+        vm.stopPrank();
         _setOptionalCheckers(_mkWl(address(0), true, ""));
         _setOptionalCheckers(_mkWl(address(checker), true, ""));
+        vm.startPrank(emergency);
         address[] memory routers = new address[](1);
         routers[0] = address(router);
         bool[] memory routerAllowed = new bool[](1);
@@ -93,7 +97,18 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function _setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] memory updates) internal {
-        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setOptionalCheckers.selector, updates), 7201);
+        vm.startPrank(emergency);
+        _executeEmergencyWalletSelfCallTimelocked(
+            abi.encodeWithSelector(wallet.setOptionalCheckers.selector, updates), ++_optCfgSalt
+        );
+        vm.stopPrank();
+    }
+
+    function _executeEmergencyWalletSelfCallTimelocked(bytes memory data, uint256 salt) internal {
+        bytes32 opId = wallet.proposeTransaction(_singleCall(address(wallet), 0, data), salt);
+        (,,, uint64 executeAfter,,,,,,,) = wallet.operations(opId);
+        vm.warp(executeAfter);
+        wallet.executePending(_singleCall(address(wallet), 0, data), salt);
     }
 
     function _executeWalletSelfCall(bytes memory data, uint256 salt) internal {
@@ -153,7 +168,6 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
-        vm.prank(emergency);
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -240,7 +254,6 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
-        vm.prank(emergency);
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -265,7 +278,6 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
-        vm.prank(emergency);
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);

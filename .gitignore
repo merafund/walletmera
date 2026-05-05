@@ -16,3 +16,4 @@ lcov.info
 .gas-snapshot
 .cursor
 broadcast
+.DS_Store

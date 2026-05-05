@@ -132,7 +132,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         assertEq(wallet.backup(), backup);
         assertEq(wallet.emergency(), emergency);
         assertEq(wallet.eip1271Signer(), signer);
-        assertEq(wallet.GUARDIAN(), guardian);
+        assertEq(wallet.guardian(), guardian);
         assertTrue(wallet.isLifeController(emergency));
         assertEq(wallet.lastLifeHeartbeatAt(), block.timestamp);
     }

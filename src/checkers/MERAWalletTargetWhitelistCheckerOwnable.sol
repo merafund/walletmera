@@ -3,7 +3,7 @@ pragma solidity 0.8.34;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletWhitelistErrors} from "./errors/IMERAWalletWhitelistErrors.sol";
 import {MERAWalletWhitelistTypes} from "./types/MERAWalletWhitelistTypes.sol";
 

@@ -124,7 +124,7 @@ contract MERAWalletThresholdGuardianTest is Test {
 
     function test_Regression_OutsiderCannotSetEmergencyDirectly() public {
         vm.prank(outsider);
-        vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
+        vm.expectRevert(IBaseMERAWalletErrors.NotSelf.selector);
         wallet.setEmergency(address(0xE6001));
     }
 

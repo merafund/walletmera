@@ -13,7 +13,7 @@ abstract contract MERAWalletERC20 is MERAWalletMemoryBatches {
         address checker,
         bytes calldata checkerData,
         uint256 salt
-    ) external {
+    ) external nonReentrant {
         bytes memory data = abi.encodeWithSelector(IERC20.transfer.selector, to, amount);
         _executeSingleCall(token, 0, data, checker, _bytesCalldataToMemory(checkerData), salt);
     }
@@ -26,7 +26,7 @@ abstract contract MERAWalletERC20 is MERAWalletMemoryBatches {
         address checker,
         bytes calldata checkerData,
         uint256 salt
-    ) external returns (bytes32 operationId) {
+    ) external nonReentrant returns (bytes32 operationId) {
         bytes memory data = abi.encodeWithSelector(IERC20.transfer.selector, to, amount);
         bytes memory checkerMem = checker == address(0) ? new bytes(0) : _bytesCalldataToMemory(checkerData);
         operationId = _proposeSingleCallMemory(token, 0, data, checker, checkerMem, salt);
@@ -40,7 +40,7 @@ abstract contract MERAWalletERC20 is MERAWalletMemoryBatches {
         address checker,
         bytes calldata checkerData,
         uint256 salt
-    ) external returns (bytes32 operationId) {
+    ) external nonReentrant returns (bytes32 operationId) {
         bytes memory data = abi.encodeWithSelector(IERC20.approve.selector, spender, amount);
         bytes memory checkerMem = checker == address(0) ? new bytes(0) : _bytesCalldataToMemory(checkerData);
         operationId = _proposeSingleCallMemory(token, 0, data, checker, checkerMem, salt);
@@ -54,7 +54,7 @@ abstract contract MERAWalletERC20 is MERAWalletMemoryBatches {
         address checker,
         bytes calldata checkerData,
         uint256 salt
-    ) external payable {
+    ) external payable nonReentrant {
         bytes memory data = abi.encodeWithSelector(IERC20.transfer.selector, to, amount);
         bytes memory checkerMem = checker == address(0) ? new bytes(0) : _bytesCalldataToMemory(checkerData);
         _executePendingSingleCallMemory(token, 0, data, checker, checkerMem, salt);
@@ -68,7 +68,7 @@ abstract contract MERAWalletERC20 is MERAWalletMemoryBatches {
         address checker,
         bytes calldata checkerData,
         uint256 salt
-    ) external payable {
+    ) external payable nonReentrant {
         bytes memory data = abi.encodeWithSelector(IERC20.approve.selector, spender, amount);
         bytes memory checkerMem = checker == address(0) ? new bytes(0) : _bytesCalldataToMemory(checkerData);
         _executePendingSingleCallMemory(token, 0, data, checker, checkerMem, salt);

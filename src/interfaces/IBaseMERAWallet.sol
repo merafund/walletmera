@@ -10,13 +10,15 @@ interface IBaseMERAWallet {
     function primary() external view returns (address);
     function backup() external view returns (address);
     function emergency() external view returns (address);
-    function GUARDIAN() external view returns (address);
+    function guardian() external view returns (address);
     function eip1271Signer() external view returns (address);
     function roleTimelock(MERAWalletTypes.Role role) external view returns (uint256);
     function emergencyAgentLifetime() external view returns (uint256);
     function lifeHeartbeatTimeout() external view returns (uint256);
     function lastLifeHeartbeatAt() external view returns (uint256);
     function lifeControlEnabled() external view returns (bool);
+    function pendingTransactionsCount() external view returns (uint256);
+    function pendingTransactionsInvalidBefore() external view returns (uint256);
     function whitelistOptionalChecker(address checker)
         external
         view
@@ -37,7 +39,7 @@ interface IBaseMERAWallet {
             bytes32 executorSetHash,
             uint64 relayExecuteBefore
         );
-    function agents(address agent) external view returns (MERAWalletTypes.Role roleLevel, uint64 activeUntil);
+    function agents(address agent) external view returns (MERAWalletTypes.Role roleLevel, uint64 activeFrom);
     function frozenPrimary() external view returns (bool);
     function frozenBackup() external view returns (bool);
     function safeModeBefore() external view returns (uint256);
@@ -64,11 +66,13 @@ interface IBaseMERAWallet {
         bytes4[] calldata selectors,
         MERAWalletTypes.CallPathPolicy[] calldata policies
     ) external;
-    /// @param enabled Per checker: if true, registers or syncs from `checker.hookModes()`; if false, removes from required lists.
-    function setRequiredCheckers(address[] calldata checkers, bool[] calldata enabled) external;
+    /// @param updates Per entry: if `enabled` is true, registers or syncs from `checker.hookModes()`; if false, removes from required lists.
+    /// @dev `config` is passed to `applyConfig` when `enabled` and non-empty (same rules as each single entry in the batch).
+    function setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] calldata updates) external;
     /// @dev `config` is passed to `applyConfig` when allowed and non-empty (same rules as each single entry in the batch).
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates) external;
     /// @notice Configure controller agents. `Role.None` disables an agent.
+    /// @dev `agentAddresses[i]` cannot be this wallet's own address when `roleLevels[i]` is not `None`.
     function setAgents(address[] calldata agentAddresses, MERAWalletTypes.Role[] calldata roleLevels) external;
     /// @notice Same-or-higher agents/core controllers may freeze; only strictly higher core controllers may unfreeze; guardian may freeze only.
     function setFrozenPrimary(bool frozen) external;
@@ -81,6 +85,8 @@ interface IBaseMERAWallet {
     function resetSafeMode() external;
     /// @notice Set the migration target address. Only callable by emergency. Set to address(0) to deactivate.
     function setMigrationTarget(address target) external;
+    /// @notice Invalidates pending transactions created before the current timestamp and resets the pending counter.
+    function invalidatePendingTransactionsBeforeCurrentTimestamp() external;
 
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     /// @notice Execute migration calls (transferOwnership / grantRole to migrationTarget) immediately without timelock.
@@ -112,6 +118,7 @@ interface IBaseMERAWallet {
         returns (address[] memory beforeCheckers, address[] memory afterCheckers);
     function isLifeController(address controller) external view returns (bool);
 
-    function set1271Signer(address signer) external;
+    /// @notice Binds `eip1271Signer` to the current `primary` / `backup` / `emergency` address for the given role, or clears it when `role` is `None`.
+    function set1271Signer(MERAWalletTypes.Role role) external;
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4);
 }

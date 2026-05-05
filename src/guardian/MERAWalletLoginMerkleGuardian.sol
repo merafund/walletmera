@@ -43,7 +43,7 @@ contract MERAWalletLoginMerkleGuardian {
     event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
 
     error InvalidWallet();
-    /// @dev Reverts when `wallet_` does not list this contract as its GUARDIAN on IBaseMERAWallet.
+    /// @dev Reverts when `wallet_` does not list this contract as its guardian on IBaseMERAWallet.
     error TargetWalletGuardianMismatch();
     error InvalidLoginRegistry();
     error InvalidLoginRoot();
@@ -117,7 +117,7 @@ contract MERAWalletLoginMerkleGuardian {
         require(newEmergency != address(0), InvalidEmergency());
 
         bytes32 loginHash = _requireEligibleLoginOwner(msg.sender);
-        require(IBaseMERAWallet(payable(wallet_)).GUARDIAN() == address(this), TargetWalletGuardianMismatch());
+        require(IBaseMERAWallet(payable(wallet_)).guardian() == address(this), TargetWalletGuardianMismatch());
 
         uint256 nonce = proposalNonce;
         proposalId = keccak256(abi.encode(wallet_, newEmergency, nonce));

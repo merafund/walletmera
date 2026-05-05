@@ -14,14 +14,23 @@ interface IBaseMERAWalletErrors {
     error InvalidRole();
     error Unauthorized();
     error NotAllowedRoleChange();
+    /// @dev {setRoleTimelock}: caller core role rank must be >= target role rank (see {_roleRank}; Emergency highest).
+    error RoleTimelockChangeNotAuthorized(MERAWalletTypes.Role callerRole, MERAWalletTypes.Role targetRole);
+    /// @dev {set1271Signer}: effective caller role rank must be >= current signer role rank (see {_roleRank}).
+    error Set1271SignerNotAuthorized(MERAWalletTypes.Role callerRole, MERAWalletTypes.Role signerRole);
+    /// @dev Caller must be the wallet contract (delegatecall / batched self-call), not an EOA hitting `onlySelf` entrypoints.
+    error NotSelf();
     error NotEmergency();
     error ZeroDelayNotProposable();
     error TimelockDelayTooLarge(uint256 delay, uint256 maxDelay);
+    /// @dev {setEmergencyAgentLifetime}: `lifetime` exceeds {MERAWalletConstants.MAX_EMERGENCY_AGENT_LIFETIME}.
+    error EmergencyAgentLifetimeTooLarge(uint256 lifetime, uint256 maxLifetime);
     error TimelockRequired(uint256 requiredDelay);
     error CallPathForbiddenForRole(MERAWalletTypes.Role role);
     error OperationAlreadyPending(bytes32 operationId);
     error OperationAlreadyUsed(bytes32 operationId);
     error OperationNotPending(bytes32 operationId);
+    error PendingTransactionInvalidated(bytes32 operationId);
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     error CannotCancelOperation(bytes32 operationId);
     error CannotVetoOperation(bytes32 operationId);
@@ -33,7 +42,6 @@ interface IBaseMERAWalletErrors {
     error RelayDeadlineBeforeTimelock(uint64 relayExecuteBefore, uint256 executeAfter);
     error RelayExecutionExpired(uint64 relayExecuteBefore, uint256 currentTime);
     error RelayRewardNotAllowed();
-    error RelayRewardRequired();
     error RelayExecutorNotAllowed(address executor);
     error CoreExecutorNotAllowed(address executor);
     error InvalidExecutorWhitelist();
@@ -45,6 +53,8 @@ interface IBaseMERAWalletErrors {
     error NotCoreController();
     error AgentRemovalNotAuthorized();
     error NoopAgent();
+    /// @dev The wallet contract itself cannot be registered as an agent.
+    error WalletCannotBeAgent();
     /// @dev Core controller attempted an action while their role level is frozen.
     error RoleFrozen(MERAWalletTypes.Role role);
     /// @dev Caller is not allowed to change freeze flags (wrong role for this flag).
@@ -54,7 +64,7 @@ interface IBaseMERAWalletErrors {
     error LifeHeartbeatExpired(uint256 lastHeartbeatAt, uint256 timeout, uint256 currentTime);
     error EmergencyMustStayLifeController();
     error TooManyRequiredCheckers(uint256 length, uint256 maxAllowed);
-    error AgentExpired(address agent, uint256 activeUntil);
+    error AgentExpired(address agent, uint256 expiresAt);
     /// @dev Parallel calldata arrays for a batch setter had different lengths.
     error ArrayLengthMismatch(uint256 a, uint256 b);
     /// @dev Caller is not allowed to enter safe mode (not emergency or emergency-level agent).

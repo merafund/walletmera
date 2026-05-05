@@ -84,7 +84,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
     function _proposeTransactionFromMemory(MERAWalletTypes.Call[] memory memoryCalls, uint256 salt)
         internal
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
         returns (bytes32 operationId, MERAWalletTypes.Role callerRole, uint256 executeAfter, uint256 requiredDelay)
     {
         callerRole = _effectiveCoreRole();
@@ -100,7 +100,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         executeAfter = block.timestamp + requiredDelay;
         _operations[operationId] = MERAWalletTypes.PendingOperation({
-            creator: _effectiveCaller(),
+            creator: msg.sender,
             creatorRole: callerRole,
             createdAt: uint64(block.timestamp),
             executeAfter: uint64(executeAfter),
@@ -110,7 +110,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         _beforeProposeWithCallsMemory(memoryCalls, operationId);
 
-        emit TransactionProposed(operationId, salt, _effectiveCaller(), callerRole, executeAfter, requiredDelay);
+        emit TransactionProposed(operationId, salt, msg.sender, callerRole, executeAfter, requiredDelay);
     }
 
     function _executePendingFromMemory(
@@ -130,7 +130,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         if (relayOperation.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
-            _requireControllerCoreUnfrozen();
+            _requireControllerCoreAvailable();
         } else {
             require(!_isCoreController(msg.sender), CoreExecutorNotAllowed(msg.sender));
             _validateRelayExecutor(relayOperation, executorWhitelist);
@@ -138,7 +138,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         operation.status = MERAWalletTypes.OperationStatus.Executed;
 
-        _executeCallsWithHooksWithCallsMemory(memoryCalls, operationId, operation.creator, operation.creatorRole);
+        _executeCallsWithHooksWithCallsMemory(memoryCalls, operationId, operation.creatorRole);
         _payoutRelayReward(relayOperation);
 
         emit PendingTransactionExecuted(operationId, salt, msg.sender);
@@ -147,7 +147,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
     function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 salt)
         internal
         whenLifeAlive
-        whenControllerCoreUnfrozen
+        whenControllerCoreAvailable
     {
         _validateCallsMemory(calls);
 
@@ -156,7 +156,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         uint256 requiredDelay = _getRequiredDelayMemory(callerRole, calls);
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
 
-        _executeCallsWithHooksWithCallsMemory(calls, operationId, _effectiveCaller(), callerRole);
+        _executeCallsWithHooksWithCallsMemory(calls, operationId, callerRole);
 
         emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
     }

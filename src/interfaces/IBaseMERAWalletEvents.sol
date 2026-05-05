@@ -5,39 +5,26 @@ import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 
 /// @notice Events emitted by BaseMERAWallet.
 interface IBaseMERAWalletEvents {
-    event PrimaryUpdated(address indexed previousPrimary, address indexed newPrimary, address indexed caller);
-    event BackupUpdated(address indexed previousBackup, address indexed newBackup, address indexed caller);
-    event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency, address indexed caller);
-    event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian, address indexed caller);
-    event RoleTimelockUpdated(
-        MERAWalletTypes.Role indexed role, uint256 previousDelay, uint256 newDelay, address indexed caller
-    );
+    event PrimaryUpdated(address indexed previousPrimary, address indexed newPrimary);
+    event BackupUpdated(address indexed previousBackup, address indexed newBackup);
+    event EmergencyUpdated(address indexed previousEmergency, address indexed newEmergency);
+    event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
+    event RoleTimelockUpdated(MERAWalletTypes.Role indexed role, uint256 previousDelay, uint256 newDelay);
     event TargetCallPolicyUpdated(
-        address indexed target,
-        MERAWalletTypes.CallPathPolicy previousPolicy,
-        MERAWalletTypes.CallPathPolicy newPolicy,
-        address indexed caller
+        address indexed target, MERAWalletTypes.CallPathPolicy previousPolicy, MERAWalletTypes.CallPathPolicy newPolicy
     );
     event SelectorCallPolicyUpdated(
-        bytes4 indexed selector,
-        MERAWalletTypes.CallPathPolicy previousPolicy,
-        MERAWalletTypes.CallPathPolicy newPolicy,
-        address indexed caller
+        bytes4 indexed selector, MERAWalletTypes.CallPathPolicy previousPolicy, MERAWalletTypes.CallPathPolicy newPolicy
     );
     event TargetSelectorCallPolicyUpdated(
         address indexed target,
         bytes4 indexed selector,
         MERAWalletTypes.CallPathPolicy previousPolicy,
         MERAWalletTypes.CallPathPolicy newPolicy,
-        bool configured,
-        address indexed caller
+        bool configured
     );
-    event RequiredCheckerUpdated(
-        address indexed checker, bool beforeEnabled, bool afterEnabled, address indexed caller
-    );
-    event OptionalCheckerUpdated(
-        address indexed checker, bool allowed, bool beforeEnabled, bool afterEnabled, address indexed caller
-    );
+    event RequiredCheckerUpdated(address indexed checker, bool beforeEnabled, bool afterEnabled);
+    event OptionalCheckerUpdated(address indexed checker, bool allowed, bool beforeEnabled, bool afterEnabled);
     event TransactionProposed(
         bytes32 indexed operationId,
         uint256 indexed salt,
@@ -58,19 +45,20 @@ interface IBaseMERAWalletEvents {
     event PendingTransactionCancelled(bytes32 indexed operationId, uint256 indexed salt, address indexed cancelledBy);
     event PendingTransactionVetoed(bytes32 indexed operationId, uint256 indexed salt, address indexed vetoedBy);
     event PendingTransactionVetoCleared(bytes32 indexed operationId, uint256 indexed salt, address indexed clearedBy);
-    event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed salt, address indexed executor);
-    event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner, address indexed caller);
-    event AgentUpdated(
-        address indexed agent, MERAWalletTypes.Role roleLevel, uint64 activeUntil, address indexed caller
+    event PendingTransactionsInvalidated(
+        uint256 previousInvalidBefore, uint256 newInvalidBefore, uint256 previousPendingTransactionsCount
     );
-    event EmergencyAgentLifetimeUpdated(uint256 previousLifetime, uint256 newLifetime, address indexed caller);
-    event PrimaryFreezeUpdated(bool frozen, address indexed caller);
-    event BackupFreezeUpdated(bool frozen, address indexed caller);
-    event LifeControlUpdated(bool enabled, uint256 timeout, address indexed caller);
-    event LifeControllerUpdated(address indexed controller, bool enabled, address indexed caller);
+    event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed salt, address indexed executor);
+    event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner);
+    event AgentUpdated(address indexed agent, MERAWalletTypes.Role roleLevel, uint64 activeFrom);
+    event EmergencyAgentLifetimeUpdated(uint256 previousLifetime, uint256 newLifetime);
+    event PrimaryFreezeUpdated(bool frozen);
+    event BackupFreezeUpdated(bool frozen);
+    event LifeControlUpdated(bool enabled, uint256 timeout);
+    event LifeControllerUpdated(address indexed controller, bool enabled);
     event LifeHeartbeatConfirmed(address indexed controller, uint256 timestamp);
-    event SafeModeEntered(uint256 safeModeBefore, address indexed caller);
-    event SafeModeReset(address indexed caller);
-    event MigrationTargetUpdated(address indexed previousTarget, address indexed newTarget, address indexed caller);
-    event MigrationTransactionExecuted(bytes32 indexed operationId, uint256 salt, address indexed caller);
+    event SafeModeEntered(uint256 safeModeBefore);
+    event SafeModeReset();
+    event MigrationTargetUpdated(address indexed previousTarget, address indexed newTarget);
+    event MigrationTransactionExecuted(bytes32 indexed operationId, uint256 salt);
 }

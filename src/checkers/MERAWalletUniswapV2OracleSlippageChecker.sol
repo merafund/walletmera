@@ -8,7 +8,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
-import {IMERAWalletTransactionChecker} from "../interfaces/extensions/IMERAWalletTransactionChecker.sol";
+import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
 import {IAggregatorV3} from "../interfaces/oracles/IAggregatorV3.sol";
 import {IUniswapV2Router02} from "../interfaces/uniswap/IUniswapV2Router02.sol";
