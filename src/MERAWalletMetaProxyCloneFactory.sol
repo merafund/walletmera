@@ -65,18 +65,6 @@ contract MERAWalletMetaProxyCloneFactory {
         emit WalletDeployed(loginHash, login, wallet);
     }
 
-    /// @notice Returns the wallet registered for `login`, or `address(0)` if none.
-    function walletOf(string calldata login) external view returns (address) {
-        if (bytes(login).length == 0) {
-            return address(0);
-        }
-        return LOGIN_REGISTRY.walletByLoginHash(_loginHash(login));
-    }
-
-    function walletByLoginHash(bytes32 loginHash) external view returns (address) {
-        return LOGIN_REGISTRY.walletByLoginHash(loginHash);
-    }
-
     /// @notice Counterfactual wallet address for `login` and `params` using this factory as CREATE2 deployer.
     function predictWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
         external

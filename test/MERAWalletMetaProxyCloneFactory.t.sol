@@ -142,9 +142,8 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address deployed = factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, 0, "");
 
         assertEq(deployed, predicted);
-        assertEq(factory.walletOf(login), deployed);
-        assertEq(factory.walletByLoginHash(keccak256(bytes(login))), deployed);
         assertEq(registry.walletOf(login), deployed);
+        assertEq(registry.walletByLoginHash(keccak256(bytes(login))), deployed);
         assertEq(registry.loginHashByWallet(deployed), keccak256(bytes(login)));
         assertEq(registry.loginOf(deployed), login);
 
@@ -334,8 +333,8 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         assertEq(factory.predictWallet("", p), expected);
     }
 
-    function test_walletOf_empty_returns_zero() public view {
-        assertEq(factory.walletOf(""), address(0));
+    function test_registry_walletOf_empty_returns_zero() public view {
+        assertEq(registry.walletOf(""), address(0));
     }
 
     function test_underpay_reverts() public {
