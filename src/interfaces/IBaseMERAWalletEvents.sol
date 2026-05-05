@@ -11,14 +11,10 @@ interface IBaseMERAWalletEvents {
     event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
     event RoleTimelockUpdated(MERAWalletTypes.Role indexed role, uint256 previousDelay, uint256 newDelay);
     event TargetCallPolicyUpdated(
-        address indexed target,
-        MERAWalletTypes.CallPathPolicy previousPolicy,
-        MERAWalletTypes.CallPathPolicy newPolicy
+        address indexed target, MERAWalletTypes.CallPathPolicy previousPolicy, MERAWalletTypes.CallPathPolicy newPolicy
     );
     event SelectorCallPolicyUpdated(
-        bytes4 indexed selector,
-        MERAWalletTypes.CallPathPolicy previousPolicy,
-        MERAWalletTypes.CallPathPolicy newPolicy
+        bytes4 indexed selector, MERAWalletTypes.CallPathPolicy previousPolicy, MERAWalletTypes.CallPathPolicy newPolicy
     );
     event TargetSelectorCallPolicyUpdated(
         address indexed target,
@@ -28,9 +24,7 @@ interface IBaseMERAWalletEvents {
         bool configured
     );
     event RequiredCheckerUpdated(address indexed checker, bool beforeEnabled, bool afterEnabled);
-    event OptionalCheckerUpdated(
-        address indexed checker, bool allowed, bool beforeEnabled, bool afterEnabled
-    );
+    event OptionalCheckerUpdated(address indexed checker, bool allowed, bool beforeEnabled, bool afterEnabled);
     event TransactionProposed(
         bytes32 indexed operationId,
         uint256 indexed salt,
@@ -52,9 +46,7 @@ interface IBaseMERAWalletEvents {
     event PendingTransactionVetoed(bytes32 indexed operationId, uint256 indexed salt, address indexed vetoedBy);
     event PendingTransactionVetoCleared(bytes32 indexed operationId, uint256 indexed salt, address indexed clearedBy);
     event PendingTransactionsInvalidated(
-        uint256 previousInvalidBefore,
-        uint256 newInvalidBefore,
-        uint256 previousPendingTransactionsCount
+        uint256 previousInvalidBefore, uint256 newInvalidBefore, uint256 previousPendingTransactionsCount
     );
     event ImmediateTransactionExecuted(bytes32 indexed operationId, uint256 indexed salt, address indexed executor);
     event EIP1271SignerUpdated(address indexed previousSigner, address indexed newSigner);

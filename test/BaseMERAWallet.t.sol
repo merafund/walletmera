@@ -25,10 +25,10 @@ contract BaseMERAWalletHarness is BaseMERAWallet {
         address initialGuardian
     ) BaseMERAWallet(initialPrimary, initialBackup, initialEmergency, initialSigner, initialGuardian) {}
 
-    function exposedCallWithExecutionContext(
-        MERAWalletTypes.Call calldata callData,
-        MERAWalletTypes.Role contextRole
-    ) external returns (bool success, bytes memory result) {
+    function exposedCallWithExecutionContext(MERAWalletTypes.Call calldata callData, MERAWalletTypes.Role contextRole)
+        external
+        returns (bool success, bytes memory result)
+    {
         return _callWithExecutionContext(callData, contextRole);
     }
 }
@@ -133,8 +133,7 @@ contract BaseMERAWalletTest is Test {
             checkerData: ""
         });
 
-        (bool success, bytes memory result) =
-            h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Primary);
+        (bool success, bytes memory result) = h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Primary);
 
         assertFalse(success);
         assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.SafeModeActive.selector, h.safeModeBefore()));
@@ -174,8 +173,7 @@ contract BaseMERAWalletTest is Test {
             checkerData: ""
         });
 
-        (bool success, bytes memory result) =
-            h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Backup);
+        (bool success, bytes memory result) = h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Backup);
 
         assertFalse(success);
         assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.SafeModeActive.selector, h.safeModeBefore()));

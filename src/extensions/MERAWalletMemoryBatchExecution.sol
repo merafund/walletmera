@@ -46,10 +46,10 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
         }
     }
 
-    function _callWithExecutionContextMemory(
-        MERAWalletTypes.Call memory callData,
-        MERAWalletTypes.Role contextRole
-    ) internal returns (bool success, bytes memory result) {
+    function _callWithExecutionContextMemory(MERAWalletTypes.Call memory callData, MERAWalletTypes.Role contextRole)
+        internal
+        returns (bool success, bytes memory result)
+    {
         if (callData.target != address(this)) {
             return callData.target.call{value: callData.value}(callData.data);
         }

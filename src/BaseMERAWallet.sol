@@ -1130,10 +1130,10 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(success, RelayRewardTransferFailed(recipient, amount));
     }
 
-    function _callWithExecutionContext(
-        MERAWalletTypes.Call calldata callData,
-        MERAWalletTypes.Role contextRole
-    ) internal returns (bool success, bytes memory result) {
+    function _callWithExecutionContext(MERAWalletTypes.Call calldata callData, MERAWalletTypes.Role contextRole)
+        internal
+        returns (bool success, bytes memory result)
+    {
         if (callData.target != address(this)) {
             return callData.target.call{value: callData.value}(callData.data);
         }
