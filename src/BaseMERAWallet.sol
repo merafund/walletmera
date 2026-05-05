@@ -794,7 +794,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             require(executorWhitelist.length == 0, InvalidExecutorWhitelist());
             _requireControllerCoreAvailable();
         } else {
-            require(!_isCoreController(msg.sender), CoreExecutorNotAllowed(msg.sender));
             _validateRelayExecutor(relayOperation, executorWhitelist);
         }
 

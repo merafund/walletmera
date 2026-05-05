@@ -2560,9 +2560,8 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.backup(), newBackup);
     }
 
-    /// @dev `executePending` has `whenControllerCoreAvailable`, so outsiders cannot relay-execute.
-    /// For non-{CoreExecute} relay policy, `_executePending` rejects core controllers (`CoreExecutorNotAllowed`).
-    /// This test documents reachable reverts around relay execution.
+    /// @dev `executePending` has `whenControllerCoreAvailable`, so outsiders cannot relay-execute (`Unauthorized`).
+    /// With relay policy `Anyone`, a core controller passes `_validateRelayExecutor` and receives the relay reward.
     function test_ProposeWithRelay_Anyone_ExternalExecutorGetsReward() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -2580,22 +2579,23 @@ contract BaseMERAWalletTest is Test {
         (,,, uint64 executeAfter,,,,,,,) = wallet.operations(operationId);
         vm.warp(executeAfter);
 
-        vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CoreExecutorNotAllowed.selector, primary));
-        wallet.executePending(calls, 1);
-
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.Unauthorized.selector);
         wallet.executePending(calls, 1);
 
-        assertEq(receiver.value(), 0);
-        assertEq(address(wallet).balance, 1 ether);
+        vm.prank(primary);
+        uint256 primaryBalBefore = primary.balance;
+        wallet.executePending(calls, 1);
+
+        assertEq(receiver.value(), 717);
+        assertEq(address(wallet).balance, 0);
         (,,,,,,, uint256 relayReward,,,) = wallet.operations(operationId);
-        assertEq(relayReward, 1 ether);
+        assertEq(relayReward, 0);
+        assertEq(primary.balance, primaryBalBefore + 1 ether);
     }
 
-    /// @dev See {test_ProposeWithRelay_Anyone_ExternalExecutorGetsReward}: only core controllers reach the body,
-    /// non-core callers revert at gate; `{Designated}` path still rejects cores before `_validateRelayExecutor`.
+    /// @dev See {test_ProposeWithRelay_Anyone_ExternalExecutorGetsReward}: non-core callers revert at gate.
+    /// `{Designated}`: a core controller who is not the designated executor hits `RelayExecutorNotAllowed`.
     function test_ProposeWithRelay_Designated_OnlyDesignatedCanExecute() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -2620,7 +2620,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executePending(calls, 1);
 
         vm.prank(backup);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CoreExecutorNotAllowed.selector, backup));
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RelayExecutorNotAllowed.selector, backup));
         wallet.executePending(calls, 1);
 
         vm.prank(designated);
@@ -2631,8 +2631,8 @@ contract BaseMERAWalletTest is Test {
         assertEq(address(wallet).balance, 0.25 ether);
     }
 
-    /// @dev Non-core callers never reach `{Whitelist}` relay checks (`Unauthorized` at entry); core callers hit
-    /// `CoreExecutorNotAllowed` before `_validateRelayExecutor`.
+    /// @dev Non-core callers never reach `{Whitelist}` relay checks (`Unauthorized` at entry); a core controller
+    /// not in the whitelist hits `RelayExecutorNotAllowed` inside `_validateRelayExecutor`.
     function test_ProposeWithRelay_Whitelist_ValidatesHashAndExecutor() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -2671,7 +2671,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executePending(calls, 1, whitelist);
 
         vm.prank(backup);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CoreExecutorNotAllowed.selector, backup));
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.RelayExecutorNotAllowed.selector, backup));
         wallet.executePending(calls, 1, whitelist);
 
         assertEq(receiver.value(), 0);
