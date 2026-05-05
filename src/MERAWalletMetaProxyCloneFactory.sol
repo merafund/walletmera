@@ -14,7 +14,6 @@ contract MERAWalletMetaProxyCloneFactory {
 
     event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
 
-    error EmptyLogin();
     error LoginAlreadyRegistered();
     error WalletImplementationNotDeployed();
     error LoginRegistryNotDeployed();
@@ -56,8 +55,6 @@ contract MERAWalletMetaProxyCloneFactory {
         bytes calldata authorization,
         string memory referrerLogin
     ) private returns (address wallet) {
-        _requireNonEmptyLogin(login);
-
         bytes32 salt = _salt(login);
         require(LOGIN_REGISTRY.walletByLoginHash(salt) == address(0), LoginAlreadyRegistered());
 
@@ -86,14 +83,9 @@ contract MERAWalletMetaProxyCloneFactory {
         view
         returns (address)
     {
-        _requireNonEmptyLogin(login);
         return Clones.predictDeterministicAddressWithImmutableArgs(
             WALLET_IMPLEMENTATION, _immutableArgs(params), _salt(login), address(this)
         );
-    }
-
-    function _requireNonEmptyLogin(string calldata login) private pure {
-        require(bytes(login).length != 0, EmptyLogin());
     }
 
     function _salt(string calldata login) private pure returns (bytes32 salt) {

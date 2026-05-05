@@ -320,14 +320,18 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
     function test_empty_login_reverts() public {
         MERAWalletTypes.WalletInitParams memory p = _params();
-        vm.expectRevert(MERAWalletMetaProxyCloneFactory.EmptyLogin.selector);
+        vm.expectRevert(MERAWalletLoginRegistry.EmptyLogin.selector);
         factory.deployWallet("", p, secret, 0, "");
     }
 
-    function test_predict_empty_login_reverts() public {
+    /// @dev Empty login is rejected in the registry; counterfactual prediction still works for off-chain tooling.
+    function test_predict_empty_login_matches_openzeppelin_prediction() public view {
         MERAWalletTypes.WalletInitParams memory p = _params();
-        vm.expectRevert(MERAWalletMetaProxyCloneFactory.EmptyLogin.selector);
-        factory.predictWallet("", p);
+        bytes32 salt = keccak256(bytes(""));
+        bytes memory args = abi.encode(p);
+        address expected =
+            Clones.predictDeterministicAddressWithImmutableArgs(address(implementation), args, salt, address(factory));
+        assertEq(factory.predictWallet("", p), expected);
     }
 
     function test_walletOf_empty_returns_zero() public view {
