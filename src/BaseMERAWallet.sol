@@ -1422,7 +1422,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return _roleRank(callerCore) > _roleRank(targetRole);
         }
 
-        MERAWalletTypes.Role agentRole = _agentRole(_effectiveCaller());
+        MERAWalletTypes.Role agentRole = _agentRole(msg.sender);
         if (agentRole != MERAWalletTypes.Role.None) {
             return isBlockingAction && _roleRank(agentRole) >= _roleRank(targetRole);
         }
