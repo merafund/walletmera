@@ -76,6 +76,27 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         wallet = factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, 0, "");
     }
 
+    function _commitWithReferrer(
+        string memory login,
+        MERAWalletTypes.WalletInitParams memory p,
+        string memory referrerLogin
+    ) internal returns (address predicted) {
+        predicted = factory.predictWallet(login, p);
+        registry.commit(
+            registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256(""), referrerLogin)
+        );
+        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+    }
+
+    function _deployCommittedWithReferrer(
+        string memory login,
+        MERAWalletTypes.WalletInitParams memory p,
+        string memory referrerLogin
+    ) internal returns (address wallet) {
+        _commitWithReferrer(login, p, referrerLogin);
+        wallet = factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, 0, "", referrerLogin);
+    }
+
     function _signAuthorization(
         MERALoginSignatureVerifier verifier,
         string memory login,
@@ -135,6 +156,78 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         assertEq(wallet.guardian(), guardian);
         assertTrue(wallet.isLifeController(emergency));
         assertEq(wallet.lastLifeHeartbeatAt(), block.timestamp);
+    }
+
+    function test_deploy_with_referrer_records_referral_and_getters() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+        address bobWallet = _deployCommittedWithReferrer("bob", p, "alice");
+        bytes32 bobLoginHash = keccak256(bytes("bob"));
+        bytes32 aliceLoginHash = keccak256(bytes("alice"));
+
+        assertEq(registry.walletOf("bob"), bobWallet);
+        assertEq(registry.referrerLoginHashByLoginHash(bobLoginHash), aliceLoginHash);
+        assertEq(registry.referrerLoginHashOf("bob"), aliceLoginHash);
+        assertEq(registry.referrerLoginOf("bob"), "alice");
+    }
+
+    function test_deploy_without_referrer_records_zero_referral() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+
+        assertEq(registry.referrerLoginHashByLoginHash(keccak256(bytes("alice"))), bytes32(0));
+        assertEq(registry.referrerLoginHashOf("alice"), bytes32(0));
+        assertEq(registry.referrerLoginOf("alice"), "");
+    }
+
+    function test_deploy_with_unknown_referrer_reverts() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "bob";
+        _commitWithReferrer(login, p, "alice");
+
+        uint256 price = registry.priceOf(login);
+        vm.expectRevert(MERAWalletLoginRegistry.ReferrerLoginNotRegistered.selector);
+        factory.deployWallet{value: price}(login, p, secret, 0, "", "alice");
+    }
+
+    function test_deploy_with_self_referrer_reverts() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "alice";
+        _commitWithReferrer(login, p, login);
+
+        uint256 price = registry.priceOf(login);
+        vm.expectRevert(MERAWalletLoginRegistry.SelfReferral.selector);
+        factory.deployWallet{value: price}(login, p, secret, 0, "", login);
+    }
+
+    function test_deploy_with_different_referrer_than_commitment_reverts() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+        _deployCommitted("carol", p);
+        string memory login = "bob";
+        _commitWithReferrer(login, p, "alice");
+
+        uint256 price = registry.priceOf(login);
+        vm.expectRevert(MERAWalletLoginRegistry.CommitmentNotFound.selector);
+        factory.deployWallet{value: price}(login, p, secret, 0, "", "carol");
+    }
+
+    function test_registry_migration_keeps_historical_referral_attribution() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+        address bobWallet = _deployCommittedWithReferrer("bob", p, "alice");
+        address carolWallet = _deployCommitted("carol", p);
+
+        vm.prank(bobWallet);
+        registry.requestLoginMigration("bob", "carol", carolWallet);
+        vm.prank(carolWallet);
+        registry.confirmLoginMigration("bob");
+
+        assertEq(registry.walletOf("bob"), carolWallet);
+        assertEq(registry.walletOf("carol"), bobWallet);
+        assertEq(registry.referrerLoginHashByLoginHash(keccak256(bytes("bob"))), keccak256(bytes("alice")));
+        assertEq(registry.referrerLoginOf("bob"), "alice");
+        assertEq(registry.referrerLoginHashByLoginHash(keccak256(bytes("carol"))), bytes32(0));
     }
 
     function test_deploy_twice_same_login_reverts() public {

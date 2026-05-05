@@ -34,6 +34,28 @@ contract MERAWalletMetaProxyCloneFactory {
         uint256 deadline,
         bytes calldata authorization
     ) external payable returns (address wallet) {
+        return _deployWallet(login, params, secret, deadline, authorization, "");
+    }
+
+    function deployWallet(
+        string calldata login,
+        MERAWalletTypes.WalletInitParams calldata params,
+        bytes32 secret,
+        uint256 deadline,
+        bytes calldata authorization,
+        string calldata referrerLogin
+    ) external payable returns (address wallet) {
+        return _deployWallet(login, params, secret, deadline, authorization, referrerLogin);
+    }
+
+    function _deployWallet(
+        string calldata login,
+        MERAWalletTypes.WalletInitParams calldata params,
+        bytes32 secret,
+        uint256 deadline,
+        bytes calldata authorization,
+        string memory referrerLogin
+    ) private returns (address wallet) {
         _requireNonEmptyLogin(login);
 
         bytes32 salt = _salt(login);
@@ -42,7 +64,7 @@ contract MERAWalletMetaProxyCloneFactory {
         wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, _immutableArgs(params), salt);
         BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
 
-        LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization);
+        LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization, referrerLogin);
         emit WalletDeployed(salt, login, wallet);
     }
 

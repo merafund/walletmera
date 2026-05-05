@@ -25,6 +25,7 @@ contract MERAWalletLoginRegistry is Ownable {
     mapping(bytes32 commitment => uint256 committedAt) public commitments;
     mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
     mapping(address wallet => bytes32 loginHash) public loginHashByWallet;
+    mapping(bytes32 loginHash => bytes32 referrerLoginHash) public referrerLoginHashByLoginHash;
     mapping(bytes32 oldLoginHash => PendingLoginMigration migration) public pendingLoginMigrationByOldLoginHash;
     mapping(bytes32 loginHash => string login) private _loginByHash;
 
@@ -32,6 +33,7 @@ contract MERAWalletLoginRegistry is Ownable {
     event AuthorizationVerifierUpdated(address indexed previousVerifier, address indexed newVerifier);
     event LoginCommitmentMade(bytes32 indexed commitment, uint256 committedAt);
     event LoginRegistered(bytes32 indexed loginHash, string login, address indexed wallet, address indexed factory);
+    event LoginReferralRecorded(bytes32 indexed loginHash, bytes32 indexed referrerLoginHash, string referrerLogin);
     event LoginTransferred(
         bytes32 indexed loginHash, string login, address indexed previousWallet, address indexed newWallet
     );
@@ -63,6 +65,8 @@ contract MERAWalletLoginRegistry is Ownable {
     error LoginAlreadyRegistered();
     error LoginNotOwned();
     error AddressAlreadyHasLogin();
+    error ReferrerLoginNotRegistered();
+    error SelfReferral();
     error CommitmentAlreadyExists();
     error CommitmentNotFound();
     error CommitmentTooNew();
@@ -113,7 +117,21 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 deadline,
         bytes32 authorizationHash
     ) external pure returns (bytes32) {
-        return _makeCommitment(login, wallet, factory, secret, deadline, authorizationHash);
+        return _makeCommitment(login, wallet, factory, secret, deadline, authorizationHash, bytes32(0));
+    }
+
+    function makeCommitment(
+        string calldata login,
+        address wallet,
+        address factory,
+        bytes32 secret,
+        uint256 deadline,
+        bytes32 authorizationHash,
+        string calldata referrerLogin
+    ) external pure returns (bytes32) {
+        return _makeCommitment(
+            login, wallet, factory, secret, deadline, authorizationHash, _optionalLoginHash(referrerLogin)
+        );
     }
 
     function commit(bytes32 commitment) external {
@@ -129,13 +147,41 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 deadline,
         bytes calldata authorization
     ) external payable onlyFactory {
+        bytes32 loginHash = _requireLoginHash(login);
+        _registerLogin(login, loginHash, wallet, secret, deadline, authorization, bytes32(0), "");
+    }
+
+    function registerLogin(
+        string calldata login,
+        address wallet,
+        bytes32 secret,
+        uint256 deadline,
+        bytes calldata authorization,
+        string calldata referrerLogin
+    ) external payable onlyFactory {
         require(wallet != address(0), InvalidAddress());
         bytes32 loginHash = _requireLoginHash(login);
+        bytes32 referrerLoginHash = _requireReferrerLoginHash(loginHash, referrerLogin);
+        _registerLogin(login, loginHash, wallet, secret, deadline, authorization, referrerLoginHash, referrerLogin);
+    }
+
+    function _registerLogin(
+        string calldata login,
+        bytes32 loginHash,
+        address wallet,
+        bytes32 secret,
+        uint256 deadline,
+        bytes calldata authorization,
+        bytes32 referrerLoginHash,
+        string memory referrerLogin
+    ) private {
+        require(wallet != address(0), InvalidAddress());
         require(walletByLoginHash[loginHash] == address(0), LoginAlreadyRegistered());
         require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
         require(msg.value == _priceOfValidatedLength(bytes(login).length), InvalidPayment());
 
-        bytes32 commitment = _makeCommitment(login, wallet, msg.sender, secret, deadline, keccak256(authorization));
+        bytes32 commitment =
+            _makeCommitment(login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash);
         uint256 committedAtPlusOne = commitments[commitment];
         require(committedAtPlusOne != 0, CommitmentNotFound());
         uint256 committedAt = committedAtPlusOne - 1;
@@ -151,9 +197,11 @@ contract MERAWalletLoginRegistry is Ownable {
 
         walletByLoginHash[loginHash] = wallet;
         loginHashByWallet[wallet] = loginHash;
+        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
         _loginByHash[loginHash] = login;
 
         emit LoginRegistered(loginHash, login, wallet, msg.sender);
+        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
     function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet) external {
@@ -220,6 +268,20 @@ contract MERAWalletLoginRegistry is Ownable {
         return _loginByHash[loginHash];
     }
 
+    function referrerLoginHashOf(string calldata login) external view returns (bytes32) {
+        if (bytes(login).length == 0) {
+            return bytes32(0);
+        }
+        return referrerLoginHashByLoginHash[_loginHash(login)];
+    }
+
+    function referrerLoginOf(string calldata login) external view returns (string memory) {
+        if (bytes(login).length == 0) {
+            return "";
+        }
+        return _loginByHash[referrerLoginHashByLoginHash[_loginHash(login)]];
+    }
+
     function _requireLoginHash(string calldata login) private pure returns (bytes32) {
         bytes calldata loginBytes = bytes(login);
         uint256 length = loginBytes.length;
@@ -240,6 +302,26 @@ contract MERAWalletLoginRegistry is Ownable {
         return _loginHash(login);
     }
 
+    function _optionalLoginHash(string calldata login) private pure returns (bytes32) {
+        if (bytes(login).length == 0) {
+            return bytes32(0);
+        }
+        return _requireLoginHash(login);
+    }
+
+    function _requireReferrerLoginHash(bytes32 loginHash, string calldata referrerLogin)
+        private
+        view
+        returns (bytes32 referrerLoginHash)
+    {
+        referrerLoginHash = _optionalLoginHash(referrerLogin);
+        if (referrerLoginHash == bytes32(0)) {
+            return bytes32(0);
+        }
+        require(referrerLoginHash != loginHash, SelfReferral());
+        require(walletByLoginHash[referrerLoginHash] != address(0), ReferrerLoginNotRegistered());
+    }
+
     function _priceOfValidatedLength(uint256 length) private pure returns (uint256) {
         if (length > PAID_LOGIN_MAX_LENGTH) {
             return 0;
@@ -257,10 +339,15 @@ contract MERAWalletLoginRegistry is Ownable {
         address factory,
         bytes32 secret,
         uint256 deadline,
-        bytes32 authorizationHash
+        bytes32 authorizationHash,
+        bytes32 referrerLoginHash
     ) private pure returns (bytes32) {
         require(wallet != address(0) && factory != address(0), InvalidAddress());
-        return keccak256(abi.encode(_requireLoginHash(login), wallet, factory, secret, deadline, authorizationHash));
+        return keccak256(
+            abi.encode(
+                _requireLoginHash(login), wallet, factory, secret, deadline, authorizationHash, referrerLoginHash
+            )
+        );
     }
 
     function _onlyFactory() private view {
