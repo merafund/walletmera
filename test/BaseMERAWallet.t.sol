@@ -2518,6 +2518,45 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Vetoed));
     }
 
+    /// @dev Agent veto is authorized while safe mode is active.
+    function test_SafeMode_AgentVetoPending_Allowed() public {
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Backup);
+
+        vm.startPrank(emergency);
+        _setAllRoleTimelocks(1 days);
+        vm.stopPrank();
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 42));
+
+        vm.prank(backup);
+        bytes32 operationId = wallet.proposeTransaction(calls, 1);
+
+        vm.prank(emergency);
+        wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
+        assertLt(block.timestamp, wallet.safeModeBefore());
+
+        vm.prank(agentAddr);
+        wallet.vetoPending(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus status,,,,,) = wallet.operations(operationId);
+        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Vetoed));
+    }
+
+    function test_SafeMode_AgentSetFrozenPrimary_Allowed() public {
+        vm.prank(backup);
+        _agentsCall(wallet, agentAddr, true);
+
+        vm.prank(emergency);
+        wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
+        assertLt(block.timestamp, wallet.safeModeBefore());
+
+        vm.prank(agentAddr);
+        wallet.setFrozenPrimary(true);
+        assertTrue(wallet.frozenPrimary());
+    }
+
     function test_FrozenPrimary_Emergency_ConfigUnaffected() public {
         vm.prank(backup);
         wallet.setFrozenPrimary(true);

@@ -1415,7 +1415,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         MERAWalletTypes.Role agentRole = _agentRole(_effectiveCaller());
         if (agentRole != MERAWalletTypes.Role.None) {
-            _requireNotSafeMode();
             return isBlockingAction && _roleRank(agentRole) >= _roleRank(targetRole);
         }
 
