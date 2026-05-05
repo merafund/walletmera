@@ -138,7 +138,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
 
         operation.status = MERAWalletTypes.OperationStatus.Executed;
 
-        _executeCallsWithHooksWithCallsMemory(memoryCalls, operationId, operation.creator, operation.creatorRole);
+        _executeCallsWithHooksWithCallsMemory(memoryCalls, operationId, operation.creatorRole);
         _payoutRelayReward(relayOperation);
 
         emit PendingTransactionExecuted(operationId, salt, msg.sender);
@@ -156,7 +156,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         uint256 requiredDelay = _getRequiredDelayMemory(callerRole, calls);
         require(requiredDelay == 0, TimelockRequired(requiredDelay));
 
-        _executeCallsWithHooksWithCallsMemory(calls, operationId, _effectiveCaller(), callerRole);
+        _executeCallsWithHooksWithCallsMemory(calls, operationId, callerRole);
 
         emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
     }

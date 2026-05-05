@@ -27,10 +27,9 @@ contract BaseMERAWalletHarness is BaseMERAWallet {
 
     function exposedCallWithExecutionContext(
         MERAWalletTypes.Call calldata callData,
-        address contextCaller,
         MERAWalletTypes.Role contextRole
     ) external returns (bool success, bytes memory result) {
-        return _callWithExecutionContext(callData, contextCaller, contextRole);
+        return _callWithExecutionContext(callData, contextRole);
     }
 }
 
@@ -112,10 +111,10 @@ contract BaseMERAWalletTest is Test {
         wallet.setPrimary(newPrimary);
     }
 
-    function test_SetPrimary_SelfCallUsesEffectivePrimaryCaller() public {
+    function test_SetPrimary_SelfCallEmitsUpdatedEvent() public {
         address newPrimary = address(0x9999);
         vm.expectEmit(true, true, true, true, address(wallet));
-        emit IBaseMERAWalletEvents.PrimaryUpdated(primary, newPrimary, primary);
+        emit IBaseMERAWalletEvents.PrimaryUpdated(primary, newPrimary);
         vm.prank(primary);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setPrimary.selector, newPrimary), 910);
         assertEq(wallet.primary(), newPrimary);
@@ -135,7 +134,7 @@ contract BaseMERAWalletTest is Test {
         });
 
         (bool success, bytes memory result) =
-            h.exposedCallWithExecutionContext(callData, primary, MERAWalletTypes.Role.Primary);
+            h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Primary);
 
         assertFalse(success);
         assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.SafeModeActive.selector, h.safeModeBefore()));
@@ -176,7 +175,7 @@ contract BaseMERAWalletTest is Test {
         });
 
         (bool success, bytes memory result) =
-            h.exposedCallWithExecutionContext(callData, backup, MERAWalletTypes.Role.Backup);
+            h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Backup);
 
         assertFalse(success);
         assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.SafeModeActive.selector, h.safeModeBefore()));
@@ -206,11 +205,11 @@ contract BaseMERAWalletTest is Test {
         wallet.setEmergency(newEmergency);
     }
 
-    function test_SetEmergency_SelfCallUsesEffectiveEmergencyCaller() public {
+    function test_SetEmergency_SelfCallEmitsUpdatedEvent() public {
         address newEmergency = address(0xE2E2);
 
         vm.expectEmit(true, true, true, true, address(wallet));
-        emit IBaseMERAWalletEvents.EmergencyUpdated(emergency, newEmergency, emergency);
+        emit IBaseMERAWalletEvents.EmergencyUpdated(emergency, newEmergency);
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setEmergency.selector, newEmergency), 925);
 
@@ -1577,9 +1576,9 @@ contract BaseMERAWalletTest is Test {
         _agentsCall(wallet, secondAgent, true);
     }
 
-    function test_Agent_SelfCallEmitsEffectiveCaller() public {
+    function test_Agent_SelfCallEmitsUpdatedEvent() public {
         vm.expectEmit(true, true, true, true, address(wallet));
-        emit IBaseMERAWalletEvents.AgentUpdated(agentAddr, MERAWalletTypes.Role.Primary, 0, primary);
+        emit IBaseMERAWalletEvents.AgentUpdated(agentAddr, MERAWalletTypes.Role.Primary, 0);
 
         vm.prank(primary);
         _agentsCall(wallet, agentAddr, MERAWalletTypes.Role.Primary);
@@ -3098,7 +3097,7 @@ contract BaseMERAWalletTest is Test {
         address newTarget = address(0xCAFE);
         vm.prank(emergency);
         vm.expectEmit(true, true, true, true);
-        emit IBaseMERAWalletEvents.MigrationTargetUpdated(address(0), newTarget, emergency);
+        emit IBaseMERAWalletEvents.MigrationTargetUpdated(address(0), newTarget);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, newTarget), 29801);
         assertEq(wallet.migrationTarget(), newTarget);
     }
@@ -3406,7 +3405,7 @@ contract BaseMERAWalletTest is Test {
 
         vm.prank(primary);
         vm.expectEmit(true, false, true, true);
-        emit IBaseMERAWalletEvents.MigrationTransactionExecuted(expectedOpId, 1, primary);
+        emit IBaseMERAWalletEvents.MigrationTransactionExecuted(expectedOpId, 1);
         wallet.executeMigrationTransaction(calls, 1);
     }
 }

@@ -31,14 +31,13 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
     function _executeCallsWithHooksWithCallsMemory(
         MERAWalletTypes.Call[] memory calls,
         bytes32 operationId,
-        address contextCaller,
         MERAWalletTypes.Role contextRole
     ) internal {
         uint256 callsLength = calls.length;
         for (uint256 i = 0; i < callsLength;) {
             MERAWalletTypes.Call memory callData = calls[i];
             _beforeExecuteWithCallMemory(callData, operationId, i);
-            (bool success, bytes memory result) = _callWithExecutionContextMemory(callData, contextCaller, contextRole);
+            (bool success, bytes memory result) = _callWithExecutionContextMemory(callData, contextRole);
             require(success, CallExecutionFailed(i, result));
             _afterExecuteWithCallMemory(callData, operationId, i);
             unchecked {
@@ -49,14 +48,13 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
 
     function _callWithExecutionContextMemory(
         MERAWalletTypes.Call memory callData,
-        address contextCaller,
         MERAWalletTypes.Role contextRole
     ) internal returns (bool success, bytes memory result) {
         if (callData.target != address(this)) {
             return callData.target.call{value: callData.value}(callData.data);
         }
 
-        _storeExecutionContext(contextCaller, contextRole);
+        _storeExecutionContext(contextRole);
         (success, result) = callData.target.call{value: callData.value}(callData.data);
         _clearExecutionContext();
     }
