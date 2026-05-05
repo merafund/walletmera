@@ -1423,7 +1423,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
     }
 
-    function test_CancelPending_BackupMayCancelEmergencyOperation() public {
+    function test_CancelPending_BackupCannotCancelEmergencyOperation() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
         vm.stopPrank();
@@ -1435,10 +1435,8 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(backup);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
         wallet.cancelPending(operationId);
-
-        (,,,,, MERAWalletTypes.OperationStatus status,,,,,) = wallet.operations(operationId);
-        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
     }
 
     function test_CancelPending_EmergencyCannotCancelBackupOperation() public {

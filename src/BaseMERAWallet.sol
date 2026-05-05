@@ -511,10 +511,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             OperationNotPending(operationId)
         );
 
-        require(
-            callerRole != MERAWalletTypes.Role.Emergency || operation.creatorRole != MERAWalletTypes.Role.Emergency,
-            CannotCancelOperation(operationId)
-        );
+        require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation(operationId));
         require(_roleRank(callerRole) <= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
 
         _refundRelayReward(operation.creator, relayOperation.relayReward);
