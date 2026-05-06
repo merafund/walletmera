@@ -2,7 +2,6 @@
 pragma solidity 0.8.34;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletERC20RecipientWhitelist} from "../interfaces/checkers/IMERAWalletERC20RecipientWhitelist.sol";
@@ -13,7 +12,6 @@ import {MERAWalletERC20WhitelistCheckerTypes} from "./types/MERAWalletERC20White
 /// @notice Shared logic for ERC20 `transfer` / `approve` whitelist checkers (separate deployed instances per operation).
 abstract contract MERAWalletERC20WhitelistCheckerBase is
     Ownable,
-    Pausable,
     IMERAWalletTransactionChecker,
     IMERAWalletERC20WhitelistCheckerErrors
 {
@@ -26,7 +24,6 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     address public defaultAssetWhitelist;
     address public defaultRecipientWhitelist;
 
-    event PauseAgentUpdated(address indexed agent, bool allowed, address indexed caller);
     event WalletErc20WhitelistCheckerConfigUpdated(
         address indexed wallet, address indexed assetWhitelist, address indexed recipientWhitelist, address caller
     );
@@ -39,20 +36,6 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
 
     /// @dev Expected ERC20 selector (`IERC20.transfer` or `IERC20.approve`).
     function _expectedSelector() internal pure virtual returns (bytes4);
-
-    function setPauseAgents(address[] calldata agents, bool[] calldata allowed) external onlyOwner {
-        uint256 n = agents.length;
-        require(n == allowed.length, Erc20WhitelistArrayLengthMismatch());
-        for (uint256 i = 0; i < n;) {
-            address agent = agents[i];
-            require(agent != address(0), Erc20WhitelistInvalidAddress());
-            isPauseAgent[agent] = allowed[i];
-            emit PauseAgentUpdated(agent, allowed[i], msg.sender);
-            unchecked {
-                ++i;
-            }
-        }
-    }
 
     /// @inheritdoc IMERAWalletTransactionChecker
     function applyConfig(bytes calldata config) external override {
@@ -79,22 +62,12 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         emit DefaultRecipientWhitelistUpdated(previous, newWhitelist, msg.sender);
     }
 
-    /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgents}.
-    function pause() external {
-        require(msg.sender == owner() || isPauseAgent[msg.sender], Erc20WhitelistNotPauseAuthorized());
-        _pause();
-    }
-
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-
     /// @inheritdoc IMERAWalletTransactionChecker
     function hookModes() external pure override returns (bool enableBefore, bool enableAfter) {
         return (true, false);
     }
 
-    function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external override whenNotPaused {
+    function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external override {
         require(call.value == 0, Erc20WhitelistNonZeroValue(callId));
 
         bytes calldata data = call.data;
