@@ -66,7 +66,6 @@ contract MERAWalletLoginRegistry is Ownable {
     error InvalidPayment();
     error InvalidLoginLength();
     error InvalidLoginCharacter();
-    error InvalidUnderscore();
     error InvalidHyphen();
     error UnauthorizedFactory();
     error LoginAlreadyRegistered();
@@ -327,9 +326,7 @@ contract MERAWalletLoginRegistry is Ownable {
         require(length >= MIN_LOGIN_LENGTH && length <= MAX_LOGIN_LENGTH, InvalidLoginLength());
         for (uint256 i = 0; i < length; ++i) {
             bytes1 char = loginBytes[i];
-            if (char == "_") {
-                require(i == 0 || loginBytes[i - 1] == "_", InvalidUnderscore());
-            } else if (char == "-") {
+            if (char == "-") {
                 if (i == 3 && loginBytes[2] == "-") {
                     revert InvalidHyphen();
                 }

@@ -461,7 +461,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     function test_registry_accepts_ensip15_ascii_subset() public view {
         assertEq(registry.validateLogin("abc"), keccak256(bytes("abc")));
         assertEq(registry.validateLogin("abc123"), keccak256(bytes("abc123")));
-        assertEq(registry.validateLogin("__abc"), keccak256(bytes("__abc")));
+        assertEq(registry.validateLogin("abc-def"), keccak256(bytes("abc-def")));
         assertEq(registry.validateLogin("a-b"), keccak256(bytes("a-b")));
     }
 
@@ -478,7 +478,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.validateLogin(unicode"алиса");
         vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginCharacter.selector);
         registry.validateLogin("alice.eth");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidUnderscore.selector);
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginCharacter.selector);
         registry.validateLogin("ab_cd");
         vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
         registry.validateLogin("ab--cd");
