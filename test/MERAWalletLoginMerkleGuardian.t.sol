@@ -3,6 +3,7 @@ pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
+import {MERAWalletLoginRegistryConstants} from "../src/constants/MERAWalletLoginRegistryConstants.sol";
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletLoginMerkleGuardian} from "../src/guardian/MERAWalletLoginMerkleGuardian.sol";
 import {Hashes} from "@openzeppelin/contracts/utils/cryptography/Hashes.sol";
@@ -382,7 +383,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     function _registerLogin(string memory login, address wallet_) internal {
         bytes32 secret = keccak256(abi.encode(login, wallet_));
         registry.commit(registry.makeCommitment(login, wallet_, address(this), secret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
         registry.registerLogin{value: registry.priceOf(login)}(login, wallet_, secret, 0, "");
     }
 

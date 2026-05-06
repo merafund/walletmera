@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
+import {MERAWalletLoginRegistryConstants} from "../src/constants/MERAWalletLoginRegistryConstants.sol";
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
@@ -3116,11 +3117,11 @@ contract BaseMERAWalletTest is Test {
         BaseMERAWallet newWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
         bytes32 oldSecret = keccak256("old");
         registry.commit(registry.makeCommitment("old", address(wallet), address(this), oldSecret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
         registry.registerLogin{value: registry.priceOf("old")}("old", address(wallet), oldSecret, 0, "");
         bytes32 newSecret = keccak256("new");
         registry.commit(registry.makeCommitment("new", address(newWallet), address(this), newSecret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
         registry.registerLogin{value: registry.priceOf("new")}("new", address(newWallet), newSecret, 0, "");
 
         vm.startPrank(emergency);

@@ -2,100 +2,36 @@
 pragma solidity 0.8.34;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {MERAWalletLoginRegistryConstants} from "./constants/MERAWalletLoginRegistryConstants.sol";
+import {MERAWalletLoginRegistryTypes} from "./types/MERAWalletLoginRegistryTypes.sol";
 import {IBaseMERAWallet} from "./interfaces/IBaseMERAWallet.sol";
 import {IMERALoginAuthorizationVerifier} from "./interfaces/IMERALoginAuthorizationVerifier.sol";
+import {IMERAWalletLoginRegistry} from "./interfaces/IMERAWalletLoginRegistry.sol";
+import {IMERAWalletLoginRegistryErrors} from "./interfaces/IMERAWalletLoginRegistryErrors.sol";
+import {IMERAWalletLoginRegistryEvents} from "./interfaces/IMERAWalletLoginRegistryEvents.sol";
 
 /// @title MERAWalletLoginRegistry
 /// @notice Stores MERA login ownership and the factories allowed to register new logins.
-contract MERAWalletLoginRegistry is Ownable {
-    struct PendingLoginMigration {
-        address previousWallet;
-        address newWallet;
-        bytes32 newLoginHash;
-    }
-
-    uint256 public constant MIN_COMMITMENT_AGE = 60 seconds;
-    uint256 public constant MAX_COMMITMENT_AGE = 15 minutes;
-    uint256 public constant MIN_LOGIN_LENGTH = 3;
-    uint256 public constant MAX_LOGIN_LENGTH = 32;
-    uint256 public constant PAID_LOGIN_MAX_LENGTH = 9;
-    uint256 public constant MIN_BASE_LOGIN_PRICE = 0.00001 ether;
-    uint256 public constant MAX_BASE_LOGIN_PRICE = 1 ether;
-    uint256 public constant MIN_LOGIN_PRICE_MULTIPLIER = 2;
-    uint256 public constant MAX_LOGIN_PRICE_MULTIPLIER = 10;
-
-    address public authorizationVerifier;
-    /// @dev If true, short logins (length <= PAID_LOGIN_MAX_LENGTH) register for free without pre-commit but require {authorizationVerifier}.
-    /// @dev If false, short logins use paid registration with pre-commit and never call {authorizationVerifier}.
-    bool public immutable REQUIRE_SHORT_LOGIN_AUTHORIZATION;
-    mapping(address factory => bool allowed) public isFactory;
-    mapping(bytes32 commitment => uint256 committedAt) public commitments;
-    mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
-    mapping(address wallet => bytes32 loginHash) public loginHashByWallet;
-    mapping(bytes32 loginHash => bytes32 referrerLoginHash) public referrerLoginHashByLoginHash;
-    mapping(bytes32 oldLoginHash => PendingLoginMigration migration) public pendingLoginMigrationByOldLoginHash;
+contract MERAWalletLoginRegistry is
+    IMERAWalletLoginRegistry,
+    IMERAWalletLoginRegistryEvents,
+    IMERAWalletLoginRegistryErrors,
+    Ownable
+{
+    address public override authorizationVerifier;
+    bool public immutable override REQUIRE_SHORT_LOGIN_AUTHORIZATION;
+    mapping(address factory => bool allowed) public override isFactory;
+    mapping(bytes32 commitment => uint256 committedAt) public override commitments;
+    mapping(bytes32 loginHash => address wallet) public override walletByLoginHash;
+    mapping(address wallet => bytes32 loginHash) public override loginHashByWallet;
+    mapping(bytes32 loginHash => bytes32 referrerLoginHash) public override referrerLoginHashByLoginHash;
+    mapping(bytes32 oldLoginHash => MERAWalletLoginRegistryTypes.PendingLoginMigration migration)
+        public
+        override pendingLoginMigrationByOldLoginHash;
     mapping(bytes32 loginHash => string login) private _loginByHash;
 
-    /// @notice Base price for the shortest paid login tier (length == PAID_LOGIN_MAX_LENGTH); owner may adjust within [MIN_BASE_LOGIN_PRICE, MAX_BASE_LOGIN_PRICE].
-    uint256 public baseLoginPrice = 0.0005 ether;
-    /// @notice Per-length step multiplier for paid login pricing: price = baseLoginPrice * loginPriceMultiplier^(PAID_LOGIN_MAX_LENGTH - length). Owner may set in [MIN_LOGIN_PRICE_MULTIPLIER, MAX_LOGIN_PRICE_MULTIPLIER].
-    uint256 public loginPriceMultiplier = 10;
-
-    event FactoryAdded(address indexed factory);
-    event AuthorizationVerifierUpdated(address indexed previousVerifier, address indexed newVerifier);
-    event LoginCommitmentMade(bytes32 indexed commitment, uint256 committedAt);
-    event LoginRegistered(bytes32 indexed loginHash, string login, address indexed wallet, address indexed factory);
-    event LoginReferralRecorded(bytes32 indexed loginHash, bytes32 indexed referrerLoginHash, string referrerLogin);
-    event LoginTransferred(
-        bytes32 indexed loginHash, string login, address indexed previousWallet, address indexed newWallet
-    );
-    event LoginMigrationRequested(
-        bytes32 indexed oldLoginHash,
-        string oldLogin,
-        bytes32 indexed newLoginHash,
-        string newLogin,
-        address indexed previousWallet,
-        address newWallet
-    );
-    event LoginMigrationConfirmed(
-        bytes32 indexed oldLoginHash,
-        string oldLogin,
-        bytes32 indexed newLoginHash,
-        string newLogin,
-        address indexed previousWallet,
-        address newWallet
-    );
-    event BaseLoginPriceUpdated(uint256 previousPrice, uint256 newPrice);
-    event LoginPriceMultiplierUpdated(uint256 previousMultiplier, uint256 newMultiplier);
-    event EthWithdrawn(address indexed to, uint256 amount);
-
-    error EmptyLogin();
-    error InvalidAddress();
-    error InvalidPayment();
-    error InvalidLoginLength();
-    error InvalidLoginCharacter();
-    error InvalidHyphen();
-    error UnauthorizedFactory();
-    error LoginAlreadyRegistered();
-    error LoginNotOwned();
-    error AddressAlreadyHasLogin();
-    error ReferrerLoginNotRegistered();
-    error SelfReferral();
-    error CommitmentAlreadyExists();
-    error CommitmentNotFound();
-    error CommitmentTooNew();
-    error CommitmentExpired();
-    error SameWallet();
-    error LoginMigrationAlreadyPending();
-    error LoginMigrationNotFound();
-    error LoginMigrationNotConfirmingWallet();
-    error LoginMigrationStale();
-    error LoginMigrationGuardianEmergencyMismatch();
-    error InvalidBaseLoginPrice();
-    error InvalidLoginPriceMultiplier();
-    error NothingToWithdraw();
-    error WithdrawFailed();
-    error AuthorizationVerifierNotSet();
+    uint256 public override baseLoginPrice = MERAWalletLoginRegistryConstants.DEFAULT_BASE_LOGIN_PRICE;
+    uint256 public override loginPriceMultiplier = MERAWalletLoginRegistryConstants.DEFAULT_LOGIN_PRICE_MULTIPLIER;
 
     modifier onlyFactory() {
         _onlyFactory();
@@ -107,13 +43,13 @@ contract MERAWalletLoginRegistry is Ownable {
     }
 
     /// @notice Whitelist a factory permanently; removal is not supported (avoids bricking deployed factories).
-    function addFactory(address factory) external onlyOwner {
+    function addFactory(address factory) external override onlyOwner {
         require(factory != address(0), InvalidAddress());
         isFactory[factory] = true;
         emit FactoryAdded(factory);
     }
 
-    function setAuthorizationVerifier(address newVerifier) external onlyOwner {
+    function setAuthorizationVerifier(address newVerifier) external override onlyOwner {
         if (newVerifier != address(0)) {
             require(newVerifier.code.length != 0, InvalidAddress());
         }
@@ -122,10 +58,11 @@ contract MERAWalletLoginRegistry is Ownable {
         emit AuthorizationVerifierUpdated(previousVerifier, newVerifier);
     }
 
-    /// @notice Updates the base login price; must stay within [MIN_BASE_LOGIN_PRICE, MAX_BASE_LOGIN_PRICE].
-    function setBaseLoginPrice(uint256 newBaseLoginPrice) external onlyOwner {
+    /// @notice Updates the base login price; must stay within pricing bounds in {MERAWalletLoginRegistryConstants}.
+    function setBaseLoginPrice(uint256 newBaseLoginPrice) external override onlyOwner {
         require(
-            newBaseLoginPrice >= MIN_BASE_LOGIN_PRICE && newBaseLoginPrice <= MAX_BASE_LOGIN_PRICE,
+            newBaseLoginPrice >= MERAWalletLoginRegistryConstants.MIN_BASE_LOGIN_PRICE
+                && newBaseLoginPrice <= MERAWalletLoginRegistryConstants.MAX_BASE_LOGIN_PRICE,
             InvalidBaseLoginPrice()
         );
         uint256 previousPrice = baseLoginPrice;
@@ -133,10 +70,10 @@ contract MERAWalletLoginRegistry is Ownable {
         emit BaseLoginPriceUpdated(previousPrice, newBaseLoginPrice);
     }
 
-    /// @notice Updates the per-length price multiplier; must stay within [MIN_LOGIN_PRICE_MULTIPLIER, MAX_LOGIN_PRICE_MULTIPLIER].
-    function setLoginPriceMultiplier(uint256 newMultiplier) external onlyOwner {
+    function setLoginPriceMultiplier(uint256 newMultiplier) external override onlyOwner {
         require(
-            newMultiplier >= MIN_LOGIN_PRICE_MULTIPLIER && newMultiplier <= MAX_LOGIN_PRICE_MULTIPLIER,
+            newMultiplier >= MERAWalletLoginRegistryConstants.MIN_LOGIN_PRICE_MULTIPLIER
+                && newMultiplier <= MERAWalletLoginRegistryConstants.MAX_LOGIN_PRICE_MULTIPLIER,
             InvalidLoginPriceMultiplier()
         );
         uint256 previousMultiplier = loginPriceMultiplier;
@@ -144,8 +81,7 @@ contract MERAWalletLoginRegistry is Ownable {
         emit LoginPriceMultiplierUpdated(previousMultiplier, newMultiplier);
     }
 
-    /// @notice Withdraws the entire ETH balance accumulated from paid login registrations to the current owner.
-    function withdraw() external onlyOwner {
+    function withdraw() external override onlyOwner {
         uint256 amount = address(this).balance;
         require(amount != 0, NothingToWithdraw());
 
@@ -156,7 +92,7 @@ contract MERAWalletLoginRegistry is Ownable {
         emit EthWithdrawn(to, amount);
     }
 
-    function commit(bytes32 commitment) external {
+    function commit(bytes32 commitment) external override {
         require(commitments[commitment] == 0, CommitmentAlreadyExists());
         commitments[commitment] = block.timestamp + 1;
         emit LoginCommitmentMade(commitment, block.timestamp);
@@ -168,7 +104,7 @@ contract MERAWalletLoginRegistry is Ownable {
         bytes32 secret,
         uint256 deadline,
         bytes calldata authorization
-    ) external payable onlyFactory {
+    ) external payable override onlyFactory {
         bytes32 loginHash = _requireLoginHash(login);
         _registerLogin(login, loginHash, wallet, secret, deadline, authorization, bytes32(0), "");
     }
@@ -180,14 +116,17 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 deadline,
         bytes calldata authorization,
         string calldata referrerLogin
-    ) external payable onlyFactory {
+    ) external payable override onlyFactory {
         require(wallet != address(0), InvalidAddress());
         bytes32 loginHash = _requireLoginHash(login);
         bytes32 referrerLoginHash = _requireReferrerLoginHash(loginHash, referrerLogin);
         _registerLogin(login, loginHash, wallet, secret, deadline, authorization, referrerLoginHash, referrerLogin);
     }
 
-    function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet) external {
+    function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet)
+        external
+        override
+    {
         require(newWallet != address(0), InvalidAddress());
         require(newWallet != msg.sender, SameWallet());
         bytes32 oldLoginHash = _requireLoginHash(oldLogin);
@@ -203,15 +142,17 @@ contract MERAWalletLoginRegistry is Ownable {
 
         _requireMatchingGuardianAndEmergency(msg.sender, newWallet);
 
-        pendingLoginMigrationByOldLoginHash[oldLoginHash] =
-            PendingLoginMigration({previousWallet: msg.sender, newWallet: newWallet, newLoginHash: newLoginHash});
+        pendingLoginMigrationByOldLoginHash[oldLoginHash] = MERAWalletLoginRegistryTypes.PendingLoginMigration({
+            previousWallet: msg.sender, newWallet: newWallet, newLoginHash: newLoginHash
+        });
 
         emit LoginMigrationRequested(oldLoginHash, oldLogin, newLoginHash, newLogin, msg.sender, newWallet);
     }
 
-    function confirmLoginMigration(string calldata oldLogin) external {
+    function confirmLoginMigration(string calldata oldLogin) external override {
         bytes32 oldLoginHash = _requireLoginHash(oldLogin);
-        PendingLoginMigration memory migration = pendingLoginMigrationByOldLoginHash[oldLoginHash];
+        MERAWalletLoginRegistryTypes.PendingLoginMigration memory migration =
+            pendingLoginMigrationByOldLoginHash[oldLoginHash];
         require(migration.previousWallet != address(0), LoginMigrationNotFound());
         require(msg.sender == migration.newWallet, LoginMigrationNotConfirmingWallet());
 
@@ -240,41 +181,41 @@ contract MERAWalletLoginRegistry is Ownable {
         emit LoginTransferred(newLoginHash, newLogin, newWallet, previousWallet);
     }
 
-    function priceOf(string calldata login) external view returns (uint256) {
+    function priceOf(string calldata login) external view override returns (uint256) {
         _requireLoginHash(login);
         return _priceOfValidatedLength(bytes(login).length);
     }
 
-    function walletOf(string calldata login) external view returns (address) {
+    function walletOf(string calldata login) external view override returns (address) {
         if (bytes(login).length == 0) {
             return address(0);
         }
         return walletByLoginHash[_loginHash(login)];
     }
 
-    function loginOf(address wallet) external view returns (string memory) {
+    function loginOf(address wallet) external view override returns (string memory) {
         return _loginByHash[loginHashByWallet[wallet]];
     }
 
-    function loginByHash(bytes32 loginHash) external view returns (string memory) {
+    function loginByHash(bytes32 loginHash) external view override returns (string memory) {
         return _loginByHash[loginHash];
     }
 
-    function referrerLoginHashOf(string calldata login) external view returns (bytes32) {
+    function referrerLoginHashOf(string calldata login) external view override returns (bytes32) {
         if (bytes(login).length == 0) {
             return bytes32(0);
         }
         return referrerLoginHashByLoginHash[_loginHash(login)];
     }
 
-    function referrerLoginOf(string calldata login) external view returns (string memory) {
+    function referrerLoginOf(string calldata login) external view override returns (string memory) {
         if (bytes(login).length == 0) {
             return "";
         }
         return _loginByHash[referrerLoginHashByLoginHash[_loginHash(login)]];
     }
 
-    function validateLogin(string calldata login) external pure returns (bytes32) {
+    function validateLogin(string calldata login) external pure override returns (bytes32) {
         return _requireLoginHash(login);
     }
 
@@ -285,7 +226,7 @@ contract MERAWalletLoginRegistry is Ownable {
         bytes32 secret,
         uint256 deadline,
         bytes32 authorizationHash
-    ) external pure returns (bytes32) {
+    ) external pure override returns (bytes32) {
         return _makeCommitment(login, wallet, factory, secret, deadline, authorizationHash, bytes32(0));
     }
 
@@ -297,7 +238,7 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 deadline,
         bytes32 authorizationHash,
         string calldata referrerLogin
-    ) external pure returns (bytes32) {
+    ) external pure override returns (bytes32) {
         return _makeCommitment(
             login, wallet, factory, secret, deadline, authorizationHash, _optionalLoginHash(referrerLogin)
         );
@@ -318,7 +259,7 @@ contract MERAWalletLoginRegistry is Ownable {
         require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
 
         uint256 loginLength = bytes(login).length;
-        if (loginLength > PAID_LOGIN_MAX_LENGTH) {
+        if (loginLength > MERAWalletLoginRegistryConstants.PAID_LOGIN_MAX_LENGTH) {
             require(msg.value == 0, InvalidPayment());
         } else if (REQUIRE_SHORT_LOGIN_AUTHORIZATION) {
             require(msg.value == 0, InvalidPayment());
@@ -334,8 +275,13 @@ contract MERAWalletLoginRegistry is Ownable {
             uint256 committedAtPlusOne = commitments[commitment];
             require(committedAtPlusOne != 0, CommitmentNotFound());
             uint256 committedAt = committedAtPlusOne - 1;
-            require(block.timestamp >= committedAt + MIN_COMMITMENT_AGE, CommitmentTooNew());
-            require(block.timestamp <= committedAt + MAX_COMMITMENT_AGE, CommitmentExpired());
+            require(
+                block.timestamp >= committedAt + MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE, CommitmentTooNew()
+            );
+            require(
+                block.timestamp <= committedAt + MERAWalletLoginRegistryConstants.MAX_COMMITMENT_AGE,
+                CommitmentExpired()
+            );
             delete commitments[commitment];
         }
 
@@ -362,10 +308,10 @@ contract MERAWalletLoginRegistry is Ownable {
     }
 
     function _priceOfValidatedLength(uint256 length) private view returns (uint256) {
-        if (length > PAID_LOGIN_MAX_LENGTH) {
+        if (length > MERAWalletLoginRegistryConstants.PAID_LOGIN_MAX_LENGTH) {
             return 0;
         }
-        uint256 exponent = PAID_LOGIN_MAX_LENGTH - length;
+        uint256 exponent = MERAWalletLoginRegistryConstants.PAID_LOGIN_MAX_LENGTH - length;
         return baseLoginPrice * (loginPriceMultiplier ** exponent);
     }
 
@@ -387,7 +333,11 @@ contract MERAWalletLoginRegistry is Ownable {
         bytes calldata loginBytes = bytes(login);
         uint256 length = loginBytes.length;
         require(length != 0, EmptyLogin());
-        require(length >= MIN_LOGIN_LENGTH && length <= MAX_LOGIN_LENGTH, InvalidLoginLength());
+        require(
+            length >= MERAWalletLoginRegistryConstants.MIN_LOGIN_LENGTH
+                && length <= MERAWalletLoginRegistryConstants.MAX_LOGIN_LENGTH,
+            InvalidLoginLength()
+        );
         for (uint256 i = 0; i < length; ++i) {
             bytes1 char = loginBytes[i];
             if (char == "-") {

@@ -8,6 +8,9 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
+import {IMERAWalletLoginRegistryErrors} from "../src/interfaces/IMERAWalletLoginRegistryErrors.sol";
+import {IMERAWalletLoginRegistryEvents} from "../src/interfaces/IMERAWalletLoginRegistryEvents.sol";
+import {MERAWalletLoginRegistryConstants} from "../src/constants/MERAWalletLoginRegistryConstants.sol";
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERALoginSignatureVerifier} from "../src/MERALoginSignatureVerifier.sol";
 import {MERAWalletMetaProxyCloneFactory} from "../src/MERAWalletMetaProxyCloneFactory.sol";
@@ -77,7 +80,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     {
         predicted = factory.predictWallet(login, p);
         registry.commit(registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
     }
 
     function _deployCommitted(string memory login, MERAWalletTypes.WalletInitParams memory p)
@@ -97,7 +100,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.commit(
             registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256(""), referrerLogin)
         );
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
     }
 
     function _deployCommittedWithReferrer(
@@ -208,7 +211,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         _commitWithReferrer(login, p, "alice");
 
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.ReferrerLoginNotRegistered.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.ReferrerLoginNotRegistered.selector);
         factory.deployWallet{value: price}(login, p, secret, 0, "", "alice");
     }
 
@@ -218,7 +221,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         _commitWithReferrer(login, p, login);
 
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.SelfReferral.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.SelfReferral.selector);
         factory.deployWallet{value: price}(login, p, secret, 0, "", login);
     }
 
@@ -230,7 +233,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         _commitWithReferrer(login, p, "alice");
 
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.CommitmentNotFound.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.CommitmentNotFound.selector);
         factory.deployWallet{value: price}(login, p, secret, 0, "", "carol");
     }
 
@@ -272,7 +275,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         vm.prank(deployed);
         registry.requestLoginMigration(login, newLogin, newWallet);
         vm.expectEmit(true, true, true, true);
-        emit MERAWalletLoginRegistry.LoginTransferred(keccak256(bytes(login)), login, deployed, newWallet);
+        emit IMERAWalletLoginRegistryEvents.LoginTransferred(keccak256(bytes(login)), login, deployed, newWallet);
         vm.prank(newWallet);
         registry.confirmLoginMigration(login);
 
@@ -291,7 +294,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         _deployCommitted(login, p);
         address newWallet = _deployCommitted(newLogin, p);
 
-        vm.expectRevert(MERAWalletLoginRegistry.LoginNotOwned.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginNotOwned.selector);
         registry.requestLoginMigration(login, newLogin, newWallet);
     }
 
@@ -303,7 +306,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address newWallet = _deployCommitted(newLogin, p);
 
         vm.prank(newWallet);
-        vm.expectRevert(MERAWalletLoginRegistry.LoginMigrationNotFound.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationNotFound.selector);
         registry.confirmLoginMigration(login);
     }
 
@@ -318,7 +321,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.requestLoginMigration(login, newLogin, newWallet);
 
         vm.prank(address(0x123456));
-        vm.expectRevert(MERAWalletLoginRegistry.LoginMigrationNotConfirmingWallet.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationNotConfirmingWallet.selector);
         registry.confirmLoginMigration(login);
     }
 
@@ -333,13 +336,13 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address newWallet = _deployCommitted(newLogin, pNew);
 
         vm.prank(oldWallet);
-        vm.expectRevert(MERAWalletLoginRegistry.LoginMigrationGuardianEmergencyMismatch.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationGuardianEmergencyMismatch.selector);
         registry.requestLoginMigration(oldLogin, newLogin, newWallet);
     }
 
     function test_registry_only_factory_can_register_login() public {
         uint256 price = registry.priceOf("mallory");
-        vm.expectRevert(MERAWalletLoginRegistry.UnauthorizedFactory.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.UnauthorizedFactory.selector);
         registry.registerLogin{value: price}("mallory", address(0x123456), secret, 0, "");
     }
 
@@ -357,7 +360,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
     function test_empty_login_reverts() public {
         MERAWalletTypes.WalletInitParams memory p = _params();
-        vm.expectRevert(MERAWalletLoginRegistry.EmptyLogin.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.EmptyLogin.selector);
         factory.deployWallet("", p, secret, 0, "");
     }
 
@@ -380,7 +383,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         string memory login = "dave";
         _commit(login, p);
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidPayment.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidPayment.selector);
         factory.deployWallet{value: price - 1 wei}(login, p, secret, 0, "");
     }
 
@@ -389,7 +392,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         string memory login = "dave";
         _commit(login, p);
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidPayment.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidPayment.selector);
         factory.deployWallet{value: price + 1 wei}(login, p, secret, 0, "");
     }
 
@@ -429,16 +432,16 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     }
 
     function test_setBaseLoginPrice_reverts_below_min() public {
-        uint256 tooLow = registry.MIN_BASE_LOGIN_PRICE() - 1;
+        uint256 tooLow = MERAWalletLoginRegistryConstants.MIN_BASE_LOGIN_PRICE - 1;
         vm.prank(owner);
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidBaseLoginPrice.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidBaseLoginPrice.selector);
         registry.setBaseLoginPrice(tooLow);
     }
 
     function test_setBaseLoginPrice_reverts_above_max() public {
-        uint256 tooHigh = registry.MAX_BASE_LOGIN_PRICE() + 1;
+        uint256 tooHigh = MERAWalletLoginRegistryConstants.MAX_BASE_LOGIN_PRICE + 1;
         vm.prank(owner);
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidBaseLoginPrice.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidBaseLoginPrice.selector);
         registry.setBaseLoginPrice(tooHigh);
     }
 
@@ -451,13 +454,13 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
     function test_setLoginPriceMultiplier_reverts_below_min() public {
         vm.prank(owner);
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginPriceMultiplier.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginPriceMultiplier.selector);
         registry.setLoginPriceMultiplier(1);
     }
 
     function test_setLoginPriceMultiplier_reverts_above_max() public {
         vm.prank(owner);
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginPriceMultiplier.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginPriceMultiplier.selector);
         registry.setLoginPriceMultiplier(11);
     }
 
@@ -485,7 +488,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
         uint256 ownerBalBefore = owner.balance;
         vm.expectEmit(true, false, false, true);
-        emit MERAWalletLoginRegistry.EthWithdrawn(owner, total);
+        emit IMERAWalletLoginRegistryEvents.EthWithdrawn(owner, total);
         vm.prank(owner);
         registry.withdraw();
 
@@ -495,7 +498,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
     function test_withdraw_reverts_when_balance_zero() public {
         vm.prank(owner);
-        vm.expectRevert(MERAWalletLoginRegistry.NothingToWithdraw.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.NothingToWithdraw.selector);
         registry.withdraw();
     }
 
@@ -513,34 +516,34 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     }
 
     function test_registry_rejects_invalid_login_characters_and_shapes() public {
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginLength.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginLength.selector);
         registry.validateLogin("ab");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginLength.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginLength.selector);
         registry.priceOf("ab");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginLength.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginLength.selector);
         registry.validateLogin("abcdefghijklmnopqrstuvwxyz1234567");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginCharacter.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginCharacter.selector);
         registry.validateLogin("Alice");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginCharacter.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginCharacter.selector);
         registry.validateLogin(unicode"алиса");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginCharacter.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginCharacter.selector);
         registry.validateLogin("alice.eth");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginCharacter.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidLoginCharacter.selector);
         registry.validateLogin("ab_cd");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidHyphen.selector);
         registry.validateLogin("ab--cd");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidHyphen.selector);
         registry.validateLogin("-abc");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidHyphen.selector);
         registry.validateLogin("abc-");
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidHyphen.selector);
         registry.validateLogin("a--bc");
     }
 
     function test_register_without_commit_reverts() public {
         MERAWalletTypes.WalletInitParams memory p = _params();
         uint256 price = registry.priceOf("dave");
-        vm.expectRevert(MERAWalletLoginRegistry.CommitmentNotFound.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.CommitmentNotFound.selector);
         factory.deployWallet{value: price}("dave", p, secret, 0, "");
     }
 
@@ -551,7 +554,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.commit(registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256("")));
 
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.CommitmentTooNew.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.CommitmentTooNew.selector);
         factory.deployWallet{value: price}(login, p, secret, 0, "");
     }
 
@@ -560,10 +563,10 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         string memory login = "dave";
         address predicted = factory.predictWallet(login, p);
         registry.commit(registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MAX_COMMITMENT_AGE() + 1);
+        skip(MERAWalletLoginRegistryConstants.MAX_COMMITMENT_AGE + 1);
 
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.CommitmentExpired.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.CommitmentExpired.selector);
         factory.deployWallet{value: price}(login, p, secret, 0, "");
     }
 
@@ -572,10 +575,10 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         string memory login = "dave";
         address predicted = factory.predictWallet(login, p);
         registry.commit(registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
 
         uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERAWalletLoginRegistry.CommitmentNotFound.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.CommitmentNotFound.selector);
         factory.deployWallet{value: price}(login, p, keccak256("wrong"), 0, "");
     }
 
@@ -585,7 +588,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         bytes32 commitment =
             registry.makeCommitment(login, factory.predictWallet(login, p), address(factory), secret, 0, keccak256(""));
         registry.commit(commitment);
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
         factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, 0, "");
 
         assertEq(registry.commitments(commitment), 0);
@@ -631,7 +634,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address predicted = fac.predictWallet(login, p);
         uint256 deadline = block.timestamp + 30 seconds;
         bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
-        vm.warp(block.timestamp + 45 seconds);
+        skip(45 seconds);
 
         vm.expectRevert(MERALoginSignatureVerifier.AuthorizationExpired.selector);
         fac.deployWallet(login, p, secret, deadline, authorization);
@@ -685,7 +688,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         MERAWalletTypes.WalletInitParams memory p = _params();
         string memory login = "dave";
 
-        vm.expectRevert(MERAWalletLoginRegistry.AuthorizationVerifierNotSet.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.AuthorizationVerifierNotSet.selector);
         fac.deployWallet(login, p, secret, 0, "");
     }
 
@@ -701,7 +704,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         uint256 deadline = block.timestamp + 15 minutes;
         bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
 
-        vm.expectRevert(MERAWalletLoginRegistry.InvalidPayment.selector);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidPayment.selector);
         fac.deployWallet{value: 1 wei}(login, p, secret, deadline, authorization);
     }
 }

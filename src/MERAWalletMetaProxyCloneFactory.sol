@@ -4,13 +4,13 @@ pragma solidity 0.8.34;
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {MERAWalletTypes} from "./types/MERAWalletTypes.sol";
 import {BaseMERAWallet} from "./BaseMERAWallet.sol";
-import {MERAWalletLoginRegistry} from "./MERAWalletLoginRegistry.sol";
+import {IMERAWalletLoginRegistry} from "./interfaces/IMERAWalletLoginRegistry.sol";
 
 /// @title MERAWalletMetaProxyCloneFactory
 /// @notice Deploys deterministic `BaseMERAWallet` meta-proxy clones with init params embedded as immutable args.
 contract MERAWalletMetaProxyCloneFactory {
     address public immutable WALLET_IMPLEMENTATION;
-    MERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
+    IMERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
 
     event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
 
@@ -22,7 +22,7 @@ contract MERAWalletMetaProxyCloneFactory {
         require(walletImplementation.code.length != 0, WalletImplementationNotDeployed());
         require(loginRegistry.code.length != 0, LoginRegistryNotDeployed());
         WALLET_IMPLEMENTATION = walletImplementation;
-        LOGIN_REGISTRY = MERAWalletLoginRegistry(loginRegistry);
+        LOGIN_REGISTRY = IMERAWalletLoginRegistry(loginRegistry);
     }
 
     /// @notice Deploys a new `BaseMERAWallet` meta-proxy clone and stores `login` -> wallet.
