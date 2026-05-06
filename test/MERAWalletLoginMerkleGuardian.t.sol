@@ -30,7 +30,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     bytes32 internal loginRoot;
 
     function setUp() public {
-        registry = new MERAWalletLoginRegistry(owner);
+        registry = new MERAWalletLoginRegistry(owner, false);
         vm.prank(owner);
         registry.addFactory(address(this));
 

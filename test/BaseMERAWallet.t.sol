@@ -3110,7 +3110,7 @@ contract BaseMERAWalletTest is Test {
     }
 
     function test_LoginMigrationRegistryCalls_DefaultToEmergencyOnly() public {
-        MERAWalletLoginRegistry registry = new MERAWalletLoginRegistry(address(this));
+        MERAWalletLoginRegistry registry = new MERAWalletLoginRegistry(address(this), false);
         registry.addFactory(address(this));
 
         BaseMERAWallet newWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));

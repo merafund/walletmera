@@ -43,11 +43,22 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     function setUp() public {
         authorizer = vm.addr(authorizerPk);
         implementation = new BaseMERAWallet(address(1), address(2), address(3), address(0), address(0));
-        registry = new MERAWalletLoginRegistry(owner);
+        registry = new MERAWalletLoginRegistry(owner, false);
         factory = new MERAWalletMetaProxyCloneFactory(address(implementation), address(registry));
 
         vm.prank(owner);
         registry.addFactory(address(factory));
+    }
+
+    /// @dev Short logins: free + IMERALoginAuthorizationVerifier, no pre-commit.
+    function _authRegistryAndFactory()
+        internal
+        returns (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac)
+    {
+        reg = new MERAWalletLoginRegistry(owner, true);
+        fac = new MERAWalletMetaProxyCloneFactory(address(implementation), address(reg));
+        vm.prank(owner);
+        reg.addFactory(address(fac));
     }
 
     function _params() internal view returns (MERAWalletTypes.WalletInitParams memory p) {
@@ -104,8 +115,19 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address wallet,
         uint256 deadline
     ) internal view returns (bytes memory) {
+        return _signAuthorization(registry, factory, verifier, login, wallet, deadline);
+    }
+
+    function _signAuthorization(
+        MERAWalletLoginRegistry reg,
+        MERAWalletMetaProxyCloneFactory fac,
+        MERALoginSignatureVerifier verifier,
+        string memory login,
+        address wallet,
+        uint256 deadline
+    ) internal view returns (bytes memory) {
         bytes32 digest = verifier.hashAuthorization(
-            address(registry), address(factory), keccak256(bytes(login)), wallet, deadline
+            address(reg), address(fac), keccak256(bytes(login)), wallet, deadline
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(authorizerPk, digest);
         return abi.encodePacked(r, s, v);
@@ -570,27 +592,82 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     }
 
     function test_l2_mode_requires_valid_authorization() public {
+        (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
         MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(authorizer);
         vm.prank(owner);
-        registry.setAuthorizationVerifier(address(verifier));
+        reg.setAuthorizationVerifier(address(verifier));
 
         MERAWalletTypes.WalletInitParams memory p = _params();
         string memory login = "dave";
-        address predicted = factory.predictWallet(login, p);
+        address predicted = fac.predictWallet(login, p);
         uint256 deadline = block.timestamp + 15 minutes;
-        bytes memory authorization = _signAuthorization(verifier, login, predicted, deadline);
+        bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
 
-        registry.commit(
-            registry.makeCommitment(login, predicted, address(factory), secret, deadline, keccak256(authorization))
-        );
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
-
-        address deployed =
-            factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, deadline, authorization);
+        address deployed = fac.deployWallet(login, p, secret, deadline, authorization);
         assertEq(deployed, predicted);
     }
 
     function test_l2_mode_rejects_missing_authorization() public {
+        (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
+        MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(authorizer);
+        vm.prank(owner);
+        reg.setAuthorizationVerifier(address(verifier));
+
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "dave";
+
+        vm.expectRevert(MERALoginSignatureVerifier.InvalidAuthorization.selector);
+        fac.deployWallet(login, p, secret, 0, "");
+    }
+
+    function test_l2_mode_rejects_expired_authorization() public {
+        (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
+        MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(authorizer);
+        vm.prank(owner);
+        reg.setAuthorizationVerifier(address(verifier));
+
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "dave";
+        address predicted = fac.predictWallet(login, p);
+        uint256 deadline = block.timestamp + 30 seconds;
+        bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
+        vm.warp(block.timestamp + 45 seconds);
+
+        vm.expectRevert(MERALoginSignatureVerifier.AuthorizationExpired.selector);
+        fac.deployWallet(login, p, secret, deadline, authorization);
+    }
+
+    function test_l2_mode_accepts_eip1271_authorizer() public {
+        (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
+        Mock1271Authorizer mockAuthorizer = new Mock1271Authorizer(authorizer);
+        MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(address(mockAuthorizer));
+        vm.prank(owner);
+        reg.setAuthorizationVerifier(address(verifier));
+
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "dave";
+        address predicted = fac.predictWallet(login, p);
+        uint256 deadline = block.timestamp + 15 minutes;
+        bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
+
+        address deployed = fac.deployWallet(login, p, secret, deadline, authorization);
+        assertEq(deployed, predicted);
+    }
+
+    function test_deploy_long_login_without_commit_or_payment() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "abcdefghij";
+        address predicted = factory.predictWallet(login, p);
+
+        vm.expectEmit(true, false, false, true);
+        emit MERAWalletMetaProxyCloneFactory.WalletDeployed(keccak256(bytes(login)), login, predicted);
+        address deployed = factory.deployWallet(login, p, secret, 0, "");
+
+        assertEq(deployed, predicted);
+        assertEq(registry.walletOf(login), deployed);
+    }
+
+    function test_paid_mode_skips_authorization_verifier_even_when_set() public {
         MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(authorizer);
         vm.prank(owner);
         registry.setAuthorizationVerifier(address(verifier));
@@ -599,49 +676,32 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         string memory login = "dave";
         _commit(login, p);
 
-        uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERALoginSignatureVerifier.InvalidAuthorization.selector);
-        factory.deployWallet{value: price}(login, p, secret, 0, "");
+        address deployed = factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, 0, "");
+        assertEq(deployed, factory.predictWallet(login, p));
     }
 
-    function test_l2_mode_rejects_expired_authorization() public {
+    function test_short_login_authorization_mode_reverts_without_verifier() public {
+        (, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "dave";
+
+        vm.expectRevert(MERAWalletLoginRegistry.AuthorizationVerifierNotSet.selector);
+        fac.deployWallet(login, p, secret, 0, "");
+    }
+
+    function test_short_login_authorization_mode_rejects_nonzero_value() public {
+        (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
         MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(authorizer);
         vm.prank(owner);
-        registry.setAuthorizationVerifier(address(verifier));
+        reg.setAuthorizationVerifier(address(verifier));
 
         MERAWalletTypes.WalletInitParams memory p = _params();
         string memory login = "dave";
-        address predicted = factory.predictWallet(login, p);
-        uint256 deadline = block.timestamp + 30 seconds;
-        bytes memory authorization = _signAuthorization(verifier, login, predicted, deadline);
-        registry.commit(
-            registry.makeCommitment(login, predicted, address(factory), secret, deadline, keccak256(authorization))
-        );
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
-
-        uint256 price = registry.priceOf(login);
-        vm.expectRevert(MERALoginSignatureVerifier.AuthorizationExpired.selector);
-        factory.deployWallet{value: price}(login, p, secret, deadline, authorization);
-    }
-
-    function test_l2_mode_accepts_eip1271_authorizer() public {
-        Mock1271Authorizer mockAuthorizer = new Mock1271Authorizer(authorizer);
-        MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(address(mockAuthorizer));
-        vm.prank(owner);
-        registry.setAuthorizationVerifier(address(verifier));
-
-        MERAWalletTypes.WalletInitParams memory p = _params();
-        string memory login = "dave";
-        address predicted = factory.predictWallet(login, p);
+        address predicted = fac.predictWallet(login, p);
         uint256 deadline = block.timestamp + 15 minutes;
-        bytes memory authorization = _signAuthorization(verifier, login, predicted, deadline);
-        registry.commit(
-            registry.makeCommitment(login, predicted, address(factory), secret, deadline, keccak256(authorization))
-        );
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
 
-        address deployed =
-            factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, deadline, authorization);
-        assertEq(deployed, predicted);
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidPayment.selector);
+        fac.deployWallet{value: 1 wei}(login, p, secret, deadline, authorization);
     }
 }

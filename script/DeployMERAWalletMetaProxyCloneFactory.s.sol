@@ -21,7 +21,8 @@ contract DeployMERAWalletMetaProxyCloneFactory is Script {
         console2.log("Deployer:", deployer);
 
         implementation = new BaseMERAWallet(address(1), address(2), address(3), address(0), address(0));
-        registry = new MERAWalletLoginRegistry(deployer);
+        // Paid short-logins + pre-commit; long logins (> PAID_LOGIN_MAX_LENGTH) stay free without commit.
+        registry = new MERAWalletLoginRegistry(deployer, false);
         factory = new MERAWalletMetaProxyCloneFactory(address(implementation), address(registry));
         registry.addFactory(address(factory));
 

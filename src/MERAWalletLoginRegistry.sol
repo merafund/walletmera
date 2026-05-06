@@ -25,6 +25,9 @@ contract MERAWalletLoginRegistry is Ownable {
     }
 
     address public authorizationVerifier;
+    /// @dev If true, short logins (length <= PAID_LOGIN_MAX_LENGTH) register for free without pre-commit but require {authorizationVerifier}.
+    /// @dev If false, short logins use paid registration with pre-commit and never call {authorizationVerifier}.
+    bool public immutable REQUIRE_SHORT_LOGIN_AUTHORIZATION;
     mapping(address factory => bool allowed) public isFactory;
     mapping(bytes32 commitment => uint256 committedAt) public commitments;
     mapping(bytes32 loginHash => address wallet) public walletByLoginHash;
@@ -92,13 +95,16 @@ contract MERAWalletLoginRegistry is Ownable {
     error InvalidLoginPriceMultiplier();
     error NothingToWithdraw();
     error WithdrawFailed();
+    error AuthorizationVerifierNotSet();
 
     modifier onlyFactory() {
         _onlyFactory();
         _;
     }
 
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    constructor(address initialOwner, bool requireShortLoginAuthorization) Ownable(initialOwner) {
+        REQUIRE_SHORT_LOGIN_AUTHORIZATION = requireShortLoginAuthorization;
+    }
 
     /// @notice Whitelist a factory permanently; removal is not supported (avoids bricking deployed factories).
     function addFactory(address factory) external onlyOwner {
@@ -228,22 +234,28 @@ contract MERAWalletLoginRegistry is Ownable {
         require(wallet != address(0), InvalidAddress());
         require(walletByLoginHash[loginHash] == address(0), LoginAlreadyRegistered());
         require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
-        require(msg.value == _priceOfValidatedLength(bytes(login).length), InvalidPayment());
 
-        bytes32 commitment =
-            _makeCommitment(login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash);
-        uint256 committedAtPlusOne = commitments[commitment];
-        require(committedAtPlusOne != 0, CommitmentNotFound());
-        uint256 committedAt = committedAtPlusOne - 1;
-        require(block.timestamp >= committedAt + MIN_COMMITMENT_AGE, CommitmentTooNew());
-        require(block.timestamp <= committedAt + MAX_COMMITMENT_AGE, CommitmentExpired());
-
-        address verifier = authorizationVerifier;
-        if (verifier != address(0)) {
+        uint256 loginLength = bytes(login).length;
+        if (loginLength > PAID_LOGIN_MAX_LENGTH) {
+            require(msg.value == 0, InvalidPayment());
+        } else if (REQUIRE_SHORT_LOGIN_AUTHORIZATION) {
+            require(msg.value == 0, InvalidPayment());
+            address verifier = authorizationVerifier;
+            require(verifier != address(0), AuthorizationVerifierNotSet());
             IMERALoginAuthorizationVerifier(verifier)
                 .validateRegistration(address(this), msg.sender, loginHash, login, wallet, deadline, authorization);
+        } else {
+            require(msg.value == _priceOfValidatedLength(loginLength), InvalidPayment());
+            bytes32 commitment = _makeCommitment(
+                login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash
+            );
+            uint256 committedAtPlusOne = commitments[commitment];
+            require(committedAtPlusOne != 0, CommitmentNotFound());
+            uint256 committedAt = committedAtPlusOne - 1;
+            require(block.timestamp >= committedAt + MIN_COMMITMENT_AGE, CommitmentTooNew());
+            require(block.timestamp <= committedAt + MAX_COMMITMENT_AGE, CommitmentExpired());
+            delete commitments[commitment];
         }
-        delete commitments[commitment];
 
         walletByLoginHash[loginHash] = wallet;
         loginHashByWallet[wallet] = loginHash;
