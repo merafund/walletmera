@@ -420,6 +420,31 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.setBaseLoginPrice(tooHigh);
     }
 
+    function test_setLoginPriceMultiplier_owner_updates_within_bounds() public {
+        vm.prank(owner);
+        registry.setLoginPriceMultiplier(2);
+        assertEq(registry.loginPriceMultiplier(), 2);
+        assertEq(registry.priceOf("abc"), registry.baseLoginPrice() * (2 ** 6));
+    }
+
+    function test_setLoginPriceMultiplier_reverts_below_min() public {
+        vm.prank(owner);
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginPriceMultiplier.selector);
+        registry.setLoginPriceMultiplier(1);
+    }
+
+    function test_setLoginPriceMultiplier_reverts_above_max() public {
+        vm.prank(owner);
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidLoginPriceMultiplier.selector);
+        registry.setLoginPriceMultiplier(11);
+    }
+
+    function test_setLoginPriceMultiplier_reverts_not_owner() public {
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, primary));
+        registry.setLoginPriceMultiplier(5);
+    }
+
     function test_setBaseLoginPrice_reverts_not_owner() public {
         vm.prank(primary);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, primary));

@@ -15,6 +15,8 @@ contract MERAWalletLoginRegistry is Ownable {
     uint256 public constant PAID_LOGIN_MAX_LENGTH = 9;
     uint256 public constant MIN_BASE_LOGIN_PRICE = 0.00001 ether;
     uint256 public constant MAX_BASE_LOGIN_PRICE = 1 ether;
+    uint256 public constant MIN_LOGIN_PRICE_MULTIPLIER = 2;
+    uint256 public constant MAX_LOGIN_PRICE_MULTIPLIER = 10;
 
     struct PendingLoginMigration {
         address previousWallet;
@@ -33,6 +35,8 @@ contract MERAWalletLoginRegistry is Ownable {
 
     /// @notice Base price for the shortest paid login tier (length == PAID_LOGIN_MAX_LENGTH); owner may adjust within [MIN_BASE_LOGIN_PRICE, MAX_BASE_LOGIN_PRICE].
     uint256 public baseLoginPrice = 0.0005 ether;
+    /// @notice Per-length step multiplier for paid login pricing: price = baseLoginPrice * loginPriceMultiplier^(PAID_LOGIN_MAX_LENGTH - length). Owner may set in [MIN_LOGIN_PRICE_MULTIPLIER, MAX_LOGIN_PRICE_MULTIPLIER].
+    uint256 public loginPriceMultiplier = 10;
 
     event FactoryAdded(address indexed factory);
     event AuthorizationVerifierUpdated(address indexed previousVerifier, address indexed newVerifier);
@@ -59,6 +63,7 @@ contract MERAWalletLoginRegistry is Ownable {
         address newWallet
     );
     event BaseLoginPriceUpdated(uint256 previousPrice, uint256 newPrice);
+    event LoginPriceMultiplierUpdated(uint256 previousMultiplier, uint256 newMultiplier);
     event EthWithdrawn(address indexed to, uint256 amount);
 
     error EmptyLogin();
@@ -84,6 +89,7 @@ contract MERAWalletLoginRegistry is Ownable {
     error LoginMigrationStale();
     error LoginMigrationGuardianEmergencyMismatch();
     error InvalidBaseLoginPrice();
+    error InvalidLoginPriceMultiplier();
     error NothingToWithdraw();
     error WithdrawFailed();
 
@@ -119,6 +125,17 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 previousPrice = baseLoginPrice;
         baseLoginPrice = newBaseLoginPrice;
         emit BaseLoginPriceUpdated(previousPrice, newBaseLoginPrice);
+    }
+
+    /// @notice Updates the per-length price multiplier; must stay within [MIN_LOGIN_PRICE_MULTIPLIER, MAX_LOGIN_PRICE_MULTIPLIER].
+    function setLoginPriceMultiplier(uint256 newMultiplier) external onlyOwner {
+        require(
+            newMultiplier >= MIN_LOGIN_PRICE_MULTIPLIER && newMultiplier <= MAX_LOGIN_PRICE_MULTIPLIER,
+            InvalidLoginPriceMultiplier()
+        );
+        uint256 previousMultiplier = loginPriceMultiplier;
+        loginPriceMultiplier = newMultiplier;
+        emit LoginPriceMultiplierUpdated(previousMultiplier, newMultiplier);
     }
 
     /// @notice Withdraws the entire ETH balance accumulated from paid login registrations to the current owner.
@@ -359,11 +376,8 @@ contract MERAWalletLoginRegistry is Ownable {
         if (length > PAID_LOGIN_MAX_LENGTH) {
             return 0;
         }
-        uint256 price = baseLoginPrice;
-        for (uint256 i = length; i < PAID_LOGIN_MAX_LENGTH; ++i) {
-            price *= 10;
-        }
-        return price;
+        uint256 exponent = PAID_LOGIN_MAX_LENGTH - length;
+        return baseLoginPrice * (loginPriceMultiplier ** exponent);
     }
 
     function _makeCommitment(
