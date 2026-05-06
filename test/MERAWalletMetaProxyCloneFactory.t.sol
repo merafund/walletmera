@@ -300,6 +300,21 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.confirmLoginMigration(login);
     }
 
+    function test_registry_migration_reverts_when_guardian_emergency_differ() public {
+        string memory oldLogin = "mig-old";
+        string memory newLogin = "mig-new";
+        MERAWalletTypes.WalletInitParams memory pOld = _params();
+        MERAWalletTypes.WalletInitParams memory pNew = _params();
+        pNew.initialGuardian = address(0xBEEF01);
+
+        address oldWallet = _deployCommitted(oldLogin, pOld);
+        address newWallet = _deployCommitted(newLogin, pNew);
+
+        vm.prank(oldWallet);
+        vm.expectRevert(MERAWalletLoginRegistry.LoginMigrationGuardianEmergencyMismatch.selector);
+        registry.requestLoginMigration(oldLogin, newLogin, newWallet);
+    }
+
     function test_registry_only_factory_can_register_login() public {
         uint256 price = registry.priceOf("mallory");
         vm.expectRevert(MERAWalletLoginRegistry.UnauthorizedFactory.selector);

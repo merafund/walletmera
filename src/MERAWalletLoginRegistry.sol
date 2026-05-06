@@ -2,6 +2,7 @@
 pragma solidity 0.8.34;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IBaseMERAWallet} from "./interfaces/IBaseMERAWallet.sol";
 import {IMERALoginAuthorizationVerifier} from "./interfaces/IMERALoginAuthorizationVerifier.sol";
 
 /// @title MERAWalletLoginRegistry
@@ -82,6 +83,7 @@ contract MERAWalletLoginRegistry is Ownable {
     error LoginMigrationNotFound();
     error LoginMigrationNotConfirmingWallet();
     error LoginMigrationStale();
+    error LoginMigrationGuardianEmergencyMismatch();
     error InvalidBaseLoginPrice();
     error NothingToWithdraw();
     error WithdrawFailed();
@@ -250,6 +252,8 @@ contract MERAWalletLoginRegistry is Ownable {
             LoginMigrationAlreadyPending()
         );
 
+        _requireMatchingGuardianAndEmergency(msg.sender, newWallet);
+
         pendingLoginMigrationByOldLoginHash[oldLoginHash] =
             PendingLoginMigration({previousWallet: msg.sender, newWallet: newWallet, newLoginHash: newLoginHash});
 
@@ -271,6 +275,8 @@ contract MERAWalletLoginRegistry is Ownable {
                 && loginHashByWallet[previousWallet] == oldLoginHash && loginHashByWallet[newWallet] == newLoginHash,
             LoginMigrationStale()
         );
+
+        _requireMatchingGuardianAndEmergency(previousWallet, newWallet);
 
         string memory newLogin = _loginByHash[newLoginHash];
 
@@ -384,6 +390,16 @@ contract MERAWalletLoginRegistry is Ownable {
 
     function _onlyFactory() private view {
         require(isFactory[msg.sender], UnauthorizedFactory());
+    }
+
+    /// @dev Ensures both wallets share the same guardian and emergency roles before login migration.
+    function _requireMatchingGuardianAndEmergency(address previousWallet, address newWallet) private view {
+        IBaseMERAWallet prev = IBaseMERAWallet(payable(previousWallet));
+        IBaseMERAWallet next = IBaseMERAWallet(payable(newWallet));
+        require(
+            prev.guardian() == next.guardian() && prev.emergency() == next.emergency(),
+            LoginMigrationGuardianEmergencyMismatch()
+        );
     }
 
     function _loginHash(string calldata login) private pure returns (bytes32 loginHash) {
