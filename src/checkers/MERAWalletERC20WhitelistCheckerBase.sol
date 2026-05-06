@@ -15,6 +15,8 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     IMERAWalletTransactionChecker,
     IMERAWalletERC20WhitelistCheckerErrors
 {
+    /// @dev Minimum calldata length for standard ERC20 `transfer(address,uint256)` / `approve(address,uint256)`:
+    /// selector (4) + ABI-encoded `to`/`spender` (32) + `amount` (32).
     uint256 internal constant _ERC20_TRANSFER_OR_APPROVE_BODY_LEN = 4 + 32 + 32;
 
     mapping(address agent => bool allowed) public isPauseAgent;
