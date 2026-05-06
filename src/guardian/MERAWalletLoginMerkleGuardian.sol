@@ -3,9 +3,9 @@ pragma solidity 0.8.34;
 
 import {IBaseMERAWallet} from "../interfaces/IBaseMERAWallet.sol";
 import {MERAWalletLoginRegistry} from "../MERAWalletLoginRegistry.sol";
-import {Hashes} from "@openzeppelin/contracts/utils/cryptography/Hashes.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-/// @notice Login-based threshold guardian backed by a one-time published Merkle login set.
+/// @notice Login-based threshold guardian backed by incrementally revealed Merkle login proofs.
 contract MERAWalletLoginMerkleGuardian {
     struct Proposal {
         address targetWallet;
@@ -24,6 +24,7 @@ contract MERAWalletLoginMerkleGuardian {
     uint64 public constant MIN_PROPOSAL_LIFETIME = 72 hours;
 
     bool public loginListPublished;
+    uint256 public publishedLoginCount;
     uint256 public proposalNonce;
 
     mapping(bytes32 loginHash => bool published) public publishedLoginHash;
@@ -51,13 +52,12 @@ contract MERAWalletLoginMerkleGuardian {
     /// @dev `proposalLifetime_` must be at least `MIN_PROPOSAL_LIFETIME`.
     error InvalidProposalLifetime();
     error EmptyLoginList();
-    error LoginListAlreadyPublished();
     error DuplicateLoginHash(bytes32 loginHash);
-    error LoginRootMismatch(bytes32 expected, bytes32 actual);
-    error LoginListTooSmall(uint256 loginCount, uint256 threshold);
+    error LoginProofCountMismatch(uint256 loginCount, uint256 proofCount);
+    error InvalidLoginProof(bytes32 loginHash);
     /// @dev `publishLoginList` caller must be a wallet registered in `LOGIN_REGISTRY`.
     error PublisherNotRegistered(address publisher);
-    /// @dev Caller must include their own login hash (from the registry) in `loginHashes`.
+    /// @dev Caller must have already published their login hash or include it in `loginHashes`.
     error PublisherNotInLoginList(address publisher, bytes32 loginHash);
     error LoginListNotPublished();
     error InvalidEmergency();
@@ -81,34 +81,31 @@ contract MERAWalletLoginMerkleGuardian {
         PROPOSAL_LIFETIME = proposalLifetime_;
     }
 
-    function publishLoginList(bytes32[] calldata loginHashes) external {
-        require(!loginListPublished, LoginListAlreadyPublished());
-
+    function publishLoginList(bytes32[] calldata loginHashes, bytes32[][] calldata proofs) external {
         uint256 loginCount = loginHashes.length;
         require(loginCount != 0, EmptyLoginList());
-        require(loginCount >= THRESHOLD, LoginListTooSmall(loginCount, THRESHOLD));
-
-        bytes32 root = _computeRoot(loginHashes);
-        require(root == LOGIN_ROOT, LoginRootMismatch(LOGIN_ROOT, root));
+        require(loginCount == proofs.length, LoginProofCountMismatch(loginCount, proofs.length));
 
         bytes32 senderLoginHash = LOGIN_REGISTRY.loginHashByWallet(msg.sender);
         require(senderLoginHash != bytes32(0), PublisherNotRegistered(msg.sender));
 
-        bool senderInList;
+        bool senderCanPublish = publishedLoginHash[senderLoginHash];
         for (uint256 i = 0; i < loginCount;) {
             bytes32 loginHash = loginHashes[i];
-            if (loginHash == senderLoginHash) {
-                senderInList = true;
-            }
             require(!publishedLoginHash[loginHash], DuplicateLoginHash(loginHash));
+            require(MerkleProof.verifyCalldata(proofs[i], LOGIN_ROOT, loginHash), InvalidLoginProof(loginHash));
+            if (loginHash == senderLoginHash) {
+                senderCanPublish = true;
+            }
             publishedLoginHash[loginHash] = true;
             unchecked {
                 ++i;
             }
         }
-        require(senderInList, PublisherNotInLoginList(msg.sender, senderLoginHash));
+        require(senderCanPublish, PublisherNotInLoginList(msg.sender, senderLoginHash));
 
         loginListPublished = true;
+        publishedLoginCount += loginCount;
         emit LoginListPublished(LOGIN_ROOT, loginCount);
     }
 
@@ -178,31 +175,5 @@ contract MERAWalletLoginMerkleGuardian {
         require(!proposal.executed, ProposalAlreadyExecuted(proposalId));
         uint256 expiresAt = uint256(proposal.createdAt) + PROPOSAL_LIFETIME;
         require(block.timestamp <= expiresAt, ProposalExpired(proposalId, expiresAt, block.timestamp));
-    }
-
-    function _computeRoot(bytes32[] calldata loginHashes) internal pure returns (bytes32 root) {
-        uint256 leafCount = loginHashes.length;
-        require(leafCount != 0, EmptyLoginList());
-        uint256 internalCount = leafCount - 1;
-        if (internalCount == 0) {
-            return loginHashes[0];
-        }
-
-        bytes32[] memory nodes = new bytes32[](internalCount);
-        uint256 treeLength = (leafCount << 1) - 1;
-
-        // Match OpenZeppelin's @openzeppelin/merkle-tree heap layout while storing only internal nodes.
-        for (uint256 i = internalCount; i > 0;) {
-            unchecked {
-                --i;
-            }
-            uint256 leftIndex = (i << 1) + 1;
-            uint256 rightIndex = leftIndex + 1;
-            bytes32 left = leftIndex < internalCount ? nodes[leftIndex] : loginHashes[treeLength - 1 - leftIndex];
-            bytes32 right = rightIndex < internalCount ? nodes[rightIndex] : loginHashes[treeLength - 1 - rightIndex];
-            nodes[i] = Hashes.commutativeKeccak256(left, right);
-        }
-
-        return nodes[0];
     }
 }

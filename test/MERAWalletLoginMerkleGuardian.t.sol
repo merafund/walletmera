@@ -3,6 +3,7 @@ pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
+import {MERAWalletLoginRegistryConstants} from "../src/constants/MERAWalletLoginRegistryConstants.sol";
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletLoginMerkleGuardian} from "../src/guardian/MERAWalletLoginMerkleGuardian.sol";
 import {Hashes} from "@openzeppelin/contracts/utils/cryptography/Hashes.sol";
@@ -13,11 +14,11 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     address internal backup = vm.addr(0xB0B);
     address internal emergency = vm.addr(0xE911);
 
-    address internal aliceWallet = vm.addr(0xA11);
-    address internal bobWallet = vm.addr(0xB0B1);
-    address internal carolWallet = vm.addr(0xCA);
-    address internal daveWallet = vm.addr(0xDA);
-    address internal erinWallet = vm.addr(0xE12);
+    BaseMERAWallet internal aliceWallet;
+    BaseMERAWallet internal bobWallet;
+    BaseMERAWallet internal carolWallet;
+    BaseMERAWallet internal daveWallet;
+    BaseMERAWallet internal erinWallet;
     address internal outsider = vm.addr(0x4444);
     address internal guardianAddress = address(0xA11CEB0BCAFE);
 
@@ -30,9 +31,15 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     bytes32 internal loginRoot;
 
     function setUp() public {
-        registry = new MERAWalletLoginRegistry(owner);
+        registry = new MERAWalletLoginRegistry(owner, false);
         vm.prank(owner);
         registry.addFactory(address(this));
+
+        aliceWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
+        bobWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
+        carolWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
+        daveWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
+        erinWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
 
         _registerDefaultLogins();
         loginRoot = _computeRoot(loginHashes);
@@ -45,92 +52,106 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_PublishLoginList_Succeeds() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
 
         assertTrue(guardian.loginListPublished());
+        assertEq(guardian.publishedLoginCount(), 3);
         assertTrue(guardian.publishedLoginHash(_loginHash("alice")));
         assertTrue(guardian.publishedLoginHash(_loginHash("bob")));
         assertTrue(guardian.publishedLoginHash(_loginHash("carol")));
     }
 
-    function test_PublishLoginList_RejectsEmptyList() public {
-        bytes32[] memory empty = new bytes32[](0);
+    function test_PublishLoginList_SupportsOneByOneTopUp() public {
+        bytes32[] memory aliceOnly = _singleHash(_loginHash("alice"));
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(aliceOnly, _proofs(aliceOnly));
 
-        vm.expectRevert(MERAWalletLoginMerkleGuardian.EmptyLoginList.selector);
-        guardian.publishLoginList(empty);
+        assertTrue(guardian.loginListPublished());
+        assertEq(guardian.publishedLoginCount(), 1);
+        assertTrue(guardian.publishedLoginHash(_loginHash("alice")));
+        assertFalse(guardian.publishedLoginHash(_loginHash("bob")));
+
+        bytes32[] memory bobOnly = _singleHash(_loginHash("bob"));
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(bobOnly, _proofs(bobOnly));
+
+        assertEq(guardian.publishedLoginCount(), 2);
+        assertTrue(guardian.publishedLoginHash(_loginHash("bob")));
     }
 
-    function test_PublishLoginList_RejectsWrongTreeOrder() public {
-        bytes32[] memory wrongOrder = new bytes32[](3);
-        wrongOrder[0] = _loginHash("alice");
-        wrongOrder[1] = _loginHash("carol");
-        wrongOrder[2] = _loginHash("bob");
+    function test_PublishLoginList_RejectsEmptyList() public {
+        bytes32[] memory empty = new bytes32[](0);
+        bytes32[][] memory emptyProofs = new bytes32[][](0);
 
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.EmptyLoginList.selector);
+        guardian.publishLoginList(empty, emptyProofs);
+    }
+
+    function test_PublishLoginList_RejectsProofCountMismatch() public {
+        bytes32[] memory oneLogin = _singleHash(_loginHash("alice"));
+        bytes32[][] memory emptyProofs = new bytes32[][](0);
+
+        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginProofCountMismatch.selector, 1, 0));
+        guardian.publishLoginList(oneLogin, emptyProofs);
+    }
+
+    function test_PublishLoginList_RejectsInvalidProof() public {
+        bytes32[] memory carolOnly = _singleHash(_loginHash("carol"));
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = _proofs(_singleHash(_loginHash("alice")))[0];
+
+        vm.prank(address(carolWallet));
         vm.expectRevert(
-            abi.encodeWithSelector(
-                MERAWalletLoginMerkleGuardian.LoginRootMismatch.selector, loginRoot, _computeRoot(wrongOrder)
-            )
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.InvalidLoginProof.selector, _loginHash("carol"))
         );
-        guardian.publishLoginList(wrongOrder);
+        guardian.publishLoginList(carolOnly, proofs);
     }
 
     function test_PublishLoginList_RejectsDuplicates() public {
         bytes32[] memory duplicates = new bytes32[](2);
         duplicates[0] = _loginHash("alice");
         duplicates[1] = _loginHash("alice");
-        bytes32 duplicateRoot = _computeRoot(duplicates);
-
-        MERAWalletLoginMerkleGuardian duplicateGuardian =
-            new MERAWalletLoginMerkleGuardian(address(registry), duplicateRoot, 1, PROPOSAL_LIFETIME);
+        bytes32[][] memory proofs = new bytes32[][](2);
+        proofs[0] = _proofs(_singleHash(_loginHash("alice")))[0];
+        proofs[1] = proofs[0];
 
         vm.expectRevert(
             abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.DuplicateLoginHash.selector, _loginHash("alice"))
         );
-        vm.prank(aliceWallet);
-        duplicateGuardian.publishLoginList(duplicates);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(duplicates, proofs);
     }
 
-    function test_PublishLoginList_RejectsSecondPublish() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+    function test_PublishLoginList_RejectsAlreadyPublishedLogin() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(_singleHash(_loginHash("alice")), _proofs(_singleHash(_loginHash("alice"))));
 
-        vm.expectRevert(MERAWalletLoginMerkleGuardian.LoginListAlreadyPublished.selector);
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
-    }
-
-    function test_PublishLoginList_RejectsListBelowThreshold() public {
-        bytes32[] memory oneLogin = new bytes32[](1);
-        oneLogin[0] = _loginHash("alice");
-        MERAWalletLoginMerkleGuardian smallGuardian =
-            new MERAWalletLoginMerkleGuardian(address(registry), oneLogin[0], 2, PROPOSAL_LIFETIME);
-
-        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginListTooSmall.selector, 1, 2));
-        smallGuardian.publishLoginList(oneLogin);
+        vm.expectRevert(
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.DuplicateLoginHash.selector, _loginHash("alice"))
+        );
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(_singleHash(_loginHash("alice")), _proofs(_singleHash(_loginHash("alice"))));
     }
 
     function test_PublishLoginList_RejectsUnregisteredPublisher() public {
         vm.prank(outsider);
         vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.PublisherNotRegistered.selector, outsider));
-        guardian.publishLoginList(loginHashes);
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
     }
 
     function test_PublishLoginList_RejectsPublisherNotInList() public {
         bytes32[] memory aliceCarol = new bytes32[](2);
         aliceCarol[0] = _loginHash("alice");
         aliceCarol[1] = _loginHash("carol");
-        bytes32 acRoot = _computeRoot(aliceCarol);
-        MERAWalletLoginMerkleGuardian acGuardian =
-            new MERAWalletLoginMerkleGuardian(address(registry), acRoot, 2, PROPOSAL_LIFETIME);
 
-        vm.prank(bobWallet);
+        vm.prank(address(bobWallet));
         vm.expectRevert(
             abi.encodeWithSelector(
-                MERAWalletLoginMerkleGuardian.PublisherNotInLoginList.selector, bobWallet, _loginHash("bob")
+                MERAWalletLoginMerkleGuardian.PublisherNotInLoginList.selector, address(bobWallet), _loginHash("bob")
             )
         );
-        acGuardian.publishLoginList(aliceCarol);
+        guardian.publishLoginList(aliceCarol, _proofs(aliceCarol));
     }
 
     function test_PublishLoginList_SupportsOZCompatibleOddLengthTree() public {
@@ -141,8 +162,8 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         fiveLogins[3] = _loginHash("dave");
         fiveLogins[4] = _loginHash("erin");
 
-        _registerLogin("dave", daveWallet);
-        _registerLogin("erin", erinWallet);
+        _registerLogin("dave", address(daveWallet));
+        _registerLogin("erin", address(erinWallet));
 
         bytes32 expectedRoot = Hashes.commutativeKeccak256(
             Hashes.commutativeKeccak256(Hashes.commutativeKeccak256(fiveLogins[0], fiveLogins[1]), fiveLogins[4]),
@@ -154,37 +175,38 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
         assertEq(ozCompatibleRoot, expectedRoot);
 
-        vm.prank(aliceWallet);
-        fiveLoginGuardian.publishLoginList(fiveLogins);
+        vm.prank(address(aliceWallet));
+        fiveLoginGuardian.publishLoginList(fiveLogins, _proofsForTree(fiveLogins, fiveLogins));
 
         assertTrue(fiveLoginGuardian.loginListPublished());
+        assertEq(fiveLoginGuardian.publishedLoginCount(), 5);
         assertTrue(fiveLoginGuardian.publishedLoginHash(_loginHash("erin")));
     }
 
     function test_Propose_AutoApprovesCurrentLoginOwner() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
         address newEmergency = address(0xE0001);
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), newEmergency);
 
         (address target, address storedEmergency, address proposer,, uint16 approvals,) = guardian.proposals(proposalId);
         assertEq(target, address(wallet));
         assertEq(storedEmergency, newEmergency);
-        assertEq(proposer, aliceWallet);
+        assertEq(proposer, address(aliceWallet));
         assertEq(approvals, 1);
         assertTrue(guardian.hasApproved(proposalId, _loginHash("alice")));
     }
 
     function test_Approve_ExecuteChangesEmergencyWhenThresholdReached() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
         address newEmergency = address(0xE0002);
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), newEmergency);
-        vm.prank(bobWallet);
+        vm.prank(address(bobWallet));
         guardian.approveProposal(proposalId);
 
         vm.prank(outsider);
@@ -194,16 +216,16 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Propose_RevertsBeforeLoginListPublished() public {
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         vm.expectRevert(MERAWalletLoginMerkleGuardian.LoginListNotPublished.selector);
         guardian.proposeEmergencyChange(address(wallet), address(0xE0003));
     }
 
     function test_Approve_RequiresCurrentRegisteredOwner() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0004));
 
         vm.prank(outsider);
@@ -214,15 +236,15 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Approve_SameLoginCannotApproveTwiceAfterTransfer() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
-        address newAliceWallet = vm.addr(0xA12);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+        BaseMERAWallet newAliceWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0005));
-        _migrateLogin("alice", aliceWallet, "alice-new", newAliceWallet);
+        _migrateLogin("alice", address(aliceWallet), "alice-new", address(newAliceWallet));
 
-        vm.prank(newAliceWallet);
+        vm.prank(address(newAliceWallet));
         vm.expectRevert(
             abi.encodeWithSelector(
                 MERAWalletLoginMerkleGuardian.AlreadyApproved.selector, proposalId, _loginHash("alice")
@@ -232,19 +254,19 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_TransferLogin_NewOwnerCanApproveAndRevoke() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
-        address newBobWallet = vm.addr(0xB0B2);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+        BaseMERAWallet newBobWallet = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddress);
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0006));
-        _migrateLogin("bob", bobWallet, "bob-new", newBobWallet);
+        _migrateLogin("bob", address(bobWallet), "bob-new", address(newBobWallet));
 
-        vm.prank(newBobWallet);
+        vm.prank(address(newBobWallet));
         guardian.approveProposal(proposalId);
         assertTrue(guardian.hasApproved(proposalId, _loginHash("bob")));
 
-        vm.prank(newBobWallet);
+        vm.prank(address(newBobWallet));
         guardian.revokeApproval(proposalId);
         assertFalse(guardian.hasApproved(proposalId, _loginHash("bob")));
 
@@ -253,10 +275,10 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Execute_BeforeThresholdReverts() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0007));
 
         vm.expectRevert(
@@ -266,12 +288,12 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Execute_AfterLifetimeReverts() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0008));
-        vm.prank(bobWallet);
+        vm.prank(address(bobWallet));
         guardian.approveProposal(proposalId);
 
         (,,, uint64 createdAt,,) = guardian.proposals(proposalId);
@@ -287,12 +309,12 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Execute_SecondTimeReverts() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE0010));
-        vm.prank(bobWallet);
+        vm.prank(address(bobWallet));
         guardian.approveProposal(proposalId);
         guardian.executeProposal(proposalId);
 
@@ -320,20 +342,20 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     }
 
     function test_Propose_RevertsWhenTargetWalletIsZero() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
         guardian.proposeEmergencyChange(address(0), address(0xE0011));
     }
 
     function test_Propose_RevertsWhenTargetWalletGuardianMismatch() public {
-        vm.prank(aliceWallet);
-        guardian.publishLoginList(loginHashes);
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
         BaseMERAWallet otherWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0xBEEF));
 
-        vm.prank(aliceWallet);
+        vm.prank(address(aliceWallet));
         vm.expectRevert(MERAWalletLoginMerkleGuardian.TargetWalletGuardianMismatch.selector);
         guardian.proposeEmergencyChange(address(otherWallet), address(0xE0012));
     }
@@ -343,9 +365,9 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         loginHashes.push(_loginHash("bob"));
         loginHashes.push(_loginHash("carol"));
 
-        _registerLogin("alice", aliceWallet);
-        _registerLogin("bob", bobWallet);
-        _registerLogin("carol", carolWallet);
+        _registerLogin("alice", address(aliceWallet));
+        _registerLogin("bob", address(bobWallet));
+        _registerLogin("carol", address(carolWallet));
     }
 
     function _migrateLogin(string memory oldLogin, address oldWallet, string memory newLogin, address newWallet)
@@ -361,12 +383,89 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     function _registerLogin(string memory login, address wallet_) internal {
         bytes32 secret = keccak256(abi.encode(login, wallet_));
         registry.commit(registry.makeCommitment(login, wallet_, address(this), secret, 0, keccak256("")));
-        vm.warp(block.timestamp + registry.MIN_COMMITMENT_AGE());
+        skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
         registry.registerLogin{value: registry.priceOf(login)}(login, wallet_, secret, 0, "");
     }
 
     function _loginHash(string memory login) internal pure returns (bytes32) {
         return keccak256(bytes(login));
+    }
+
+    function _singleHash(bytes32 loginHash) internal pure returns (bytes32[] memory hashes) {
+        hashes = new bytes32[](1);
+        hashes[0] = loginHash;
+    }
+
+    function _proofs(bytes32[] memory hashes) internal view returns (bytes32[][] memory proofs) {
+        bytes32[] memory allHashes = new bytes32[](loginHashes.length);
+        for (uint256 i = 0; i < loginHashes.length; ++i) {
+            allHashes[i] = loginHashes[i];
+        }
+        proofs = _proofsForTree(allHashes, hashes);
+    }
+
+    function _proofsForTree(bytes32[] memory allHashes, bytes32[] memory hashes)
+        internal
+        pure
+        returns (bytes32[][] memory proofs)
+    {
+        bytes32[] memory heap = _buildHeap(allHashes);
+        proofs = new bytes32[][](hashes.length);
+        for (uint256 i = 0; i < hashes.length; ++i) {
+            proofs[i] = _proofForHash(allHashes, heap, hashes[i]);
+        }
+    }
+
+    function _buildHeap(bytes32[] memory hashes) internal pure returns (bytes32[] memory heap) {
+        uint256 leafCount = hashes.length;
+        uint256 treeLength = (leafCount << 1) - 1;
+        uint256 internalCount = leafCount - 1;
+        heap = new bytes32[](treeLength);
+
+        for (uint256 i = internalCount; i < treeLength; ++i) {
+            heap[i] = hashes[treeLength - 1 - i];
+        }
+        for (uint256 i = internalCount; i > 0;) {
+            unchecked {
+                --i;
+            }
+            heap[i] = Hashes.commutativeKeccak256(heap[(i << 1) + 1], heap[(i << 1) + 2]);
+        }
+    }
+
+    function _proofForHash(bytes32[] memory hashes, bytes32[] memory heap, bytes32 loginHash)
+        internal
+        pure
+        returns (bytes32[] memory proof)
+    {
+        uint256 leafIndex = type(uint256).max;
+        for (uint256 i = 0; i < hashes.length; ++i) {
+            if (hashes[i] == loginHash) {
+                leafIndex = i;
+                break;
+            }
+        }
+        require(leafIndex != type(uint256).max, "missing hash");
+
+        uint256 nodeIndex = heap.length - 1 - leafIndex;
+        uint256 proofLength;
+        for (uint256 cursor = nodeIndex; cursor != 0; cursor = (cursor - 1) >> 1) {
+            ++proofLength;
+        }
+
+        proof = new bytes32[](proofLength);
+        for (uint256 cursor = nodeIndex; cursor != 0; cursor = (cursor - 1) >> 1) {
+            uint256 parent = (cursor - 1) >> 1;
+            uint256 left = (parent << 1) + 1;
+            uint256 sibling = cursor == left ? left + 1 : left;
+            proof[proofLength - _remainingDepth(cursor)] = heap[sibling];
+        }
+    }
+
+    function _remainingDepth(uint256 nodeIndex) internal pure returns (uint256 depth) {
+        for (uint256 cursor = nodeIndex; cursor != 0; cursor = (cursor - 1) >> 1) {
+            ++depth;
+        }
     }
 
     function _computeRoot(bytes32[] memory hashes) internal pure returns (bytes32 root) {
