@@ -7,7 +7,7 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
 import {MERAWalletUniswapV2SlippageTypes} from "../src/checkers/types/MERAWalletUniswapV2SlippageTypes.sol";
 import {IMERAWalletUniswapV2SlippageErrors} from "../src/checkers/errors/IMERAWalletUniswapV2SlippageErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
@@ -158,7 +158,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function test_AssetWhitelist_RevertsWhenPathTokenNotAllowed() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](1);
         assets[0] = address(tokenA);
         bool[] memory allowed = new bool[](1);
@@ -198,7 +198,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function test_DefaultAssetWhitelist_AllowsSwapWhenWalletSlotUnset() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
         assets[1] = address(tokenB);
@@ -233,7 +233,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function test_AssetWhitelist_CustomSourceOverridesBaseFeed() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MockAggregatorV3 customFeedA = new MockAggregatorV3(1e8, 8);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
@@ -263,7 +263,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function test_AssetWhitelist_UsesBaseFeedWhenCustomSourceUnset() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
         assets[1] = address(tokenB);

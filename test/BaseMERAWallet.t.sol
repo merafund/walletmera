@@ -10,7 +10,7 @@ import {MERAWalletLoginRegistryConstants} from "../src/constants/MERAWalletLogin
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
 import {MERAWalletUniswapV2SlippageTypes} from "../src/checkers/types/MERAWalletUniswapV2SlippageTypes.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {ConfigurableTransactionChecker} from "./mocks/ConfigurableTransactionChecker.sol";
@@ -2205,7 +2205,7 @@ contract BaseMERAWalletTest is Test {
     function test_SetOptionalChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
         MERAWalletUniswapV2OracleSlippageChecker slip =
             new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
 

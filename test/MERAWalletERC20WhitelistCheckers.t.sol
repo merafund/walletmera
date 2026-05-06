@@ -9,7 +9,7 @@ import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletERC20TransferWhitelistChecker} from "../src/checkers/MERAWalletERC20TransferWhitelistChecker.sol";
 import {MERAWalletERC20ApproveWhitelistChecker} from "../src/checkers/MERAWalletERC20ApproveWhitelistChecker.sol";
 import {MERAWalletERC20RecipientWhitelist} from "../src/checkers/whitelists/MERAWalletERC20RecipientWhitelist.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
 import {MERAWalletERC20WhitelistCheckerTypes} from "../src/checkers/types/MERAWalletERC20WhitelistCheckerTypes.sol";
 import {
     IMERAWalletERC20WhitelistCheckerErrors
@@ -29,7 +29,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     MERAWalletERC20TransferWhitelistChecker internal transferChecker;
     MERAWalletERC20ApproveWhitelistChecker internal approveChecker;
     ERC20Mock internal token;
-    MERAWalletUniswapV2AssetWhitelist internal assetWl;
+    MERAWalletAssetWhiteList internal assetWl;
     MERAWalletERC20RecipientWhitelist internal counterpartyWl;
 
     function _mkWl(address checker, bool allowed, bytes memory config)
@@ -47,7 +47,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         approveChecker = new MERAWalletERC20ApproveWhitelistChecker(emergency);
         token = new ERC20Mock();
 
-        assetWl = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        assetWl = new MERAWalletAssetWhiteList(emergency);
         counterpartyWl = new MERAWalletERC20RecipientWhitelist(emergency);
 
         vm.startPrank(emergency);

@@ -5,7 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletERC20RecipientWhitelist} from "../interfaces/checkers/IMERAWalletERC20RecipientWhitelist.sol";
-import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
+import {IMERAWalletAssetWhiteList} from "../interfaces/checkers/IMERAWalletAssetWhiteList.sol";
 import {IMERAWalletERC20WhitelistCheckerErrors} from "./errors/IMERAWalletERC20WhitelistCheckerErrors.sol";
 import {MERAWalletERC20WhitelistCheckerTypes} from "./types/MERAWalletERC20WhitelistCheckerTypes.sol";
 
@@ -111,9 +111,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         if (wl == address(0)) {
             return;
         }
-        require(
-            IMERAWalletUniswapV2AssetWhitelist(wl).isAssetAllowed(token), Erc20WhitelistTokenNotAllowed(token, callId)
-        );
+        require(IMERAWalletAssetWhiteList(wl).isAssetAllowed(token), Erc20WhitelistTokenNotAllowed(token, callId));
     }
 
     /// @dev No-op when no counterparty list is configured for `wallet`; `account` is transfer `to` or approve `spender`.

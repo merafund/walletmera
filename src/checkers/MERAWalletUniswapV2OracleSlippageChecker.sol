@@ -9,7 +9,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
-import {IMERAWalletUniswapV2AssetWhitelist} from "../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
+import {IMERAWalletAssetWhiteList} from "../interfaces/checkers/IMERAWalletAssetWhiteList.sol";
 import {IAggregatorV3} from "../interfaces/oracles/IAggregatorV3.sol";
 import {IUniswapV2Router02} from "../interfaces/uniswap/IUniswapV2Router02.sol";
 import {IMERAWalletUniswapV2SlippageErrors} from "./errors/IMERAWalletUniswapV2SlippageErrors.sol";
@@ -278,8 +278,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         uint256 len = path.length;
         for (uint256 i = 0; i < len;) {
             require(
-                IMERAWalletUniswapV2AssetWhitelist(assetWhitelist).isAssetAllowed(path[i]),
-                AssetNotWhitelisted(path[i], callId)
+                IMERAWalletAssetWhiteList(assetWhitelist).isAssetAllowed(path[i]), AssetNotWhitelisted(path[i], callId)
             );
             unchecked {
                 ++i;
@@ -321,7 +320,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
     function _effectivePriceFeed(address assetWhitelist, address token) internal view returns (address) {
         if (assetWhitelist != address(0)) {
-            address source = IMERAWalletUniswapV2AssetWhitelist(assetWhitelist).assetSource(token);
+            address source = IMERAWalletAssetWhiteList(assetWhitelist).assetSource(token);
             if (source != address(0)) {
                 return source;
             }
