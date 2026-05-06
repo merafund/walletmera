@@ -265,18 +265,17 @@ contract MERAWalletLoginRegistry is
             require(msg.value == 0, InvalidPayment());
             address verifier = authorizationVerifier;
             require(verifier != address(0), AuthorizationVerifierNotSet());
-            IMERALoginAuthorizationVerifier(verifier)
-                .validateRegistration(
-                    MERAWalletLoginRegistryTypes.RegistrationValidationParams({
-                        registry: address(this),
-                        factory: msg.sender,
-                        loginHash: loginHash,
-                        login: login,
-                        wallet: wallet,
-                        deadline: deadline,
-                        authorization: authorization
-                    })
-                );
+            MERAWalletLoginRegistryTypes.RegistrationValidationParams memory registrationValidation =
+                MERAWalletLoginRegistryTypes.RegistrationValidationParams({
+                    registry: address(this),
+                    factory: msg.sender,
+                    loginHash: loginHash,
+                    login: login,
+                    wallet: wallet,
+                    deadline: deadline,
+                    authorization: authorization
+                });
+            IMERALoginAuthorizationVerifier(verifier).validateRegistration(registrationValidation);
         } else {
             require(msg.value == _priceOfValidatedLength(loginLength), InvalidPayment());
             bytes32 commitment = _makeCommitment(
