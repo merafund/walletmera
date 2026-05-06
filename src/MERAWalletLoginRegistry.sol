@@ -325,7 +325,7 @@ contract MERAWalletLoginRegistry is Ownable {
         uint256 length = loginBytes.length;
         require(length != 0, EmptyLogin());
         require(length >= MIN_LOGIN_LENGTH && length <= MAX_LOGIN_LENGTH, InvalidLoginLength());
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             bytes1 char = loginBytes[i];
             if (char == "_") {
                 require(i == 0 || loginBytes[i - 1] == "_", InvalidUnderscore());
