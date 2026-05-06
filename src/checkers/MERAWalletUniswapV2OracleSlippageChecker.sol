@@ -175,6 +175,19 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         address assetWhitelist = _effectiveAssetWhitelist(wallet);
         _requirePathAssetsAllowed(assetWhitelist, path, callId);
 
+        _storeSwapSnapshot(wallet, operationId, callId, path, ethIn, ethOut, assetWhitelist);
+    }
+
+    /// @dev Split out to avoid stack-too-deep when compiling without IR (e.g. forge coverage).
+    function _storeSwapSnapshot(
+        address wallet,
+        bytes32 operationId,
+        uint256 callId,
+        address[] memory path,
+        bool ethIn,
+        bool ethOut,
+        address assetWhitelist
+    ) private {
         address t0 = path[0];
         address t1 = path[path.length - 1];
         address feed0 = _effectivePriceFeed(assetWhitelist, t0);
