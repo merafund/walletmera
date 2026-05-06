@@ -47,6 +47,17 @@ contract MERAWalletMetaProxyCloneFactory {
         return _deployWallet(login, params, secret, deadline, authorization, referrerLogin);
     }
 
+    /// @notice Counterfactual wallet address for `login` and `params` using this factory as CREATE2 deployer.
+    function predictWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
+        external
+        view
+        returns (address)
+    {
+        return Clones.predictDeterministicAddressWithImmutableArgs(
+            WALLET_IMPLEMENTATION, abi.encode(params), _loginHash(login), address(this)
+        );
+    }
+
     function _deployWallet(
         string calldata login,
         MERAWalletTypes.WalletInitParams calldata params,
@@ -63,17 +74,6 @@ contract MERAWalletMetaProxyCloneFactory {
 
         LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization, referrerLogin);
         emit WalletDeployed(loginHash, login, wallet);
-    }
-
-    /// @notice Counterfactual wallet address for `login` and `params` using this factory as CREATE2 deployer.
-    function predictWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
-        external
-        view
-        returns (address)
-    {
-        return Clones.predictDeterministicAddressWithImmutableArgs(
-            WALLET_IMPLEMENTATION, abi.encode(params), _loginHash(login), address(this)
-        );
     }
 
     function _loginHash(string calldata login) private pure returns (bytes32 loginHash) {

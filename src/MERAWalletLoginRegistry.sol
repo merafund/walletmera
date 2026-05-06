@@ -8,6 +8,12 @@ import {IMERALoginAuthorizationVerifier} from "./interfaces/IMERALoginAuthorizat
 /// @title MERAWalletLoginRegistry
 /// @notice Stores MERA login ownership and the factories allowed to register new logins.
 contract MERAWalletLoginRegistry is Ownable {
+    struct PendingLoginMigration {
+        address previousWallet;
+        address newWallet;
+        bytes32 newLoginHash;
+    }
+
     uint256 public constant MIN_COMMITMENT_AGE = 60 seconds;
     uint256 public constant MAX_COMMITMENT_AGE = 15 minutes;
     uint256 public constant MIN_LOGIN_LENGTH = 3;
@@ -17,12 +23,6 @@ contract MERAWalletLoginRegistry is Ownable {
     uint256 public constant MAX_BASE_LOGIN_PRICE = 1 ether;
     uint256 public constant MIN_LOGIN_PRICE_MULTIPLIER = 2;
     uint256 public constant MAX_LOGIN_PRICE_MULTIPLIER = 10;
-
-    struct PendingLoginMigration {
-        address previousWallet;
-        address newWallet;
-        bytes32 newLoginHash;
-    }
 
     address public authorizationVerifier;
     /// @dev If true, short logins (length <= PAID_LOGIN_MAX_LENGTH) register for free without pre-commit but require {authorizationVerifier}.
@@ -156,40 +156,6 @@ contract MERAWalletLoginRegistry is Ownable {
         emit EthWithdrawn(to, amount);
     }
 
-    function priceOf(string calldata login) external view returns (uint256) {
-        _requireLoginHash(login);
-        return _priceOfValidatedLength(bytes(login).length);
-    }
-
-    function validateLogin(string calldata login) external pure returns (bytes32) {
-        return _requireLoginHash(login);
-    }
-
-    function makeCommitment(
-        string calldata login,
-        address wallet,
-        address factory,
-        bytes32 secret,
-        uint256 deadline,
-        bytes32 authorizationHash
-    ) external pure returns (bytes32) {
-        return _makeCommitment(login, wallet, factory, secret, deadline, authorizationHash, bytes32(0));
-    }
-
-    function makeCommitment(
-        string calldata login,
-        address wallet,
-        address factory,
-        bytes32 secret,
-        uint256 deadline,
-        bytes32 authorizationHash,
-        string calldata referrerLogin
-    ) external pure returns (bytes32) {
-        return _makeCommitment(
-            login, wallet, factory, secret, deadline, authorizationHash, _optionalLoginHash(referrerLogin)
-        );
-    }
-
     function commit(bytes32 commitment) external {
         require(commitments[commitment] == 0, CommitmentAlreadyExists());
         commitments[commitment] = block.timestamp + 1;
@@ -219,51 +185,6 @@ contract MERAWalletLoginRegistry is Ownable {
         bytes32 loginHash = _requireLoginHash(login);
         bytes32 referrerLoginHash = _requireReferrerLoginHash(loginHash, referrerLogin);
         _registerLogin(login, loginHash, wallet, secret, deadline, authorization, referrerLoginHash, referrerLogin);
-    }
-
-    function _registerLogin(
-        string calldata login,
-        bytes32 loginHash,
-        address wallet,
-        bytes32 secret,
-        uint256 deadline,
-        bytes calldata authorization,
-        bytes32 referrerLoginHash,
-        string memory referrerLogin
-    ) private {
-        require(wallet != address(0), InvalidAddress());
-        require(walletByLoginHash[loginHash] == address(0), LoginAlreadyRegistered());
-        require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
-
-        uint256 loginLength = bytes(login).length;
-        if (loginLength > PAID_LOGIN_MAX_LENGTH) {
-            require(msg.value == 0, InvalidPayment());
-        } else if (REQUIRE_SHORT_LOGIN_AUTHORIZATION) {
-            require(msg.value == 0, InvalidPayment());
-            address verifier = authorizationVerifier;
-            require(verifier != address(0), AuthorizationVerifierNotSet());
-            IMERALoginAuthorizationVerifier(verifier)
-                .validateRegistration(address(this), msg.sender, loginHash, login, wallet, deadline, authorization);
-        } else {
-            require(msg.value == _priceOfValidatedLength(loginLength), InvalidPayment());
-            bytes32 commitment = _makeCommitment(
-                login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash
-            );
-            uint256 committedAtPlusOne = commitments[commitment];
-            require(committedAtPlusOne != 0, CommitmentNotFound());
-            uint256 committedAt = committedAtPlusOne - 1;
-            require(block.timestamp >= committedAt + MIN_COMMITMENT_AGE, CommitmentTooNew());
-            require(block.timestamp <= committedAt + MAX_COMMITMENT_AGE, CommitmentExpired());
-            delete commitments[commitment];
-        }
-
-        walletByLoginHash[loginHash] = wallet;
-        loginHashByWallet[wallet] = loginHash;
-        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
-        _loginByHash[loginHash] = login;
-
-        emit LoginRegistered(loginHash, login, wallet, msg.sender);
-        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
     function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet) external {
@@ -319,6 +240,11 @@ contract MERAWalletLoginRegistry is Ownable {
         emit LoginTransferred(newLoginHash, newLogin, newWallet, previousWallet);
     }
 
+    function priceOf(string calldata login) external view returns (uint256) {
+        _requireLoginHash(login);
+        return _priceOfValidatedLength(bytes(login).length);
+    }
+
     function walletOf(string calldata login) external view returns (address) {
         if (bytes(login).length == 0) {
             return address(0);
@@ -348,27 +274,78 @@ contract MERAWalletLoginRegistry is Ownable {
         return _loginByHash[referrerLoginHashByLoginHash[_loginHash(login)]];
     }
 
-    function _requireLoginHash(string calldata login) private pure returns (bytes32) {
-        bytes calldata loginBytes = bytes(login);
-        uint256 length = loginBytes.length;
-        require(length != 0, EmptyLogin());
-        require(length >= MIN_LOGIN_LENGTH && length <= MAX_LOGIN_LENGTH, InvalidLoginLength());
-        for (uint256 i = 0; i < length; ++i) {
-            bytes1 char = loginBytes[i];
-            if (char == "-") {
-                require(i != 0 && i != length - 1 && loginBytes[i - 1] != "-", InvalidHyphen());
-            } else if ((char < "a" || char > "z") && (char < "0" || char > "9")) {
-                revert InvalidLoginCharacter();
-            }
-        }
-        return _loginHash(login);
+    function validateLogin(string calldata login) external pure returns (bytes32) {
+        return _requireLoginHash(login);
     }
 
-    function _optionalLoginHash(string calldata login) private pure returns (bytes32) {
-        if (bytes(login).length == 0) {
-            return bytes32(0);
+    function makeCommitment(
+        string calldata login,
+        address wallet,
+        address factory,
+        bytes32 secret,
+        uint256 deadline,
+        bytes32 authorizationHash
+    ) external pure returns (bytes32) {
+        return _makeCommitment(login, wallet, factory, secret, deadline, authorizationHash, bytes32(0));
+    }
+
+    function makeCommitment(
+        string calldata login,
+        address wallet,
+        address factory,
+        bytes32 secret,
+        uint256 deadline,
+        bytes32 authorizationHash,
+        string calldata referrerLogin
+    ) external pure returns (bytes32) {
+        return _makeCommitment(
+            login, wallet, factory, secret, deadline, authorizationHash, _optionalLoginHash(referrerLogin)
+        );
+    }
+
+    function _registerLogin(
+        string calldata login,
+        bytes32 loginHash,
+        address wallet,
+        bytes32 secret,
+        uint256 deadline,
+        bytes calldata authorization,
+        bytes32 referrerLoginHash,
+        string memory referrerLogin
+    ) private {
+        require(wallet != address(0), InvalidAddress());
+        require(walletByLoginHash[loginHash] == address(0), LoginAlreadyRegistered());
+        require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
+
+        uint256 loginLength = bytes(login).length;
+        if (loginLength > PAID_LOGIN_MAX_LENGTH) {
+            require(msg.value == 0, InvalidPayment());
+        } else if (REQUIRE_SHORT_LOGIN_AUTHORIZATION) {
+            require(msg.value == 0, InvalidPayment());
+            address verifier = authorizationVerifier;
+            require(verifier != address(0), AuthorizationVerifierNotSet());
+            IMERALoginAuthorizationVerifier(verifier)
+                .validateRegistration(address(this), msg.sender, loginHash, login, wallet, deadline, authorization);
+        } else {
+            require(msg.value == _priceOfValidatedLength(loginLength), InvalidPayment());
+            bytes32 commitment = _makeCommitment(
+                login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash
+            );
+            uint256 committedAtPlusOne = commitments[commitment];
+            require(committedAtPlusOne != 0, CommitmentNotFound());
+            uint256 committedAt = committedAtPlusOne - 1;
+            require(block.timestamp >= committedAt + MIN_COMMITMENT_AGE, CommitmentTooNew());
+            require(block.timestamp <= committedAt + MAX_COMMITMENT_AGE, CommitmentExpired());
+            delete commitments[commitment];
         }
-        return _requireLoginHash(login);
+
+        walletByLoginHash[loginHash] = wallet;
+        loginHashByWallet[wallet] = loginHash;
+        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
+        _loginByHash[loginHash] = login;
+
+        emit LoginRegistered(loginHash, login, wallet, msg.sender);
+        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
     function _requireReferrerLoginHash(bytes32 loginHash, string calldata referrerLogin)
@@ -392,6 +369,43 @@ contract MERAWalletLoginRegistry is Ownable {
         return baseLoginPrice * (loginPriceMultiplier ** exponent);
     }
 
+    function _onlyFactory() private view {
+        require(isFactory[msg.sender], UnauthorizedFactory());
+    }
+
+    /// @dev Ensures both wallets share the same guardian and emergency roles before login migration.
+    function _requireMatchingGuardianAndEmergency(address previousWallet, address newWallet) private view {
+        IBaseMERAWallet prev = IBaseMERAWallet(payable(previousWallet));
+        IBaseMERAWallet next = IBaseMERAWallet(payable(newWallet));
+        require(
+            prev.guardian() == next.guardian() && prev.emergency() == next.emergency(),
+            LoginMigrationGuardianEmergencyMismatch()
+        );
+    }
+
+    function _requireLoginHash(string calldata login) private pure returns (bytes32) {
+        bytes calldata loginBytes = bytes(login);
+        uint256 length = loginBytes.length;
+        require(length != 0, EmptyLogin());
+        require(length >= MIN_LOGIN_LENGTH && length <= MAX_LOGIN_LENGTH, InvalidLoginLength());
+        for (uint256 i = 0; i < length; ++i) {
+            bytes1 char = loginBytes[i];
+            if (char == "-") {
+                require(i != 0 && i != length - 1 && loginBytes[i - 1] != "-", InvalidHyphen());
+            } else if ((char < "a" || char > "z") && (char < "0" || char > "9")) {
+                revert InvalidLoginCharacter();
+            }
+        }
+        return _loginHash(login);
+    }
+
+    function _optionalLoginHash(string calldata login) private pure returns (bytes32) {
+        if (bytes(login).length == 0) {
+            return bytes32(0);
+        }
+        return _requireLoginHash(login);
+    }
+
     function _makeCommitment(
         string calldata login,
         address wallet,
@@ -406,20 +420,6 @@ contract MERAWalletLoginRegistry is Ownable {
             abi.encode(
                 _requireLoginHash(login), wallet, factory, secret, deadline, authorizationHash, referrerLoginHash
             )
-        );
-    }
-
-    function _onlyFactory() private view {
-        require(isFactory[msg.sender], UnauthorizedFactory());
-    }
-
-    /// @dev Ensures both wallets share the same guardian and emergency roles before login migration.
-    function _requireMatchingGuardianAndEmergency(address previousWallet, address newWallet) private view {
-        IBaseMERAWallet prev = IBaseMERAWallet(payable(previousWallet));
-        IBaseMERAWallet next = IBaseMERAWallet(payable(newWallet));
-        require(
-            prev.guardian() == next.guardian() && prev.emergency() == next.emergency(),
-            LoginMigrationGuardianEmergencyMismatch()
         );
     }
 
