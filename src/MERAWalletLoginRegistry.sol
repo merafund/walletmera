@@ -327,9 +327,7 @@ contract MERAWalletLoginRegistry is Ownable {
         for (uint256 i = 0; i < length; ++i) {
             bytes1 char = loginBytes[i];
             if (char == "-") {
-                if (i == 3 && loginBytes[2] == "-") {
-                    revert InvalidHyphen();
-                }
+                require(i != 0 && i != length - 1 && loginBytes[i - 1] != "-", InvalidHyphen());
             } else if ((char < "a" || char > "z") && (char < "0" || char > "9")) {
                 revert InvalidLoginCharacter();
             }

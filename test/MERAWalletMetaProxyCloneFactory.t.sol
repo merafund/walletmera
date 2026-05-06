@@ -482,6 +482,12 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.validateLogin("ab_cd");
         vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
         registry.validateLogin("ab--cd");
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        registry.validateLogin("-abc");
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        registry.validateLogin("abc-");
+        vm.expectRevert(MERAWalletLoginRegistry.InvalidHyphen.selector);
+        registry.validateLogin("a--bc");
     }
 
     function test_register_without_commit_reverts() public {
