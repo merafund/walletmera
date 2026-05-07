@@ -121,6 +121,15 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.primary(), newPrimary);
     }
 
+    function test_SetPrimary_SelfCallRevertsForWalletAddress() public {
+        vm.prank(primary);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.WalletCannotBeCoreRole.selector),
+            abi.encodeWithSelector(wallet.setPrimary.selector, address(wallet)),
+            9101
+        );
+    }
+
     function test_SetPrimary_SelfCallRevertsDuringSafeMode() public {
         BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
         vm.prank(emergency);
@@ -158,6 +167,15 @@ contract BaseMERAWalletTest is Test {
             abi.encodeWithSelector(IBaseMERAWalletErrors.NotAllowedRoleChange.selector),
             abi.encodeWithSelector(wallet.setBackup.selector, newBackup),
             912
+        );
+    }
+
+    function test_SetBackup_SelfCallRevertsForWalletAddress() public {
+        vm.prank(backup);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.WalletCannotBeCoreRole.selector),
+            abi.encodeWithSelector(wallet.setBackup.selector, address(wallet)),
+            9121
         );
     }
 
@@ -213,6 +231,15 @@ contract BaseMERAWalletTest is Test {
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setEmergency.selector, newEmergency), 925);
 
         assertEq(wallet.emergency(), newEmergency);
+    }
+
+    function test_SetEmergency_SelfCallRevertsForWalletAddress() public {
+        vm.prank(emergency);
+        _expectWalletSelfCallRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.WalletCannotBeCoreRole.selector),
+            abi.encodeWithSelector(wallet.setEmergency.selector, address(wallet)),
+            9251
+        );
     }
 
     function test_SetEmergency_ResetsPendingTransactionsInvalidBeforeAndCount() public {

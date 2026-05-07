@@ -98,6 +98,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function setPrimary(address newPrimary) external override onlySelf whenLifeAlive {
         require(newPrimary != address(0), InvalidAddress());
+        require(newPrimary != address(this), WalletCannotBeCoreRole());
 
         _requireControllerCoreAvailable();
 
@@ -111,6 +112,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function setBackup(address newBackup) external override onlySelf whenLifeAlive {
         require(newBackup != address(0), InvalidAddress());
+        require(newBackup != address(this), WalletCannotBeCoreRole());
 
         MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
 
@@ -133,6 +135,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             _onlySelfAsEmergency();
         }
         require(newEmergency != address(0), InvalidAddress());
+        require(newEmergency != address(this), WalletCannotBeCoreRole());
 
         address previousEmergency = emergency;
         emergency = newEmergency;

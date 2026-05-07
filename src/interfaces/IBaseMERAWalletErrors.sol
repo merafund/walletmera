@@ -55,6 +55,8 @@ interface IBaseMERAWalletErrors {
     error NoopAgent();
     /// @dev The wallet contract itself cannot be registered as an agent.
     error WalletCannotBeAgent();
+    /// @dev The wallet contract itself cannot be assigned to a core controller role.
+    error WalletCannotBeCoreRole();
     /// @dev Core controller attempted an action while their role level is frozen.
     error RoleFrozen(MERAWalletTypes.Role role);
     /// @dev Caller is not allowed to change freeze flags (wrong role for this flag).
