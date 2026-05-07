@@ -16,6 +16,13 @@ import {MERALoginSignatureVerifier} from "../src/MERALoginSignatureVerifier.sol"
 import {MERAWalletMetaProxyCloneFactory} from "../src/MERAWalletMetaProxyCloneFactory.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 
+contract NonPayableOwner {
+    // no receive or fallback — rejects any ETH sent to it
+    function callWithdraw(MERAWalletLoginRegistry reg) external {
+        reg.withdraw();
+    }
+}
+
 contract Mock1271Authorizer is IERC1271 {
     address internal immutable SIGNER;
 
@@ -790,5 +797,198 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
 
         vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidPayment.selector);
         fac.deployWallet{value: 1 wei}(login, p, secret, deadline, authorization, "");
+    }
+
+    function test_verifier_constructor_zero_authorizer_reverts() public {
+        vm.expectRevert(MERALoginSignatureVerifier.InvalidAuthorizer.selector);
+        new MERALoginSignatureVerifier(address(0));
+    }
+
+    function test_l2_mode_rejects_invalid_signature() public {
+        (MERAWalletLoginRegistry reg, MERAWalletMetaProxyCloneFactory fac) = _authRegistryAndFactory();
+        MERALoginSignatureVerifier verifier = new MERALoginSignatureVerifier(authorizer);
+        vm.prank(owner);
+        reg.setAuthorizationVerifier(address(verifier));
+
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        string memory login = "dave";
+        address predicted = fac.predictWallet(login, p);
+        uint256 deadline = block.timestamp + 15 minutes;
+        // Build a valid authorization but for a DIFFERENT login hash (wrong signature for this login)
+        bytes memory wrongAuthorization = _signAuthorization(reg, fac, verifier, "othername", predicted, deadline);
+
+        vm.expectRevert(MERALoginSignatureVerifier.InvalidAuthorization.selector);
+        fac.deployWallet(login, p, secret, deadline, wrongAuthorization, "");
+    }
+
+    function test_registry_addFactory_zero_address_reverts() public {
+        vm.prank(owner);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidAddress.selector);
+        registry.addFactory(address(0));
+    }
+
+    function test_registry_setAuthorizationVerifier_eoa_reverts() public {
+        vm.prank(owner);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidAddress.selector);
+        registry.setAuthorizationVerifier(address(0xDEAD));
+    }
+
+    function test_registry_commit_same_twice_reverts() public {
+        string memory login = "alice";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address predicted = factory.predictWallet(login, p);
+        bytes32 commitment = registry.makeCommitment(login, predicted, address(factory), secret, 0, keccak256(""), "");
+        registry.commit(commitment);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.CommitmentAlreadyExists.selector);
+        registry.commit(commitment);
+    }
+
+    function test_registry_registerLogin_zero_wallet_reverts() public {
+        // Call from factory context with wallet=address(0)
+        // Must call from an allowed factory; we'll use the factory via a low-level call to bypass normal encoding
+        // Instead, deploy via factory with a manipulated params — actually easier to call directly on registry
+        vm.prank(address(factory));
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidAddress.selector);
+        registry.registerLogin("alice", address(0), secret, 0, "", "");
+    }
+
+    function test_registry_registerLogin_same_login_twice_reverts() public {
+        string memory login = "alice";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+        assertNotEq(deployed, address(0));
+
+        // Try to register same login again (different wallet)
+        address wallet2 = address(0x1234);
+        vm.prank(address(factory));
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginAlreadyRegistered.selector);
+        registry.registerLogin(login, wallet2, secret, 0, "", "");
+    }
+
+    function test_registry_registerLogin_wallet_already_has_login_reverts() public {
+        string memory login = "alice";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+
+        // Try to register a new login for same wallet
+        vm.prank(address(factory));
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.AddressAlreadyHasLogin.selector);
+        registry.registerLogin("bob", deployed, secret, 0, "", "");
+    }
+
+    function test_registry_registerLogin_long_login_nonzero_value_reverts() public {
+        // Long logins (> PAID_LOGIN_MAX_LENGTH=9, <= MAX_LOGIN_LENGTH=32) must have msg.value == 0
+        string memory longLogin = "longloginname";
+        vm.deal(address(factory), 1 wei);
+        vm.prank(address(factory));
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidPayment.selector);
+        registry.registerLogin{value: 1 wei}(longLogin, address(0x9999), secret, 0, "", "");
+    }
+
+    function test_registry_referrerLoginHashOf_empty_login_returns_zero() public view {
+        assertEq(registry.referrerLoginHashOf(""), bytes32(0));
+    }
+
+    function test_registry_referrerLoginOf_empty_login_returns_empty() public view {
+        assertEq(registry.referrerLoginOf(""), "");
+    }
+
+    function test_registry_requestLoginMigration_zero_newWallet_reverts() public {
+        string memory login = "mig-a";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+
+        vm.prank(deployed);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidAddress.selector);
+        registry.requestLoginMigration(login, "mig-b", address(0));
+    }
+
+    function test_registry_requestLoginMigration_same_wallet_reverts() public {
+        string memory login = "mig-a";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+
+        vm.prank(deployed);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.SameWallet.selector);
+        registry.requestLoginMigration(login, "mig-b", deployed);
+    }
+
+    function test_registry_requestLoginMigration_same_login_reverts() public {
+        string memory login = "mig-a";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+
+        vm.prank(deployed);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginAlreadyRegistered.selector);
+        registry.requestLoginMigration(login, login, address(0x5678));
+    }
+
+    function test_registry_requestLoginMigration_oldLogin_not_owned_reverts() public {
+        string memory login = "mig-a";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted(login, p);
+
+        vm.prank(address(0xABCD));
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginNotOwned.selector);
+        registry.requestLoginMigration(login, "mig-b", address(0x5678));
+    }
+
+    function test_registry_requestLoginMigration_newWallet_doesnt_own_newLogin_reverts() public {
+        string memory login = "mig-a";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+
+        vm.prank(deployed);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginNotOwned.selector);
+        registry.requestLoginMigration(login, "mig-b", address(0x5678));
+    }
+
+    // Line 90 — WithdrawFailed: owner is a contract that rejects ETH
+    function test_registry_withdrawEth_failedTransfer_reverts() public {
+        NonPayableOwner nonPayable = new NonPayableOwner();
+        MERAWalletLoginRegistry reg = new MERAWalletLoginRegistry(address(nonPayable), false);
+        vm.deal(address(reg), 1 ether);
+
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.WithdrawFailed.selector);
+        nonPayable.callWithdraw(reg);
+    }
+
+    // Line 188 — LoginMigrationAlreadyPending
+    function test_registry_requestLoginMigration_already_pending_reverts() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address aliceWallet = _deployCommitted("pnd-alice", p);
+        address bobWallet = _deployCommitted("pnd-bob", p);
+
+        vm.prank(aliceWallet);
+        registry.requestLoginMigration("pnd-alice", "pnd-bob", bobWallet);
+
+        vm.prank(aliceWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationAlreadyPending.selector);
+        registry.requestLoginMigration("pnd-alice", "pnd-bob", bobWallet);
+    }
+
+    // Line 213 — LoginMigrationStale: a second migration confirms first, making the first stale
+    function test_registry_confirmLoginMigration_stale_reverts() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address aliceWallet = _deployCommitted("stl-alice", p);
+        address bobWallet = _deployCommitted("stl-bob", p);
+        address charlieWallet = _deployCommitted("stl-charlie", p);
+
+        // Pending migration: alice→bob
+        vm.prank(aliceWallet);
+        registry.requestLoginMigration("stl-alice", "stl-bob", bobWallet);
+
+        // Pending migration: charlie→alice (charlie gives up "stl-charlie", gets "stl-alice")
+        vm.prank(charlieWallet);
+        registry.requestLoginMigration("stl-charlie", "stl-alice", aliceWallet);
+
+        // Confirm charlie→alice: walletByLoginHash["stl-alice"] is now charlieWallet
+        vm.prank(aliceWallet);
+        registry.confirmLoginMigration("stl-charlie");
+
+        // Now alice→bob is stale because the "stl-alice" mapping changed
+        vm.prank(bobWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationStale.selector);
+        registry.confirmLoginMigration("stl-alice");
     }
 }
