@@ -136,9 +136,11 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         (address[] memory path, bool ethIn, bool ethOut) = _decodeSwap(call.data);
         require(path.length >= 2, PathTooShort());
 
-        address weth = IUniswapV2Router02(router).WETH();
-        require(!ethIn || path[0] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
-        require(!ethOut || path[path.length - 1] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
+        if (ethIn || ethOut) {
+            address weth = IUniswapV2Router02(router).WETH();
+            require(!ethIn || path[0] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
+            require(!ethOut || path[path.length - 1] == weth, UnsupportedRouterCall(bytes4(call.data[0:4])));
+        }
 
         address wallet = msg.sender;
         address assetWhitelist = _effectiveAssetWhitelist(wallet);
@@ -161,9 +163,19 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         address t1 = path[path.length - 1];
         address feed0 = _effectivePriceFeed(assetWhitelist, t0);
         address feed1 = _effectivePriceFeed(assetWhitelist, t1);
-        uint256 b0 = IERC20(t0).balanceOf(wallet);
-        uint256 b1 = IERC20(t1).balanceOf(wallet);
-        uint256 ethB = wallet.balance;
+        uint256 b0;
+        uint256 b1;
+        uint256 ethB;
+        if (ethIn) {
+            ethB = wallet.balance;
+            b1 = IERC20(t1).balanceOf(wallet);
+        } else if (ethOut) {
+            b0 = IERC20(t0).balanceOf(wallet);
+            ethB = wallet.balance;
+        } else {
+            b0 = IERC20(t0).balanceOf(wallet);
+            b1 = IERC20(t1).balanceOf(wallet);
+        }
 
         bytes32 key = _snapshotKey(wallet, operationId, callId);
         key.storeSnapshot(
@@ -189,12 +201,10 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     {
         address wallet = msg.sender;
         bytes32 key = _snapshotKey(wallet, operationId, callId);
-        MERAWalletUniswapV2SlippageTypes.Snapshot memory snapshot = key.loadSnapshot();
+        MERAWalletUniswapV2SlippageTypes.Snapshot memory snapshot = key.loadAndClearSnapshot();
         if (!snapshot.active) {
             return;
         }
-
-        key.clearSnapshot();
 
         require(allowedRouter[call.target], RouterNotAllowed(call.target, callId));
 

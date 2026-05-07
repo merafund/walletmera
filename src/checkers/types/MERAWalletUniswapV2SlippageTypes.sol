@@ -44,9 +44,15 @@ library MERAWalletUniswapV2SlippageTypes {
         baseSlot.offset(1).asAddress().tstore(snapshot.token1Path);
         baseSlot.offset(2).asAddress().tstore(snapshot.priceFeed0);
         baseSlot.offset(3).asAddress().tstore(snapshot.priceFeed1);
-        baseSlot.offset(4).asUint256().tstore(snapshot.erc20Bal0);
-        baseSlot.offset(5).asUint256().tstore(snapshot.erc20Bal1);
-        baseSlot.offset(6).asUint256().tstore(snapshot.ethBal);
+        if (!snapshot.ethIn) {
+            baseSlot.offset(4).asUint256().tstore(snapshot.erc20Bal0);
+        }
+        if (!snapshot.ethOut) {
+            baseSlot.offset(5).asUint256().tstore(snapshot.erc20Bal1);
+        }
+        if (snapshot.ethIn || snapshot.ethOut) {
+            baseSlot.offset(6).asUint256().tstore(snapshot.ethBal);
+        }
     }
 
     function loadSnapshot(bytes32 key) internal view returns (Snapshot memory snapshot) {
@@ -61,11 +67,44 @@ library MERAWalletUniswapV2SlippageTypes {
         snapshot.token1Path = baseSlot.offset(1).asAddress().tload();
         snapshot.priceFeed0 = baseSlot.offset(2).asAddress().tload();
         snapshot.priceFeed1 = baseSlot.offset(3).asAddress().tload();
-        snapshot.erc20Bal0 = baseSlot.offset(4).asUint256().tload();
-        snapshot.erc20Bal1 = baseSlot.offset(5).asUint256().tload();
-        snapshot.ethBal = baseSlot.offset(6).asUint256().tload();
         snapshot.ethIn = packedToken0AndFlags & _FLAG_ETH_IN != 0;
         snapshot.ethOut = packedToken0AndFlags & _FLAG_ETH_OUT != 0;
+        if (!snapshot.ethIn) {
+            snapshot.erc20Bal0 = baseSlot.offset(4).asUint256().tload();
+        }
+        if (!snapshot.ethOut) {
+            snapshot.erc20Bal1 = baseSlot.offset(5).asUint256().tload();
+        }
+        if (snapshot.ethIn || snapshot.ethOut) {
+            snapshot.ethBal = baseSlot.offset(6).asUint256().tload();
+        }
+    }
+
+    function loadAndClearSnapshot(bytes32 key) internal returns (Snapshot memory snapshot) {
+        bytes32 baseSlot = _snapshotBaseSlot(key);
+        uint256 packedToken0AndFlags = baseSlot.offset(0).asUint256().tload();
+        snapshot.active = packedToken0AndFlags & _FLAG_ACTIVE != 0;
+        if (!snapshot.active) {
+            return snapshot;
+        }
+
+        // Clearing only the active flag deactivates the snapshot for this tx.
+        baseSlot.offset(0).asUint256().tstore(0);
+        snapshot.token0Path = address(uint160(packedToken0AndFlags & _ADDRESS_MASK));
+        snapshot.token1Path = baseSlot.offset(1).asAddress().tload();
+        snapshot.priceFeed0 = baseSlot.offset(2).asAddress().tload();
+        snapshot.priceFeed1 = baseSlot.offset(3).asAddress().tload();
+        snapshot.ethIn = packedToken0AndFlags & _FLAG_ETH_IN != 0;
+        snapshot.ethOut = packedToken0AndFlags & _FLAG_ETH_OUT != 0;
+        if (!snapshot.ethIn) {
+            snapshot.erc20Bal0 = baseSlot.offset(4).asUint256().tload();
+        }
+        if (!snapshot.ethOut) {
+            snapshot.erc20Bal1 = baseSlot.offset(5).asUint256().tload();
+        }
+        if (snapshot.ethIn || snapshot.ethOut) {
+            snapshot.ethBal = baseSlot.offset(6).asUint256().tload();
+        }
     }
 
     function clearSnapshot(bytes32 key) internal {
