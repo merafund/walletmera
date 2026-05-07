@@ -48,6 +48,18 @@ contract MERAWalletERC20RecipientWhitelistTest is Test {
         assertTrue(primary.isRecipientAllowed(recipientB));
     }
 
+    function test_SetAllowedRecipients_LengthMismatchReverts() public {
+        address[] memory recipients = new address[](2);
+        recipients[0] = recipientA;
+        recipients[1] = recipientB;
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(owner);
+        vm.expectRevert(IMERAWalletERC20RecipientWhitelistErrors.RecipientWhitelistArrayLengthMismatch.selector);
+        primary.setAllowedRecipients(recipients, allowed);
+    }
+
     function test_SetAllowedRecipients_ZeroAddressReverts() public {
         address[] memory recipients = new address[](1);
         recipients[0] = address(0);
