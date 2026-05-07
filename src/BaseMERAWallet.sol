@@ -228,7 +228,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setTargetCallPolicies(address[] calldata targets, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = targets.length;
@@ -244,7 +244,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setSelectorCallPolicies(bytes4[] calldata selectors, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = selectors.length;
@@ -261,7 +261,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address[] calldata targets,
         bytes4[] calldata selectors,
         MERAWalletTypes.CallPathPolicy[] calldata policies
-    ) external override onlySelfAsEmergency whenLifeAlive {
+    ) external override onlySelf whenLifeAlive {
         uint256 n = targets.length;
         require(n == selectors.length, ArrayLengthMismatch(n, selectors.length));
         require(n == policies.length, ArrayLengthMismatch(n, policies.length));
@@ -276,7 +276,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] calldata updates)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = updates.length;
@@ -292,7 +292,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = updates.length;
