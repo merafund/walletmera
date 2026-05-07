@@ -320,6 +320,56 @@ contract BaseMERAWalletTest is Test {
         assertEq(w.emergencyAgentLifetime(), 30 days);
     }
 
+    function test_DefaultAdminSelectorPolicies_EmergencyHasNoTimelock_PrimaryAndBackupForbidden() public view {
+        bytes4[] memory selectors = new bytes4[](5);
+        selectors[0] = wallet.setTargetCallPolicies.selector;
+        selectors[1] = wallet.setSelectorCallPolicies.selector;
+        selectors[2] = wallet.setTargetSelectorCallPolicies.selector;
+        selectors[3] = wallet.setRequiredCheckers.selector;
+        selectors[4] = wallet.setOptionalCheckers.selector;
+
+        for (uint256 i = 0; i < selectors.length;) {
+            (
+                MERAWalletTypes.RoleCallPolicy memory primaryPolicy,
+                MERAWalletTypes.RoleCallPolicy memory backupPolicy,
+                uint256 emergencyDelay,
+                bool exists
+            ) = wallet.callPolicyBySelector(selectors[i]);
+            assertTrue(exists);
+            assertTrue(primaryPolicy.forbidden);
+            assertTrue(backupPolicy.forbidden);
+            assertEq(primaryPolicy.delay, 0);
+            assertEq(backupPolicy.delay, 0);
+            assertEq(emergencyDelay, 0);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function test_DefaultAdminSelectorPolicies_SetOptionalCheckers_EmergencyExecutesWithoutTimelock() public {
+        MERAWalletTypes.Call[] memory calls = _singleCall(
+            address(wallet), 0, abi.encodeWithSelector(wallet.setOptionalCheckers.selector, _mkWl(address(0), true, ""))
+        );
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseMERAWalletErrors.CallPathForbiddenForRole.selector, MERAWalletTypes.Role.Primary
+            )
+        );
+        wallet.executeTransaction(calls, 6011);
+
+        vm.prank(backup);
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.CallPathForbiddenForRole.selector, MERAWalletTypes.Role.Backup)
+        );
+        wallet.executeTransaction(calls, 6012);
+
+        vm.prank(emergency);
+        wallet.executeTransaction(calls, 6013);
+    }
+
     function test_GuardianCanEnterSafeModeAndRotationClearsIt() public {
         address guardianAddr = vm.addr(0xCAFE);
         BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
@@ -3017,10 +3067,15 @@ contract BaseMERAWalletTest is Test {
     /// @dev Self-calls whose selector is timelocked for emergency (e.g. policy / checker setters).
     /// @dev Caller must have `msg.sender == emergency` for both inner txs (e.g. wrap with `vm.startPrank(emergency)`).
     function _executeEmergencyWalletSelfCallTimelocked(bytes memory data, uint256 salt) internal {
-        bytes32 opId = wallet.proposeTransaction(_singleCall(address(wallet), 0, data), salt);
+        MERAWalletTypes.Call[] memory calls = _singleCall(address(wallet), 0, data);
+        if (wallet.getRequiredDelay(calls) == 0) {
+            wallet.executeTransaction(calls, salt);
+            return;
+        }
+        bytes32 opId = wallet.proposeTransaction(calls, salt);
         (,,, uint64 executeAfter,,,,,,,) = wallet.operations(opId);
         vm.warp(executeAfter);
-        wallet.executePending(_singleCall(address(wallet), 0, data), salt);
+        wallet.executePending(calls, salt);
     }
 
     function _executeWalletSelfCallOn(BaseMERAWallet w, bytes memory data, uint256 salt) internal {
@@ -3028,10 +3083,15 @@ contract BaseMERAWalletTest is Test {
     }
 
     function _executeEmergencyWalletSelfCallTimelockedOn(BaseMERAWallet w, bytes memory data, uint256 salt) internal {
-        bytes32 opId = w.proposeTransaction(_singleCall(address(w), 0, data), salt);
+        MERAWalletTypes.Call[] memory calls = _singleCall(address(w), 0, data);
+        if (w.getRequiredDelay(calls) == 0) {
+            w.executeTransaction(calls, salt);
+            return;
+        }
+        bytes32 opId = w.proposeTransaction(calls, salt);
         (,,, uint64 executeAfter,,,,,,,) = w.operations(opId);
         vm.warp(executeAfter);
-        w.executePending(_singleCall(address(w), 0, data), salt);
+        w.executePending(calls, salt);
     }
 
     function _expectWalletSelfCallRevert(bytes memory innerRevertData, bytes memory data, uint256 salt) internal {
@@ -3048,13 +3108,21 @@ contract BaseMERAWalletTest is Test {
         uint256 salt
     ) internal {
         vm.startPrank(emergency);
-        bytes32 opId = wallet.proposeTransaction(_singleCall(address(wallet), 0, data), salt);
-        (,,, uint64 executeAfter,,,,,,,) = wallet.operations(opId);
-        vm.warp(executeAfter);
-        vm.expectRevert(
-            abi.encodeWithSelector(IBaseMERAWalletErrors.CallExecutionFailed.selector, uint256(0), innerRevertData)
-        );
-        wallet.executePending(_singleCall(address(wallet), 0, data), salt);
+        MERAWalletTypes.Call[] memory calls = _singleCall(address(wallet), 0, data);
+        if (wallet.getRequiredDelay(calls) == 0) {
+            vm.expectRevert(
+                abi.encodeWithSelector(IBaseMERAWalletErrors.CallExecutionFailed.selector, uint256(0), innerRevertData)
+            );
+            wallet.executeTransaction(calls, salt);
+        } else {
+            bytes32 opId = wallet.proposeTransaction(calls, salt);
+            (,,, uint64 executeAfter,,,,,,,) = wallet.operations(opId);
+            vm.warp(executeAfter);
+            vm.expectRevert(
+                abi.encodeWithSelector(IBaseMERAWalletErrors.CallExecutionFailed.selector, uint256(0), innerRevertData)
+            );
+            wallet.executePending(calls, salt);
+        }
         vm.stopPrank();
     }
 

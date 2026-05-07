@@ -947,11 +947,17 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _setSelectorCallPolicy(
             IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
         );
-        _setSelectorCallPolicy(IBaseMERAWallet.setTargetCallPolicies.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setSelectorCallPolicies.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setTargetSelectorCallPolicies.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setRequiredCheckers.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setOptionalCheckers.selector, ownershipAndGrantRolePolicy);
+        MERAWalletTypes.CallPathPolicy memory adminNoTimelockPolicy = MERAWalletTypes.CallPathPolicy({
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            emergencyDelay: 0,
+            exists: true
+        });
+        _setSelectorCallPolicy(IBaseMERAWallet.setTargetCallPolicies.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setSelectorCallPolicies.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setTargetSelectorCallPolicies.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setRequiredCheckers.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setOptionalCheckers.selector, adminNoTimelockPolicy);
     }
 
     function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
