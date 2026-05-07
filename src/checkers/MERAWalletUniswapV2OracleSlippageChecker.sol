@@ -31,7 +31,6 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     uint256 public immutable MAX_ORACLE_STALE_SECONDS;
 
     event AllowedRouterUpdated(address indexed router, bool allowed, address indexed caller);
-    event TokenPriceFeedUpdated(address indexed token, address indexed feed, address indexed caller);
     event PauseAgentUpdated(address indexed agent, bool allowed, address indexed caller);
     /// @dev Emits `assetWhitelist` from stored config; additional struct fields may be reflected here later.
     event WalletSlippageCheckerConfigUpdated(
@@ -44,7 +43,6 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     mapping(address agent => bool allowed) public isPauseAgent;
 
     mapping(address router => bool allowed) public allowedRouter;
-    mapping(address token => address feed) public tokenPriceFeed;
 
     /// @dev Full per-wallet config from {applyConfig} (extensible struct); `assetWhitelist` may be zero to fall back to {defaultAssetWhitelist}.
     mapping(address wallet => MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig) public
@@ -55,7 +53,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     // to do use tload tstore
     mapping(bytes32 key => MERAWalletUniswapV2SlippageTypes.Snapshot) private _snapshots;
 
-    /// @param initialOwner Admin for router allowlist and token price feeds (see {Ownable}).
+    /// @param initialOwner Admin for router allowlist (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS` so `BPS - value` does not underflow.
     /// @param maxOracleStaleSeconds Max age of Chainlink `updatedAt`; must be `> 0`.
     constructor(address initialOwner, uint256 maxOracleNegativeDeviationBps, uint256 maxOracleStaleSeconds)
@@ -78,22 +76,6 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         for (uint256 i = 0; i < n;) {
             allowedRouter[routers[i]] = allowed[i];
             emit AllowedRouterUpdated(routers[i], allowed[i], msg.sender);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    /// @notice Batch-set Chainlink feeds; `tokens[i]` paired with `feeds[i]`.
-    function setTokenPriceFeeds(address[] calldata tokens, address[] calldata feeds) external onlyOwner {
-        uint256 n = tokens.length;
-        require(n == feeds.length, SlippageArrayLengthMismatch());
-        for (uint256 i = 0; i < n;) {
-            address token = tokens[i];
-            address feed = feeds[i];
-            require(token != address(0) && feed != address(0), SlippageInvalidAddress());
-            tokenPriceFeed[token] = feed;
-            emit TokenPriceFeedUpdated(token, feed, msg.sender);
             unchecked {
                 ++i;
             }
@@ -306,14 +288,10 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
     }
 
+    /// @dev Price feeds come only from {IMERAWalletAssetWhiteList-assetSource} on the effective whitelist (`applyConfig` or {defaultAssetWhitelist}).
     function _effectivePriceFeed(address assetWhitelist, address token) internal view returns (address) {
-        if (assetWhitelist != address(0)) {
-            address source = IMERAWalletAssetWhiteList(assetWhitelist).assetSource(token);
-            if (source != address(0)) {
-                return source;
-            }
-        }
-        address feedAddr = tokenPriceFeed[token];
+        require(assetWhitelist != address(0), PriceFeedNotSet(token));
+        address feedAddr = IMERAWalletAssetWhiteList(assetWhitelist).assetSource(token);
         require(feedAddr != address(0), PriceFeedNotSet(token));
         return feedAddr;
     }

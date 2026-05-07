@@ -65,13 +65,22 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         routerAllowed[0] = true;
         checker.setAllowedRouters(routers, routerAllowed);
 
-        address[] memory tokens = new address[](2);
-        tokens[0] = address(tokenA);
-        tokens[1] = address(tokenB);
-        address[] memory feeds = new address[](2);
-        feeds[0] = address(feedA);
-        feeds[1] = address(feedB);
-        checker.setTokenPriceFeeds(tokens, feeds);
+        MERAWalletAssetWhiteList defaultWl = new MERAWalletAssetWhiteList(emergency);
+        address[] memory wlAssets = new address[](2);
+        wlAssets[0] = address(tokenA);
+        wlAssets[1] = address(tokenB);
+        bool[] memory wlAllowed = new bool[](2);
+        wlAllowed[0] = true;
+        wlAllowed[1] = true;
+        address[] memory wlSrcAssets = new address[](2);
+        wlSrcAssets[0] = address(tokenA);
+        wlSrcAssets[1] = address(tokenB);
+        address[] memory wlSrcFeeds = new address[](2);
+        wlSrcFeeds[0] = address(feedA);
+        wlSrcFeeds[1] = address(feedB);
+        defaultWl.setAllowedAssets(wlAssets, wlAllowed);
+        defaultWl.setAssetSources(wlSrcAssets, wlSrcFeeds);
+        checker.setDefaultAssetWhitelist(address(defaultWl));
 
         address[] memory agents = new address[](1);
         agents[0] = pauseAgent;
@@ -205,8 +214,16 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
         allowed[1] = true;
+        address[] memory srcAssets = new address[](2);
+        srcAssets[0] = address(tokenA);
+        srcAssets[1] = address(tokenB);
+        address[] memory srcFeeds = new address[](2);
+        srcFeeds[0] = address(feedA);
+        srcFeeds[1] = address(feedB);
+
         vm.startPrank(emergency);
         aw.setAllowedAssets(assets, allowed);
+        aw.setAssetSources(srcAssets, srcFeeds);
         checker.setDefaultAssetWhitelist(address(aw));
         vm.stopPrank();
 
@@ -241,10 +258,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
         allowed[1] = true;
-        address[] memory sourceAssets = new address[](1);
+        address[] memory sourceAssets = new address[](2);
         sourceAssets[0] = address(tokenA);
-        address[] memory sources = new address[](1);
+        sourceAssets[1] = address(tokenB);
+        address[] memory sources = new address[](2);
         sources[0] = address(customFeedA);
+        sources[1] = address(feedB);
 
         vm.startPrank(emergency);
         aw.setAllowedAssets(assets, allowed);
@@ -262,17 +281,29 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         wallet.executeTransaction(_approveAndSwapCalls(), 44);
     }
 
-    function test_AssetWhitelist_UsesBaseFeedWhenCustomSourceUnset() public {
-        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
+    // Feeds for endpoints resolve through fallback whitelist when local sources are unset.
+    function test_AssetWhitelist_UsesFallbackFeedsWhenLocalSourceUnset() public {
+        MERAWalletAssetWhiteList baseFeeds = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
         assets[1] = address(tokenB);
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
         allowed[1] = true;
+        address[] memory srcAssets = new address[](2);
+        srcAssets[0] = address(tokenA);
+        srcAssets[1] = address(tokenB);
+        address[] memory srcFeeds = new address[](2);
+        srcFeeds[0] = address(feedA);
+        srcFeeds[1] = address(feedB);
 
         vm.startPrank(emergency);
+        baseFeeds.setAllowedAssets(assets, allowed);
+        baseFeeds.setAssetSources(srcAssets, srcFeeds);
+
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         aw.setAllowedAssets(assets, allowed);
+        aw.setFallbackWhitelist(address(baseFeeds));
         feedA.setAnswer(2e8);
         vm.stopPrank();
 
