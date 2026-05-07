@@ -43,6 +43,21 @@ contract MERAWalletWhitelistRouterTest is Test {
         router.setWhitelist(key, whitelistA);
     }
 
+    function test_BatchSetSucceeds() public {
+        bytes32[] memory keys = new bytes32[](2);
+        keys[0] = keccak256("route.a");
+        keys[1] = keccak256("route.b");
+        address[] memory whitelists = new address[](2);
+        whitelists[0] = whitelistA;
+        whitelists[1] = whitelistB;
+
+        vm.prank(owner);
+        router.setWhitelists(keys, whitelists);
+
+        assertEq(router.whitelistByHash(keys[0]), whitelistA);
+        assertEq(router.whitelistByHash(keys[1]), whitelistB);
+    }
+
     function test_BatchSetRejectsLengthMismatch() public {
         bytes32[] memory keys = new bytes32[](1);
         keys[0] = keccak256("custom.route");
