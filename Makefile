@@ -111,24 +111,6 @@ deploy-target-whitelist-checker-amoy:
 deploy-target-whitelist-checker-bsc:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistChecker.s.sol:DeployMERAWalletTargetWhitelistChecker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
 
-deploy-target-blacklist-checker-ownable-polygon:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerOwnable.s.sol:DeployMERAWalletTargetBlacklistCheckerOwnable RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-blacklist-checker-ownable-amoy:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerOwnable.s.sol:DeployMERAWalletTargetBlacklistCheckerOwnable RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-blacklist-checker-ownable-bsc:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerOwnable.s.sol:DeployMERAWalletTargetBlacklistCheckerOwnable RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
-
-deploy-target-whitelist-checker-ownable-polygon:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerOwnable.s.sol:DeployMERAWalletTargetWhitelistCheckerOwnable RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-whitelist-checker-ownable-amoy:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerOwnable.s.sol:DeployMERAWalletTargetWhitelistCheckerOwnable RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-whitelist-checker-ownable-bsc:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerOwnable.s.sol:DeployMERAWalletTargetWhitelistCheckerOwnable RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
-
 deploy-uniswap-v2-oracle-slippage-checker-polygon:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2OracleSlippageChecker.s.sol:DeployMERAWalletUniswapV2OracleSlippageChecker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
 

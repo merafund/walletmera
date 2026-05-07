@@ -5,26 +5,26 @@ import {Test} from "forge-std/Test.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
-import {MERAWalletTargetBlacklistCheckerOwnable} from "../src/checkers/MERAWalletTargetBlacklistCheckerOwnable.sol";
-import {MERAWalletTargetWhitelistCheckerOwnable} from "../src/checkers/MERAWalletTargetWhitelistCheckerOwnable.sol";
+import {MERAWalletTargetBlacklistChecker} from "../src/checkers/MERAWalletTargetBlacklistChecker.sol";
+import {MERAWalletTargetWhitelistChecker} from "../src/checkers/MERAWalletTargetWhitelistChecker.sol";
 import {IMERAWalletBlacklistErrors} from "../src/checkers/errors/IMERAWalletBlacklistErrors.sol";
 import {IMERAWalletWhitelistErrors} from "../src/checkers/errors/IMERAWalletWhitelistErrors.sol";
 import {MERAWalletBlacklistTypes} from "../src/checkers/types/MERAWalletBlacklistTypes.sol";
 import {MERAWalletWhitelistTypes} from "../src/checkers/types/MERAWalletWhitelistTypes.sol";
 import {ReceiverMock} from "./mocks/ReceiverMock.sol";
 
-contract MERAWalletTargetOwnableCheckersTest is Test {
+contract MERAWalletTargetCheckersTest is Test {
     address internal owner = address(0x0A);
     address internal outsider = address(0x0B);
     address internal walletAddr = address(0xCAFE);
 
-    MERAWalletTargetBlacklistCheckerOwnable internal bl;
-    MERAWalletTargetWhitelistCheckerOwnable internal wl;
+    MERAWalletTargetBlacklistChecker internal bl;
+    MERAWalletTargetWhitelistChecker internal wl;
     ReceiverMock internal receiver;
 
     function setUp() public {
-        bl = new MERAWalletTargetBlacklistCheckerOwnable(owner);
-        wl = new MERAWalletTargetWhitelistCheckerOwnable(owner);
+        bl = new MERAWalletTargetBlacklistChecker(owner);
+        wl = new MERAWalletTargetWhitelistChecker(owner);
         receiver = new ReceiverMock();
     }
 
