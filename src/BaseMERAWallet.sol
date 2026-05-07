@@ -1489,9 +1489,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         // `activeFrom == 0`: Emergency agent assigned but activity not started yet.
         if (role == MERAWalletTypes.Role.Emergency && agent.activeFrom != 0) {
             uint256 expiresAt = uint256(agent.activeFrom) + emergencyAgentLifetime;
-            if (block.timestamp > expiresAt) {
-                revert AgentExpired(account, expiresAt);
-            }
+            require(block.timestamp <= expiresAt, AgentExpired(account, expiresAt));
         }
     }
 
