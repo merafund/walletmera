@@ -111,6 +111,18 @@ contract MERAWalletAssetWhiteListTest is Test {
         primary.setAssetSources(assets, sources);
     }
 
+    function test_SetAllowedAssets_LengthMismatchReverts() public {
+        address[] memory assets = new address[](2);
+        assets[0] = tokenA;
+        assets[1] = tokenB;
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(owner);
+        vm.expectRevert(IMERAWalletAssetWhiteListErrors.AssetWhitelistArrayLengthMismatch.selector);
+        primary.setAllowedAssets(assets, allowed);
+    }
+
     function test_SetAssetSources_LengthMismatchReverts() public {
         address[] memory assets = new address[](1);
         assets[0] = tokenA;
