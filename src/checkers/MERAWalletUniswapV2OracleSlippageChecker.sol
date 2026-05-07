@@ -22,6 +22,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     IMERAWalletTransactionChecker,
     IMERAWalletUniswapV2SlippageErrors
 {
+    using MERAWalletUniswapV2SlippageTypes for bytes32;
+
     /// @dev Max allowed shortfall vs oracle-implied output (basis points). E.g. 100 = 1% worse than oracle is allowed.
     uint256 public immutable MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
 
@@ -49,9 +51,6 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         walletSlippageCheckerConfig;
     /// @dev Used when `walletSlippageCheckerConfig[wallet].assetWhitelist` is zero.
     address public defaultAssetWhitelist;
-
-    // to do use tload tstore
-    mapping(bytes32 key => MERAWalletUniswapV2SlippageTypes.Snapshot) private _snapshots;
 
     /// @param initialOwner Admin for router allowlist (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS` so `BPS - value` does not underflow.
@@ -167,18 +166,20 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         uint256 ethB = wallet.balance;
 
         bytes32 key = _snapshotKey(wallet, operationId, callId);
-        _snapshots[key] = MERAWalletUniswapV2SlippageTypes.Snapshot({
-            token0Path: t0,
-            token1Path: t1,
-            priceFeed0: feed0,
-            priceFeed1: feed1,
-            erc20Bal0: b0,
-            erc20Bal1: b1,
-            ethBal: ethB,
-            ethIn: ethIn,
-            ethOut: ethOut,
-            active: true
-        });
+        key.storeSnapshot(
+            MERAWalletUniswapV2SlippageTypes.Snapshot({
+                token0Path: t0,
+                token1Path: t1,
+                priceFeed0: feed0,
+                priceFeed1: feed1,
+                erc20Bal0: b0,
+                erc20Bal1: b1,
+                ethBal: ethB,
+                ethIn: ethIn,
+                ethOut: ethOut,
+                active: true
+            })
+        );
     }
 
     function checkAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId)
@@ -188,12 +189,12 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     {
         address wallet = msg.sender;
         bytes32 key = _snapshotKey(wallet, operationId, callId);
-        MERAWalletUniswapV2SlippageTypes.Snapshot memory snapshot = _snapshots[key];
+        MERAWalletUniswapV2SlippageTypes.Snapshot memory snapshot = key.loadSnapshot();
         if (!snapshot.active) {
             return;
         }
 
-        delete _snapshots[key];
+        key.clearSnapshot();
 
         require(allowedRouter[call.target], RouterNotAllowed(call.target, callId));
 
