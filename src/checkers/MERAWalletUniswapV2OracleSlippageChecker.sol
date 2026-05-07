@@ -188,8 +188,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     {
         address wallet = msg.sender;
         bytes32 key = _snapshotKey(wallet, operationId, callId);
-        MERAWalletUniswapV2SlippageTypes.Snapshot memory snap = _snapshots[key];
-        if (!snap.active) {
+        MERAWalletUniswapV2SlippageTypes.Snapshot memory snapshot = _snapshots[key];
+        if (!snapshot.active) {
             return;
         }
 
@@ -200,36 +200,38 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         uint256 amountIn;
         uint256 amountOut;
 
-        if (snap.ethIn) {
-            amountIn = snap.ethBal - wallet.balance;
+        if (snapshot.ethIn) {
+            amountIn = snapshot.ethBal - wallet.balance;
         } else {
-            uint256 b0After = IERC20(snap.token0Path).balanceOf(wallet);
-            amountIn = snap.erc20Bal0 - b0After;
+            uint256 inputTokenBalanceAfter = IERC20(snapshot.token0Path).balanceOf(wallet);
+            amountIn = snapshot.erc20Bal0 - inputTokenBalanceAfter;
         }
 
-        if (snap.ethOut) {
-            amountOut = wallet.balance - snap.ethBal;
+        if (snapshot.ethOut) {
+            amountOut = wallet.balance - snapshot.ethBal;
         } else {
-            uint256 b1After = IERC20(snap.token1Path).balanceOf(wallet);
-            amountOut = b1After - snap.erc20Bal1;
+            uint256 outputTokenBalanceAfter = IERC20(snapshot.token1Path).balanceOf(wallet);
+            amountOut = outputTokenBalanceAfter - snapshot.erc20Bal1;
         }
 
         require(amountIn != 0 && amountOut != 0, InvalidMeasuredAmounts());
 
-        (uint256 answerIn, uint8 fdIn) = _readFeed(snap.token0Path, snap.priceFeed0);
-        (uint256 answerOut, uint8 fdOut) = _readFeed(snap.token1Path, snap.priceFeed1);
+        (uint256 oracleAnswerIn, uint8 priceFeedDecimalsIn) = _readFeed(snapshot.token0Path, snapshot.priceFeed0);
+        (uint256 oracleAnswerOut, uint8 priceFeedDecimalsOut) = _readFeed(snapshot.token1Path, snapshot.priceFeed1);
 
-        uint8 tdIn = IERC20Metadata(snap.token0Path).decimals();
-        uint8 tdOut = IERC20Metadata(snap.token1Path).decimals();
+        uint8 inputTokenDecimals = IERC20Metadata(snapshot.token0Path).decimals();
+        uint8 outputTokenDecimals = IERC20Metadata(snapshot.token1Path).decimals();
 
-        uint256 denomIn = 10 ** (uint256(tdIn) + uint256(fdIn));
-        uint256 denomOut = 10 ** (uint256(tdOut) + uint256(fdOut));
-        uint256 minBps = BPS - MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
+        uint256 priceScalingDenominatorIn = 10 ** (uint256(inputTokenDecimals) + uint256(priceFeedDecimalsIn));
+        uint256 priceScalingDenominatorOut = 10 ** (uint256(outputTokenDecimals) + uint256(priceFeedDecimalsOut));
+        uint256 toleranceAdjustedBasisPoints = BPS - MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
 
         // Compare implied USD notionals without shrinking `amountOut * price` first (avoids floor-to-zero on uint256 paths).
-        uint256 lhs = Math.mulDiv(amountOut, answerOut * BPS, denomOut);
-        uint256 rhs = Math.mulDiv(amountIn, answerIn * minBps, denomIn);
-        require(lhs >= rhs, SwapWorseThanOracle());
+        uint256 scaledOutputNotionalNumerator =
+            Math.mulDiv(amountOut, oracleAnswerOut * BPS, priceScalingDenominatorOut);
+        uint256 scaledInputNotionalNumeratorWithTolerance =
+            Math.mulDiv(amountIn, oracleAnswerIn * toleranceAdjustedBasisPoints, priceScalingDenominatorIn);
+        require(scaledOutputNotionalNumerator >= scaledInputNotionalNumeratorWithTolerance, SwapWorseThanOracle());
     }
 
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
