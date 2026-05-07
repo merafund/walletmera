@@ -10,6 +10,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletAssetWhiteList} from "../interfaces/checkers/IMERAWalletAssetWhiteList.sol";
+import {IMERAWalletWhitelistRouter} from "../interfaces/checkers/IMERAWalletWhitelistRouter.sol";
 import {IAggregatorV3} from "../interfaces/oracles/IAggregatorV3.sol";
 import {IUniswapV2Router02} from "../interfaces/uniswap/IUniswapV2Router02.sol";
 import {IMERAWalletUniswapV2SlippageErrors} from "./errors/IMERAWalletUniswapV2SlippageErrors.sol";
@@ -28,6 +29,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     uint256 public immutable MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
 
     uint256 public constant BPS = 10_000;
+    bytes32 internal constant _ASSET_WHITELIST_KEY = keccak256("MERA_ASSET_WHITELIST");
 
     /// @dev Reject Chainlink answers older than this many seconds.
     uint256 public immutable MAX_ORACLE_STALE_SECONDS;
@@ -254,11 +256,24 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     }
 
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
-        address w = walletSlippageCheckerConfig[wallet].assetWhitelist;
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig storage cfg =
+            walletSlippageCheckerConfig[wallet];
+        address w = cfg.assetWhitelist;
+        if (w != address(0)) {
+            return w;
+        }
+        w = _routerWhitelist(cfg.whitelistRouter, _ASSET_WHITELIST_KEY);
         if (w != address(0)) {
             return w;
         }
         return defaultAssetWhitelist;
+    }
+
+    function _routerWhitelist(address whitelistRouter, bytes32 key) internal view returns (address) {
+        if (whitelistRouter == address(0)) {
+            return address(0);
+        }
+        return IMERAWalletWhitelistRouter(whitelistRouter).whitelistByHash(key);
     }
 
     function _effectiveMaxOracleNegativeDeviationBps(address wallet) internal view returns (uint256) {

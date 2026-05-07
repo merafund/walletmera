@@ -25,6 +25,8 @@ library MERAWalletUniswapV2SlippageTypes {
         uint256 maxOracleNegativeDeviationBps;
         /// @dev Optional per-wallet max Chainlink staleness in seconds; 0 means fallback to checker default.
         uint256 maxOracleStaleSeconds;
+        /// @dev Optional route registry checked before default asset whitelist when `assetWhitelist` is zero.
+        address whitelistRouter;
     }
 
     /// @dev Swap snapshot: balances and path endpoints recorded in the before-hook, read in the after-hook for oracle comparison.

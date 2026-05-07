@@ -10,6 +10,7 @@ import {MERAWalletERC20TransferWhitelistChecker} from "../src/checkers/MERAWalle
 import {MERAWalletERC20ApproveWhitelistChecker} from "../src/checkers/MERAWalletERC20ApproveWhitelistChecker.sol";
 import {MERAWalletERC20RecipientWhitelist} from "../src/checkers/whitelists/MERAWalletERC20RecipientWhitelist.sol";
 import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
+import {MERAWalletWhitelistRouter} from "../src/checkers/whitelists/MERAWalletWhitelistRouter.sol";
 import {MERAWalletERC20WhitelistCheckerTypes} from "../src/checkers/types/MERAWalletERC20WhitelistCheckerTypes.sol";
 import {
     IMERAWalletERC20WhitelistCheckerErrors
@@ -31,6 +32,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     ERC20Mock internal token;
     MERAWalletAssetWhiteList internal assetWl;
     MERAWalletERC20RecipientWhitelist internal counterpartyWl;
+    MERAWalletWhitelistRouter internal whitelistRouter;
 
     function _mkWl(address checker, bool allowed, bytes memory config)
         internal
@@ -49,6 +51,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
 
         assetWl = new MERAWalletAssetWhiteList(emergency);
         counterpartyWl = new MERAWalletERC20RecipientWhitelist(emergency);
+        whitelistRouter = new MERAWalletWhitelistRouter(emergency);
 
         vm.startPrank(emergency);
         _setAllRoleTimelocks(0);
@@ -117,7 +120,17 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
 
     function _cfg() internal view returns (MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory) {
         return MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
-            assetWhitelist: address(assetWl), recipientWhitelist: address(counterpartyWl)
+            assetWhitelist: address(assetWl), recipientWhitelist: address(counterpartyWl), whitelistRouter: address(0)
+        });
+    }
+
+    function _routerCfg()
+        internal
+        view
+        returns (MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory)
+    {
+        return MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
+            assetWhitelist: address(0), recipientWhitelist: address(0), whitelistRouter: address(whitelistRouter)
         });
     }
 
@@ -157,7 +170,9 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
 
         MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory cfg =
             MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
-                assetWhitelist: address(assetWl), recipientWhitelist: address(counterpartyWl)
+                assetWhitelist: address(assetWl),
+                recipientWhitelist: address(counterpartyWl),
+                whitelistRouter: address(0)
             });
         _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(cfg)));
 
@@ -286,7 +301,7 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         vm.stopPrank();
         MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory emptyCfg =
             MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
-                assetWhitelist: address(0), recipientWhitelist: address(0)
+                assetWhitelist: address(0), recipientWhitelist: address(0), whitelistRouter: address(0)
             });
         _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(emptyCfg)));
 
@@ -294,6 +309,92 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         vm.prank(primary);
         wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 2);
         assertEq(token.balanceOf(recipient), 50);
+    }
+
+    function test_Transfer_UsesRouterWhitelistsWhenExplicitConfigZero() public {
+        _allowTokenAndCounterparty();
+
+        vm.startPrank(emergency);
+        whitelistRouter.setWhitelist(whitelistRouter.ASSET_WHITELIST_KEY(), address(assetWl));
+        whitelistRouter.setWhitelist(whitelistRouter.RECIPIENT_WHITELIST_KEY(), address(counterpartyWl));
+        vm.stopPrank();
+        _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(_routerCfg())));
+
+        token.mint(address(wallet), 1000);
+        vm.prank(primary);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 2);
+        assertEq(token.balanceOf(recipient), 50);
+    }
+
+    function test_Transfer_ExplicitWhitelistsWinOverRouterRoutes() public {
+        _allowTokenAndCounterparty();
+        MERAWalletAssetWhiteList blockedAssets = new MERAWalletAssetWhiteList(emergency);
+        MERAWalletERC20RecipientWhitelist blockedRecipients = new MERAWalletERC20RecipientWhitelist(emergency);
+
+        vm.startPrank(emergency);
+        whitelistRouter.setWhitelist(whitelistRouter.ASSET_WHITELIST_KEY(), address(blockedAssets));
+        whitelistRouter.setWhitelist(whitelistRouter.RECIPIENT_WHITELIST_KEY(), address(blockedRecipients));
+        vm.stopPrank();
+
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory cfg =
+            MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
+                assetWhitelist: address(assetWl),
+                recipientWhitelist: address(counterpartyWl),
+                whitelistRouter: address(whitelistRouter)
+            });
+        _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(cfg)));
+
+        token.mint(address(wallet), 1000);
+        vm.prank(primary);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 2);
+        assertEq(token.balanceOf(recipient), 50);
+    }
+
+    function test_Transfer_UsesDefaultsWhenRouterRouteMissingOrCleared() public {
+        _allowTokenAndCounterparty();
+
+        vm.startPrank(emergency);
+        transferChecker.setDefaultAssetWhitelist(address(assetWl));
+        transferChecker.setDefaultRecipientWhitelist(address(counterpartyWl));
+        whitelistRouter.setWhitelist(whitelistRouter.ASSET_WHITELIST_KEY(), address(assetWl));
+        whitelistRouter.setWhitelist(whitelistRouter.ASSET_WHITELIST_KEY(), address(0));
+        vm.stopPrank();
+        _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(_routerCfg())));
+
+        token.mint(address(wallet), 1000);
+        vm.prank(primary);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 2);
+        assertEq(token.balanceOf(recipient), 50);
+    }
+
+    function test_Transfer_RouterRouteChangeAppliesWithoutReapplyingCheckerConfig() public {
+        _allowTokenAndCounterparty();
+        MERAWalletERC20RecipientWhitelist blockedRecipients = new MERAWalletERC20RecipientWhitelist(emergency);
+        bytes32 recipientKey = whitelistRouter.RECIPIENT_WHITELIST_KEY();
+
+        vm.startPrank(emergency);
+        whitelistRouter.setWhitelist(whitelistRouter.ASSET_WHITELIST_KEY(), address(assetWl));
+        whitelistRouter.setWhitelist(recipientKey, address(counterpartyWl));
+        vm.stopPrank();
+        _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(_routerCfg())));
+
+        token.mint(address(wallet), 1000);
+        vm.prank(primary);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 2);
+        assertEq(token.balanceOf(recipient), 50);
+
+        vm.prank(emergency);
+        whitelistRouter.setWhitelist(recipientKey, address(blockedRecipients));
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMERAWalletERC20WhitelistCheckerErrors.Erc20WhitelistCounterpartyNotAllowed.selector,
+                recipient,
+                uint256(0)
+            )
+        );
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 50, address(transferChecker)), 3);
     }
 
     function test_ApplyConfig_EmptyIsNoOp() public {
@@ -304,6 +405,29 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
     function test_Approve_HappyPath() public {
         _allowTokenAndCounterparty();
         _setOptionalCheckers(_mkWl(address(approveChecker), true, abi.encode(_cfg())));
+
+        token.mint(address(wallet), 1000);
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(IERC20.approve.selector, spender, 500),
+            checker: address(approveChecker),
+            checkerData: ""
+        });
+        vm.prank(primary);
+        wallet.executeTransaction(calls, 1);
+        assertEq(token.allowance(address(wallet), spender), 500);
+    }
+
+    function test_Approve_UsesRouterWhitelistsWhenExplicitConfigZero() public {
+        _allowTokenAndCounterparty();
+
+        vm.startPrank(emergency);
+        whitelistRouter.setWhitelist(whitelistRouter.ASSET_WHITELIST_KEY(), address(assetWl));
+        whitelistRouter.setWhitelist(whitelistRouter.RECIPIENT_WHITELIST_KEY(), address(counterpartyWl));
+        vm.stopPrank();
+        _setOptionalCheckers(_mkWl(address(approveChecker), true, abi.encode(_routerCfg())));
 
         token.mint(address(wallet), 1000);
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);

@@ -14,6 +14,7 @@ SCRIPT := script/DeployMERAWalletMetaProxyCloneFactory.s.sol:DeployMERAWalletMet
 .PHONY: deploy-factory-polygon deploy-factory-amoy deploy-factory-bsc deploy-factory
 .PHONY: deploy-meta-proxy-clone-factory deploy-meta-proxy-clone-factory-polygon deploy-meta-proxy-clone-factory-amoy deploy-meta-proxy-clone-factory-bsc
 .PHONY: deploy-asset-whitelist-polygon deploy-asset-whitelist-amoy deploy-asset-whitelist-bsc
+.PHONY: deploy-whitelist-router-polygon deploy-whitelist-router-amoy deploy-whitelist-router-bsc
 .PHONY: deploy-erc20-approve-checker-polygon deploy-erc20-approve-checker-amoy deploy-erc20-approve-checker-bsc
 .PHONY: deploy-erc20-transfer-checker-polygon deploy-erc20-transfer-checker-amoy deploy-erc20-transfer-checker-bsc
 .PHONY: deploy-target-blacklist-checker-polygon deploy-target-blacklist-checker-amoy deploy-target-blacklist-checker-bsc
@@ -74,6 +75,15 @@ deploy-asset-whitelist-amoy:
 
 deploy-asset-whitelist-bsc:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletAssetWhiteList.s.sol:DeployMERAWalletAssetWhiteList RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-whitelist-router-polygon:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouter.s.sol:DeployMERAWalletWhitelistRouter RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-whitelist-router-amoy:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouter.s.sol:DeployMERAWalletWhitelistRouter RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-whitelist-router-bsc:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouter.s.sol:DeployMERAWalletWhitelistRouter RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
 
 deploy-erc20-approve-checker-polygon:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletERC20ApproveWhitelistChecker.s.sol:DeployMERAWalletERC20ApproveWhitelistChecker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"

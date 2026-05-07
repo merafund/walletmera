@@ -6,6 +6,7 @@ import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletERC20RecipientWhitelist} from "../interfaces/checkers/IMERAWalletERC20RecipientWhitelist.sol";
 import {IMERAWalletAssetWhiteList} from "../interfaces/checkers/IMERAWalletAssetWhiteList.sol";
+import {IMERAWalletWhitelistRouter} from "../interfaces/checkers/IMERAWalletWhitelistRouter.sol";
 import {IMERAWalletERC20WhitelistCheckerErrors} from "./errors/IMERAWalletERC20WhitelistCheckerErrors.sol";
 import {MERAWalletERC20WhitelistCheckerTypes} from "./types/MERAWalletERC20WhitelistCheckerTypes.sol";
 
@@ -18,6 +19,8 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     /// @dev Minimum calldata length for standard ERC20 `transfer(address,uint256)` / `approve(address,uint256)`:
     /// selector (4) + ABI-encoded `to`/`spender` (32) + `amount` (32).
     uint256 internal constant _ERC20_TRANSFER_OR_APPROVE_BODY_LEN = 4 + 32 + 32;
+    bytes32 internal constant _ASSET_WHITELIST_KEY = keccak256("MERA_ASSET_WHITELIST");
+    bytes32 internal constant _RECIPIENT_WHITELIST_KEY = keccak256("MERA_RECIPIENT_WHITELIST");
 
     mapping(address agent => bool allowed) public isPauseAgent;
 
@@ -27,7 +30,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     address public defaultRecipientWhitelist;
 
     event WalletErc20WhitelistCheckerConfigUpdated(
-        address indexed wallet, address indexed assetWhitelist, address indexed recipientWhitelist, address caller
+        address indexed wallet, MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig config
     );
     event DefaultAssetWhitelistUpdated(address indexed previous, address indexed newWhitelist, address indexed caller);
     event DefaultRecipientWhitelistUpdated(
@@ -47,9 +50,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory decoded =
             abi.decode(config, (MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig));
         walletConfig[msg.sender] = decoded;
-        emit WalletErc20WhitelistCheckerConfigUpdated(
-            msg.sender, decoded.assetWhitelist, decoded.recipientWhitelist, msg.sender
-        );
+        emit WalletErc20WhitelistCheckerConfigUpdated(msg.sender, decoded);
     }
 
     function setDefaultAssetWhitelist(address newWhitelist) external onlyOwner {
@@ -90,7 +91,12 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     function checkAfter(MERAWalletTypes.Call calldata, bytes32, uint256) external override {}
 
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
-        address w = walletConfig[wallet].assetWhitelist;
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage cfg = walletConfig[wallet];
+        address w = cfg.assetWhitelist;
+        if (w != address(0)) {
+            return w;
+        }
+        w = _routerWhitelist(cfg.whitelistRouter, _ASSET_WHITELIST_KEY);
         if (w != address(0)) {
             return w;
         }
@@ -98,11 +104,23 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     }
 
     function _effectiveRecipientWhitelist(address wallet) internal view returns (address) {
-        address w = walletConfig[wallet].recipientWhitelist;
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage cfg = walletConfig[wallet];
+        address w = cfg.recipientWhitelist;
+        if (w != address(0)) {
+            return w;
+        }
+        w = _routerWhitelist(cfg.whitelistRouter, _RECIPIENT_WHITELIST_KEY);
         if (w != address(0)) {
             return w;
         }
         return defaultRecipientWhitelist;
+    }
+
+    function _routerWhitelist(address whitelistRouter, bytes32 key) internal view returns (address) {
+        if (whitelistRouter == address(0)) {
+            return address(0);
+        }
+        return IMERAWalletWhitelistRouter(whitelistRouter).whitelistByHash(key);
     }
 
     /// @dev No-op when no asset list is configured for `wallet`.
