@@ -29,6 +29,14 @@ library MERAWalletUniswapV2SlippageTypes {
         address whitelistRouter;
     }
 
+    /// @dev ABI payload for per-call checker data when swap endpoints must not be decoded from `call.data`.
+    struct CheckerDataSlippageCheckData {
+        address tokenIn;
+        address tokenOut;
+        bool ethIn;
+        bool ethOut;
+    }
+
     /// @dev Swap snapshot: balances and path endpoints recorded in the before-hook, read in the after-hook for oracle comparison.
     struct Snapshot {
         address token0Path;
