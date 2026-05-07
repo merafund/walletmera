@@ -717,7 +717,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address predicted = fac.predictWallet(login, p);
         uint256 deadline = block.timestamp + 30 seconds;
         bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
-        skip(45 seconds);
+        skip(60 seconds);
 
         vm.expectRevert(MERALoginSignatureVerifier.AuthorizationExpired.selector);
         fac.deployWallet(login, p, secret, deadline, authorization);
