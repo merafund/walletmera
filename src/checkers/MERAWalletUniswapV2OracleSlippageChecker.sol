@@ -52,20 +52,8 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     /// @dev Used when `walletSlippageCheckerConfig[wallet].assetWhitelist` is zero.
     address public defaultAssetWhitelist;
 
-    struct Snapshot {
-        address token0Path;
-        address token1Path;
-        address priceFeed0;
-        address priceFeed1;
-        uint256 erc20Bal0;
-        uint256 erc20Bal1;
-        uint256 ethBal;
-        bool ethIn;
-        bool ethOut;
-        bool active;
-    }
     // to do use tload tstore
-    mapping(bytes32 key => Snapshot) private _snapshots;
+    mapping(bytes32 key => MERAWalletUniswapV2SlippageTypes.Snapshot) private _snapshots;
 
     /// @param initialOwner Admin for router allowlist and token price feeds (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS` so `BPS - value` does not underflow.
@@ -197,7 +185,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         uint256 ethB = wallet.balance;
 
         bytes32 key = _snapshotKey(wallet, operationId, callId);
-        _snapshots[key] = Snapshot({
+        _snapshots[key] = MERAWalletUniswapV2SlippageTypes.Snapshot({
             token0Path: t0,
             token1Path: t1,
             priceFeed0: feed0,
@@ -218,7 +206,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     {
         address wallet = msg.sender;
         bytes32 key = _snapshotKey(wallet, operationId, callId);
-        Snapshot memory snap = _snapshots[key];
+        MERAWalletUniswapV2SlippageTypes.Snapshot memory snap = _snapshots[key];
         if (!snap.active) {
             return;
         }
