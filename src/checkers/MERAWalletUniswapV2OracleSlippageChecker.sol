@@ -34,9 +34,9 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
     event AllowedRouterUpdated(address indexed router, bool allowed, address indexed caller);
     event PauseAgentUpdated(address indexed agent, bool allowed, address indexed caller);
-    /// @dev Emits `assetWhitelist` from stored config; additional struct fields may be reflected here later.
+    /// @dev Emits full stored per-wallet config values.
     event WalletSlippageCheckerConfigUpdated(
-        address indexed wallet, address indexed assetWhitelist, address indexed caller
+        address indexed wallet, MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig config
     );
     event DefaultAssetWhitelistUpdated(
         address indexed previous, address indexed assetWhitelist, address indexed caller
@@ -103,8 +103,11 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory decoded =
             abi.decode(config, (MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig));
+        if (decoded.maxOracleNegativeDeviationBps != 0) {
+            require(decoded.maxOracleNegativeDeviationBps < BPS, SlippageInvalidDeviationBps());
+        }
         walletSlippageCheckerConfig[msg.sender] = decoded;
-        emit WalletSlippageCheckerConfigUpdated(msg.sender, decoded.assetWhitelist, msg.sender);
+        emit WalletSlippageCheckerConfigUpdated(msg.sender, decoded);
     }
 
     /// @notice Global fallback asset list when a wallet has not set its own via {applyConfig}.
@@ -227,15 +230,20 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
 
         require(amountIn != 0 && amountOut != 0, InvalidMeasuredAmounts());
 
-        (uint256 oracleAnswerIn, uint8 priceFeedDecimalsIn) = _readFeed(snapshot.token0Path, snapshot.priceFeed0);
-        (uint256 oracleAnswerOut, uint8 priceFeedDecimalsOut) = _readFeed(snapshot.token1Path, snapshot.priceFeed1);
+        uint256 maxOracleNegativeDeviationBps = _effectiveMaxOracleNegativeDeviationBps(wallet);
+        uint256 maxOracleStaleSeconds = _effectiveMaxOracleStaleSeconds(wallet);
+
+        (uint256 oracleAnswerIn, uint8 priceFeedDecimalsIn) =
+            _readFeed(snapshot.token0Path, snapshot.priceFeed0, maxOracleStaleSeconds);
+        (uint256 oracleAnswerOut, uint8 priceFeedDecimalsOut) =
+            _readFeed(snapshot.token1Path, snapshot.priceFeed1, maxOracleStaleSeconds);
 
         uint8 inputTokenDecimals = IERC20Metadata(snapshot.token0Path).decimals();
         uint8 outputTokenDecimals = IERC20Metadata(snapshot.token1Path).decimals();
 
         uint256 priceScalingDenominatorIn = 10 ** (uint256(inputTokenDecimals) + uint256(priceFeedDecimalsIn));
         uint256 priceScalingDenominatorOut = 10 ** (uint256(outputTokenDecimals) + uint256(priceFeedDecimalsOut));
-        uint256 toleranceAdjustedBasisPoints = BPS - MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
+        uint256 toleranceAdjustedBasisPoints = BPS - maxOracleNegativeDeviationBps;
 
         // Compare implied USD notionals without shrinking `amountOut * price` first (avoids floor-to-zero on uint256 paths).
         uint256 scaledOutputNotionalNumerator =
@@ -251,6 +259,22 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
             return w;
         }
         return defaultAssetWhitelist;
+    }
+
+    function _effectiveMaxOracleNegativeDeviationBps(address wallet) internal view returns (uint256) {
+        uint256 walletLimit = walletSlippageCheckerConfig[wallet].maxOracleNegativeDeviationBps;
+        if (walletLimit != 0) {
+            return walletLimit;
+        }
+        return MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
+    }
+
+    function _effectiveMaxOracleStaleSeconds(address wallet) internal view returns (uint256) {
+        uint256 walletLimit = walletSlippageCheckerConfig[wallet].maxOracleStaleSeconds;
+        if (walletLimit != 0) {
+            return walletLimit;
+        }
+        return MAX_ORACLE_STALE_SECONDS;
     }
 
     /// @dev No-op when no asset list is configured for `wallet`.
@@ -319,13 +343,17 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
         }
     }
 
-    function _readFeed(address token, address feedAddr) internal view returns (uint256 answer, uint8 feedDecimals) {
+    function _readFeed(address token, address feedAddr, uint256 maxOracleStaleSeconds)
+        internal
+        view
+        returns (uint256 answer, uint8 feedDecimals)
+    {
         require(feedAddr != address(0), PriceFeedNotSet(token));
         IAggregatorV3 feed = IAggregatorV3(feedAddr);
         feedDecimals = feed.decimals();
         (, int256 ans,, uint256 updatedAt,) = feed.latestRoundData();
         require(ans > 0, OracleAnswerInvalid(token));
-        require(block.timestamp - updatedAt <= MAX_ORACLE_STALE_SECONDS, StaleOraclePrice(token, updatedAt));
+        require(block.timestamp - updatedAt <= maxOracleStaleSeconds, StaleOraclePrice(token, updatedAt));
         answer = uint256(ans);
     }
 }

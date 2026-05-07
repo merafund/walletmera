@@ -193,7 +193,9 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         aw.setAllowedAssets(assets, allowed);
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw), maxOracleNegativeDeviationBps: 0, maxOracleStaleSeconds: 0
+            });
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -313,7 +315,9 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         vm.stopPrank();
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw), maxOracleNegativeDeviationBps: 0, maxOracleStaleSeconds: 0
+            });
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -349,7 +353,9 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         vm.stopPrank();
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw), maxOracleNegativeDeviationBps: 0, maxOracleStaleSeconds: 0
+            });
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);

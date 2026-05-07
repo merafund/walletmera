@@ -21,6 +21,10 @@ library MERAWalletUniswapV2SlippageTypes {
     struct UniswapV2SlippageCheckerConfig {
         /// @dev Optional ERC20 allowlist contract; address(0) disables per-wallet asset gating for that wallet.
         address assetWhitelist;
+        /// @dev Optional per-wallet max oracle shortfall in BPS; 0 means fallback to checker default.
+        uint256 maxOracleNegativeDeviationBps;
+        /// @dev Optional per-wallet max Chainlink staleness in seconds; 0 means fallback to checker default.
+        uint256 maxOracleStaleSeconds;
     }
 
     /// @dev Swap snapshot: balances and path endpoints recorded in the before-hook, read in the after-hook for oracle comparison.

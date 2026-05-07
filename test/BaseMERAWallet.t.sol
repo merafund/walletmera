@@ -2207,13 +2207,15 @@ contract BaseMERAWalletTest is Test {
             new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
         MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw), maxOracleNegativeDeviationBps: 0, maxOracleStaleSeconds: 0
+            });
 
         vm.startPrank(emergency);
         _setOptionalCheckers(_mkWl(address(slip), true, abi.encode(cfg)));
         vm.stopPrank();
 
-        (address storedWl) = slip.walletSlippageCheckerConfig(address(wallet));
+        (address storedWl,,) = slip.walletSlippageCheckerConfig(address(wallet));
         assertEq(storedWl, address(aw));
     }
 
