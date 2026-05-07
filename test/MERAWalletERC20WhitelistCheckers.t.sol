@@ -508,4 +508,44 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         );
         wallet.executeTransaction(calls, 1);
     }
+
+    function test_Transfer_NoAssetWhitelist_PassesTokenCheck() public {
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory emptyCfg =
+            MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
+                assetWhitelist: address(0), recipientWhitelist: address(counterpartyWl), whitelistRouter: address(0)
+            });
+        _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(emptyCfg)));
+
+        address[] memory c = new address[](1);
+        c[0] = recipient;
+        bool[] memory ok = new bool[](1);
+        ok[0] = true;
+        vm.prank(emergency);
+        counterpartyWl.setAllowedRecipients(c, ok);
+
+        token.mint(address(wallet), 1000);
+        vm.prank(primary);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 100, address(transferChecker)), 2);
+        assertEq(token.balanceOf(recipient), 100);
+    }
+
+    function test_Transfer_NoRecipientWhitelist_PassesCounterpartyCheck() public {
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig memory emptyCfg =
+            MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig({
+                assetWhitelist: address(assetWl), recipientWhitelist: address(0), whitelistRouter: address(0)
+            });
+        _setOptionalCheckers(_mkWl(address(transferChecker), true, abi.encode(emptyCfg)));
+
+        address[] memory a = new address[](1);
+        a[0] = address(token);
+        bool[] memory ok = new bool[](1);
+        ok[0] = true;
+        vm.prank(emergency);
+        assetWl.setAllowedAssets(a, ok);
+
+        token.mint(address(wallet), 1000);
+        vm.prank(primary);
+        wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 100, address(transferChecker)), 3);
+        assertEq(token.balanceOf(recipient), 100);
+    }
 }

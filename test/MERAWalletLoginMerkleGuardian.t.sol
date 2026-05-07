@@ -215,6 +215,33 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         assertEq(wallet.emergency(), newEmergency);
     }
 
+    function test_ActiveProposal_NotFoundReverts() public {
+        bytes32 badId = keccak256("nonexistent");
+        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.ProposalNotFound.selector, badId));
+        guardian.executeProposal(badId);
+    }
+
+    function test_RevokeApproval_NotApprovedReverts() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+        vm.prank(address(aliceWallet));
+        bytes32 proposalId = guardian.proposeEmergencyChange(address(wallet), address(0xE1234));
+
+        vm.prank(address(bobWallet));
+        vm.expectRevert(
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.NotApproved.selector, proposalId, _loginHash("bob"))
+        );
+        guardian.revokeApproval(proposalId);
+    }
+
+    function test_Propose_ZeroEmergencyReverts() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidEmergency.selector);
+        guardian.proposeEmergencyChange(address(wallet), address(0));
+    }
+
     function test_Propose_RevertsBeforeLoginListPublished() public {
         vm.prank(address(aliceWallet));
         vm.expectRevert(MERAWalletLoginMerkleGuardian.LoginListNotPublished.selector);
