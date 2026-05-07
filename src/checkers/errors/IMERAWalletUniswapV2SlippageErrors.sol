@@ -16,6 +16,7 @@ interface IMERAWalletUniswapV2SlippageErrors {
     error SwapWorseThanOracle();
     error SlippageNotPauseAuthorized();
     error SlippageArrayLengthMismatch();
-    /// @dev Path token rejected by the configured {IMERAWalletUniswapV2AssetWhitelist}.
+    error InvalidCheckerData();
+    /// @dev Path token rejected by the configured {IMERAWalletAssetWhiteList}.
     error AssetNotWhitelisted(address token, uint256 callId);
 }

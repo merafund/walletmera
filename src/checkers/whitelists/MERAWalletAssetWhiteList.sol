@@ -3,17 +3,13 @@ pragma solidity 0.8.34;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {IMERAWalletUniswapV2AssetWhitelist} from "../../interfaces/checkers/IMERAWalletUniswapV2AssetWhitelist.sol";
-import {IMERAWalletUniswapV2AssetWhitelistErrors} from "../errors/IMERAWalletUniswapV2AssetWhitelistErrors.sol";
+import {IMERAWalletAssetWhiteList} from "../../interfaces/checkers/IMERAWalletAssetWhiteList.sol";
+import {IMERAWalletAssetWhiteListErrors} from "../errors/IMERAWalletAssetWhiteListErrors.sol";
 
-/// @title MERAWalletUniswapV2AssetWhitelist
+/// @title MERAWalletAssetWhiteList
 /// @notice Ownable allowlist for swap path assets with optional fallback list contract.
 /// @dev Avoid circular `fallbackWhitelist` graphs; resolution is unbounded recursion in the EVM.
-contract MERAWalletUniswapV2AssetWhitelist is
-    Ownable,
-    IMERAWalletUniswapV2AssetWhitelist,
-    IMERAWalletUniswapV2AssetWhitelistErrors
-{
+contract MERAWalletAssetWhiteList is Ownable, IMERAWalletAssetWhiteList, IMERAWalletAssetWhiteListErrors {
     event AssetAllowedUpdated(address indexed asset, bool allowed, address indexed caller);
     event AssetSourceUpdated(address indexed asset, address indexed source, address indexed caller);
     event FallbackWhitelistUpdated(
@@ -66,19 +62,19 @@ contract MERAWalletUniswapV2AssetWhitelist is
         emit FallbackWhitelistUpdated(previous, newFallback, msg.sender);
     }
 
-    /// @inheritdoc IMERAWalletUniswapV2AssetWhitelist
+    /// @inheritdoc IMERAWalletAssetWhiteList
     function isAssetAllowed(address asset) external view returns (bool) {
         if (allowedAsset[asset]) {
             return true;
         }
         address fb = fallbackWhitelist;
         if (fb != address(0)) {
-            return IMERAWalletUniswapV2AssetWhitelist(fb).isAssetAllowed(asset);
+            return IMERAWalletAssetWhiteList(fb).isAssetAllowed(asset);
         }
         return false;
     }
 
-    /// @inheritdoc IMERAWalletUniswapV2AssetWhitelist
+    /// @inheritdoc IMERAWalletAssetWhiteList
     function assetSource(address asset) external view returns (address) {
         address source = localAssetSource[asset];
         if (source != address(0)) {
@@ -86,7 +82,7 @@ contract MERAWalletUniswapV2AssetWhitelist is
         }
         address fb = fallbackWhitelist;
         if (fb != address(0)) {
-            return IMERAWalletUniswapV2AssetWhitelist(fb).assetSource(asset);
+            return IMERAWalletAssetWhiteList(fb).assetSource(asset);
         }
         return address(0);
     }

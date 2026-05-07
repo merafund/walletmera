@@ -7,9 +7,9 @@ import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletT
 import {IMERAWalletWhitelistErrors} from "./errors/IMERAWalletWhitelistErrors.sol";
 import {MERAWalletWhitelistTypes} from "./types/MERAWalletWhitelistTypes.sol";
 
-/// @title MERAWalletTargetWhitelistCheckerOwnable
-/// @notice Global target allowlist with {Ownable-owner} admin only (no emergency / per-wallet {applyConfig} layer).
-contract MERAWalletTargetWhitelistCheckerOwnable is Ownable, IMERAWalletTransactionChecker, IMERAWalletWhitelistErrors {
+/// @title MERAWalletTargetWhitelistChecker
+/// @notice Global target allowlist with {Ownable-owner} admin only (no emergency / per-wallet applyConfig layer).
+contract MERAWalletTargetWhitelistChecker is Ownable, IMERAWalletTransactionChecker, IMERAWalletWhitelistErrors {
     event AllowedTargetUpdated(address indexed target, bool allowed, address indexed caller);
 
     mapping(address target => bool allowed) public allowedTarget;

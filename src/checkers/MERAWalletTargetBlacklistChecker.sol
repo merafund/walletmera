@@ -7,9 +7,9 @@ import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletT
 import {IMERAWalletBlacklistErrors} from "./errors/IMERAWalletBlacklistErrors.sol";
 import {MERAWalletBlacklistTypes} from "./types/MERAWalletBlacklistTypes.sol";
 
-/// @title MERAWalletTargetBlacklistCheckerOwnable
-/// @notice Same blocking semantics as {MERAWalletTargetBlacklistChecker} but admin is {Ownable-owner} only (no emergency / bound wallet).
-contract MERAWalletTargetBlacklistCheckerOwnable is Ownable, IMERAWalletTransactionChecker, IMERAWalletBlacklistErrors {
+/// @title MERAWalletTargetBlacklistChecker
+/// @notice Global target blocklist with {Ownable-owner} admin only (no emergency / per-wallet applyConfig layer).
+contract MERAWalletTargetBlacklistChecker is Ownable, IMERAWalletTransactionChecker, IMERAWalletBlacklistErrors {
     event BlockedTargetUpdated(address indexed target, bool blocked, address indexed caller);
 
     mapping(address target => bool blocked) public blockedTarget;

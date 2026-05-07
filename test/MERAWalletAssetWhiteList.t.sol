@@ -2,24 +2,22 @@
 pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
-import {
-    IMERAWalletUniswapV2AssetWhitelistErrors
-} from "../src/checkers/errors/IMERAWalletUniswapV2AssetWhitelistErrors.sol";
+import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
+import {IMERAWalletAssetWhiteListErrors} from "../src/checkers/errors/IMERAWalletAssetWhiteListErrors.sol";
 
-contract MERAWalletUniswapV2AssetWhitelistTest is Test {
+contract MERAWalletAssetWhiteListTest is Test {
     address internal owner = address(0x01);
     address internal tokenA = address(0xA);
     address internal tokenB = address(0xB);
     address internal feedA = address(0xA11);
     address internal feedB = address(0xB11);
 
-    MERAWalletUniswapV2AssetWhitelist internal primary;
-    MERAWalletUniswapV2AssetWhitelist internal secondaryList;
+    MERAWalletAssetWhiteList internal primary;
+    MERAWalletAssetWhiteList internal secondaryList;
 
     function setUp() public {
-        primary = new MERAWalletUniswapV2AssetWhitelist(owner);
-        secondaryList = new MERAWalletUniswapV2AssetWhitelist(owner);
+        primary = new MERAWalletAssetWhiteList(owner);
+        secondaryList = new MERAWalletAssetWhiteList(owner);
     }
 
     function test_IsAssetAllowed_LocalTrue() public {
@@ -98,7 +96,7 @@ contract MERAWalletUniswapV2AssetWhitelistTest is Test {
         allowed[0] = true;
 
         vm.prank(owner);
-        vm.expectRevert(IMERAWalletUniswapV2AssetWhitelistErrors.AssetWhitelistInvalidAddress.selector);
+        vm.expectRevert(IMERAWalletAssetWhiteListErrors.AssetWhitelistInvalidAddress.selector);
         primary.setAllowedAssets(assets, allowed);
     }
 
@@ -109,7 +107,7 @@ contract MERAWalletUniswapV2AssetWhitelistTest is Test {
         sources[0] = feedA;
 
         vm.prank(owner);
-        vm.expectRevert(IMERAWalletUniswapV2AssetWhitelistErrors.AssetWhitelistInvalidAddress.selector);
+        vm.expectRevert(IMERAWalletAssetWhiteListErrors.AssetWhitelistInvalidAddress.selector);
         primary.setAssetSources(assets, sources);
     }
 
@@ -121,7 +119,7 @@ contract MERAWalletUniswapV2AssetWhitelistTest is Test {
         sources[1] = feedB;
 
         vm.prank(owner);
-        vm.expectRevert(IMERAWalletUniswapV2AssetWhitelistErrors.AssetWhitelistArrayLengthMismatch.selector);
+        vm.expectRevert(IMERAWalletAssetWhiteListErrors.AssetWhitelistArrayLengthMismatch.selector);
         primary.setAssetSources(assets, sources);
     }
 }

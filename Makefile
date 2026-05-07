@@ -14,6 +14,7 @@ SCRIPT := script/DeployMERAWalletMetaProxyCloneFactory.s.sol:DeployMERAWalletMet
 .PHONY: deploy-factory-polygon deploy-factory-amoy deploy-factory-bsc deploy-factory
 .PHONY: deploy-meta-proxy-clone-factory deploy-meta-proxy-clone-factory-polygon deploy-meta-proxy-clone-factory-amoy deploy-meta-proxy-clone-factory-bsc
 .PHONY: deploy-asset-whitelist-polygon deploy-asset-whitelist-amoy deploy-asset-whitelist-bsc
+.PHONY: deploy-whitelist-router-polygon deploy-whitelist-router-amoy deploy-whitelist-router-bsc
 .PHONY: deploy-erc20-approve-checker-polygon deploy-erc20-approve-checker-amoy deploy-erc20-approve-checker-bsc
 .PHONY: deploy-erc20-transfer-checker-polygon deploy-erc20-transfer-checker-amoy deploy-erc20-transfer-checker-bsc
 .PHONY: deploy-target-blacklist-checker-polygon deploy-target-blacklist-checker-amoy deploy-target-blacklist-checker-bsc
@@ -67,13 +68,22 @@ deploy-meta-proxy-clone-factory-bsc:
 	@$(MAKE) deploy-meta-proxy-clone-factory RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
 
 deploy-asset-whitelist-polygon:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2AssetWhitelist.s.sol:DeployMERAWalletUniswapV2AssetWhitelist RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletAssetWhiteList.s.sol:DeployMERAWalletAssetWhiteList RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
 
 deploy-asset-whitelist-amoy:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2AssetWhitelist.s.sol:DeployMERAWalletUniswapV2AssetWhitelist RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletAssetWhiteList.s.sol:DeployMERAWalletAssetWhiteList RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
 
 deploy-asset-whitelist-bsc:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2AssetWhitelist.s.sol:DeployMERAWalletUniswapV2AssetWhitelist RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletAssetWhiteList.s.sol:DeployMERAWalletAssetWhiteList RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-whitelist-router-polygon:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouter.s.sol:DeployMERAWalletWhitelistRouter RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-whitelist-router-amoy:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouter.s.sol:DeployMERAWalletWhitelistRouter RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-whitelist-router-bsc:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouter.s.sol:DeployMERAWalletWhitelistRouter RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
 
 deploy-erc20-approve-checker-polygon:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletERC20ApproveWhitelistChecker.s.sol:DeployMERAWalletERC20ApproveWhitelistChecker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
@@ -110,24 +120,6 @@ deploy-target-whitelist-checker-amoy:
 
 deploy-target-whitelist-checker-bsc:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistChecker.s.sol:DeployMERAWalletTargetWhitelistChecker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
-
-deploy-target-blacklist-checker-ownable-polygon:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerOwnable.s.sol:DeployMERAWalletTargetBlacklistCheckerOwnable RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-blacklist-checker-ownable-amoy:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerOwnable.s.sol:DeployMERAWalletTargetBlacklistCheckerOwnable RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-blacklist-checker-ownable-bsc:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerOwnable.s.sol:DeployMERAWalletTargetBlacklistCheckerOwnable RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
-
-deploy-target-whitelist-checker-ownable-polygon:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerOwnable.s.sol:DeployMERAWalletTargetWhitelistCheckerOwnable RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-whitelist-checker-ownable-amoy:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerOwnable.s.sol:DeployMERAWalletTargetWhitelistCheckerOwnable RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
-
-deploy-target-whitelist-checker-ownable-bsc:
-	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerOwnable.s.sol:DeployMERAWalletTargetWhitelistCheckerOwnable RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
 
 deploy-uniswap-v2-oracle-slippage-checker-polygon:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2OracleSlippageChecker.s.sol:DeployMERAWalletUniswapV2OracleSlippageChecker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"

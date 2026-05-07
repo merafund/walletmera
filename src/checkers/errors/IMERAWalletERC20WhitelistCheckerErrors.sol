@@ -10,5 +10,4 @@ interface IMERAWalletERC20WhitelistCheckerErrors {
     error Erc20WhitelistCounterpartyNotAllowed(address account, uint256 callId);
     error Erc20WhitelistArrayLengthMismatch();
     error Erc20WhitelistInvalidAddress();
-    error Erc20WhitelistNotPauseAuthorized();
 }

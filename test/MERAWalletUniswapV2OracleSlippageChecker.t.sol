@@ -7,7 +7,8 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
-import {MERAWalletUniswapV2AssetWhitelist} from "../src/checkers/whitelists/MERAWalletUniswapV2AssetWhitelist.sol";
+import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
+import {MERAWalletWhitelistRouter} from "../src/checkers/whitelists/MERAWalletWhitelistRouter.sol";
 import {MERAWalletUniswapV2SlippageTypes} from "../src/checkers/types/MERAWalletUniswapV2SlippageTypes.sol";
 import {IMERAWalletUniswapV2SlippageErrors} from "../src/checkers/errors/IMERAWalletUniswapV2SlippageErrors.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
@@ -27,10 +28,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     MERAWalletUniswapV2OracleSlippageChecker internal checker;
     ERC20Mock internal tokenA;
     ERC20Mock internal tokenB;
+    ERC20Mock internal tokenC;
     ERC20Mock internal weth;
     MockUniV2Router02 internal router;
     MockAggregatorV3 internal feedA;
     MockAggregatorV3 internal feedB;
+    MERAWalletWhitelistRouter internal whitelistRouter;
 
     function _mkWl(address checkerAddr, bool allowed, bytes memory config)
         internal
@@ -48,10 +51,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         checker = new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
         tokenA = new ERC20Mock();
         tokenB = new ERC20Mock();
+        tokenC = new ERC20Mock();
         weth = new ERC20Mock();
         router = new MockUniV2Router02(address(weth));
         feedA = new MockAggregatorV3(1e8, 8);
         feedB = new MockAggregatorV3(1e8, 8);
+        whitelistRouter = new MERAWalletWhitelistRouter(emergency);
 
         vm.startPrank(emergency);
         _setAllRoleTimelocks(0);
@@ -65,13 +70,22 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         routerAllowed[0] = true;
         checker.setAllowedRouters(routers, routerAllowed);
 
-        address[] memory tokens = new address[](2);
-        tokens[0] = address(tokenA);
-        tokens[1] = address(tokenB);
-        address[] memory feeds = new address[](2);
-        feeds[0] = address(feedA);
-        feeds[1] = address(feedB);
-        checker.setTokenPriceFeeds(tokens, feeds);
+        MERAWalletAssetWhiteList defaultWl = new MERAWalletAssetWhiteList(emergency);
+        address[] memory wlAssets = new address[](2);
+        wlAssets[0] = address(tokenA);
+        wlAssets[1] = address(tokenB);
+        bool[] memory wlAllowed = new bool[](2);
+        wlAllowed[0] = true;
+        wlAllowed[1] = true;
+        address[] memory wlSrcAssets = new address[](2);
+        wlSrcAssets[0] = address(tokenA);
+        wlSrcAssets[1] = address(tokenB);
+        address[] memory wlSrcFeeds = new address[](2);
+        wlSrcFeeds[0] = address(feedA);
+        wlSrcFeeds[1] = address(feedB);
+        defaultWl.setAllowedAssets(wlAssets, wlAllowed);
+        defaultWl.setAssetSources(wlSrcAssets, wlSrcFeeds);
+        checker.setDefaultAssetWhitelist(address(defaultWl));
 
         address[] memory agents = new address[](1);
         agents[0] = pauseAgent;
@@ -157,8 +171,57 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         );
     }
 
+    function _swapCallDataThreeHop(uint256 amountIn, uint256 amountOutMin) internal view returns (bytes memory) {
+        address[] memory path = new address[](3);
+        path[0] = address(tokenA);
+        path[1] = address(tokenC);
+        path[2] = address(tokenB);
+        return abi.encodeWithSelector(
+            MockUniV2Router02.swapExactTokensForTokens.selector,
+            amountIn,
+            amountOutMin,
+            path,
+            address(wallet),
+            block.timestamp + 1
+        );
+    }
+
+    function _assetWhitelist(bool allowTokenB) internal returns (MERAWalletAssetWhiteList aw) {
+        aw = new MERAWalletAssetWhiteList(emergency);
+        address[] memory assets = new address[](2);
+        assets[0] = address(tokenA);
+        assets[1] = address(tokenB);
+        bool[] memory allowed = new bool[](2);
+        allowed[0] = true;
+        allowed[1] = allowTokenB;
+        address[] memory srcAssets = new address[](2);
+        srcAssets[0] = address(tokenA);
+        srcAssets[1] = address(tokenB);
+        address[] memory srcFeeds = new address[](2);
+        srcFeeds[0] = address(feedA);
+        srcFeeds[1] = address(feedB);
+
+        vm.startPrank(emergency);
+        aw.setAllowedAssets(assets, allowed);
+        aw.setAssetSources(srcAssets, srcFeeds);
+        vm.stopPrank();
+    }
+
+    function _routerCfg()
+        internal
+        view
+        returns (MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory)
+    {
+        return MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(0),
+                maxOracleNegativeDeviationBps: 0,
+                maxOracleStaleSeconds: 0,
+                whitelistRouter: address(whitelistRouter)
+            });
+    }
+
     function test_AssetWhitelist_RevertsWhenPathTokenNotAllowed() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](1);
         assets[0] = address(tokenA);
         bool[] memory allowed = new bool[](1);
@@ -167,7 +230,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         aw.setAllowedAssets(assets, allowed);
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw),
+                maxOracleNegativeDeviationBps: 0,
+                maxOracleStaleSeconds: 0,
+                whitelistRouter: address(0)
+            });
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -197,16 +265,48 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         wallet.executeTransaction(calls, 42);
     }
 
+    /// @dev Intermediate `tokenC` is not on the default whitelist; only path endpoints are validated.
+    function test_AssetWhitelist_AllowsMultiHopWhenIntermediateNotWhitelisted() public {
+        router.setBadRate(false);
+
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](2);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(tokenA),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20Mock.approve.selector, address(router), type(uint256).max),
+            checker: address(0),
+            checkerData: ""
+        });
+        calls[1] = MERAWalletTypes.Call({
+            target: address(router),
+            value: 0,
+            data: _swapCallDataThreeHop(1 ether, 0),
+            checker: address(checker),
+            checkerData: ""
+        });
+
+        vm.prank(primary);
+        wallet.executeTransaction(calls, 46);
+    }
+
     function test_DefaultAssetWhitelist_AllowsSwapWhenWalletSlotUnset() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
         assets[1] = address(tokenB);
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
         allowed[1] = true;
+        address[] memory srcAssets = new address[](2);
+        srcAssets[0] = address(tokenA);
+        srcAssets[1] = address(tokenB);
+        address[] memory srcFeeds = new address[](2);
+        srcFeeds[0] = address(feedA);
+        srcFeeds[1] = address(feedB);
+
         vm.startPrank(emergency);
         aw.setAllowedAssets(assets, allowed);
+        aw.setAssetSources(srcAssets, srcFeeds);
         checker.setDefaultAssetWhitelist(address(aw));
         vm.stopPrank();
 
@@ -233,7 +333,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function test_AssetWhitelist_CustomSourceOverridesBaseFeed() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MockAggregatorV3 customFeedA = new MockAggregatorV3(1e8, 8);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
@@ -241,10 +341,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
         allowed[1] = true;
-        address[] memory sourceAssets = new address[](1);
+        address[] memory sourceAssets = new address[](2);
         sourceAssets[0] = address(tokenA);
-        address[] memory sources = new address[](1);
+        sourceAssets[1] = address(tokenB);
+        address[] memory sources = new address[](2);
         sources[0] = address(customFeedA);
+        sources[1] = address(feedB);
 
         vm.startPrank(emergency);
         aw.setAllowedAssets(assets, allowed);
@@ -253,7 +355,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         vm.stopPrank();
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw),
+                maxOracleNegativeDeviationBps: 0,
+                maxOracleStaleSeconds: 0,
+                whitelistRouter: address(0)
+            });
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -262,22 +369,39 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         wallet.executeTransaction(_approveAndSwapCalls(), 44);
     }
 
-    function test_AssetWhitelist_UsesBaseFeedWhenCustomSourceUnset() public {
-        MERAWalletUniswapV2AssetWhitelist aw = new MERAWalletUniswapV2AssetWhitelist(emergency);
+    // Feeds for endpoints resolve through fallback whitelist when local sources are unset.
+    function test_AssetWhitelist_UsesFallbackFeedsWhenLocalSourceUnset() public {
+        MERAWalletAssetWhiteList baseFeeds = new MERAWalletAssetWhiteList(emergency);
         address[] memory assets = new address[](2);
         assets[0] = address(tokenA);
         assets[1] = address(tokenB);
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
         allowed[1] = true;
+        address[] memory srcAssets = new address[](2);
+        srcAssets[0] = address(tokenA);
+        srcAssets[1] = address(tokenB);
+        address[] memory srcFeeds = new address[](2);
+        srcFeeds[0] = address(feedA);
+        srcFeeds[1] = address(feedB);
 
         vm.startPrank(emergency);
+        baseFeeds.setAllowedAssets(assets, allowed);
+        baseFeeds.setAssetSources(srcAssets, srcFeeds);
+
+        MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         aw.setAllowedAssets(assets, allowed);
+        aw.setFallbackWhitelist(address(baseFeeds));
         feedA.setAnswer(2e8);
         vm.stopPrank();
 
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
-            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({assetWhitelist: address(aw)});
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(aw),
+                maxOracleNegativeDeviationBps: 0,
+                maxOracleStaleSeconds: 0,
+                whitelistRouter: address(0)
+            });
         _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
 
         router.setBadRate(false);
@@ -285,6 +409,74 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         vm.prank(primary);
         vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SwapWorseThanOracle.selector);
         wallet.executeTransaction(_approveAndSwapCalls(), 45);
+    }
+
+    function test_AssetWhitelist_UsesRouterWhenExplicitConfigZero() public {
+        MERAWalletAssetWhiteList aw = _assetWhitelist(true);
+        bytes32 assetKey = whitelistRouter.ASSET_WHITELIST_KEY();
+
+        vm.prank(emergency);
+        whitelistRouter.setWhitelist(assetKey, address(aw));
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(_routerCfg())));
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCalls(), 47);
+    }
+
+    function test_AssetWhitelist_ExplicitWinsOverRouter() public {
+        MERAWalletAssetWhiteList explicitWl = _assetWhitelist(true);
+        MERAWalletAssetWhiteList blockedRouterWl = _assetWhitelist(false);
+        bytes32 assetKey = whitelistRouter.ASSET_WHITELIST_KEY();
+
+        vm.prank(emergency);
+        whitelistRouter.setWhitelist(assetKey, address(blockedRouterWl));
+
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
+            MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
+                assetWhitelist: address(explicitWl),
+                maxOracleNegativeDeviationBps: 0,
+                maxOracleStaleSeconds: 0,
+                whitelistRouter: address(whitelistRouter)
+            });
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(cfg)));
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCalls(), 48);
+    }
+
+    function test_AssetWhitelist_DefaultUsedWhenRouterRouteMissing() public {
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(_routerCfg())));
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCalls(), 49);
+    }
+
+    function test_AssetWhitelist_RouterRouteChangeAppliesWithoutReapplyingCheckerConfig() public {
+        MERAWalletAssetWhiteList goodWl = _assetWhitelist(true);
+        MERAWalletAssetWhiteList blockedWl = _assetWhitelist(false);
+        bytes32 assetKey = whitelistRouter.ASSET_WHITELIST_KEY();
+
+        vm.prank(emergency);
+        whitelistRouter.setWhitelist(assetKey, address(goodWl));
+        _setOptionalCheckers(_mkWl(address(checker), true, abi.encode(_routerCfg())));
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCalls(), 50);
+
+        vm.prank(emergency);
+        whitelistRouter.setWhitelist(assetKey, address(blockedWl));
+
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMERAWalletUniswapV2SlippageErrors.AssetNotWhitelisted.selector, address(tokenB), uint256(1)
+            )
+        );
+        wallet.executeTransaction(_approveAndSwapCalls(), 51);
     }
 
     function test_SwapWithinOracleTolerance_Succeeds() public {
