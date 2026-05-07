@@ -45,6 +45,8 @@ interface IMERAWalletLoginRegistry is IMERAWalletLoginRegistryMigration {
         string calldata referrerLogin
     ) external payable;
 
+    function setReferrer(string calldata referrerLogin) external;
+
     function priceOf(string calldata login) external view returns (uint256);
     function walletOf(string calldata login) external view returns (address);
     function loginOf(address wallet) external view returns (string memory);

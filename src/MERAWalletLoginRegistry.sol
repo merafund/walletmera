@@ -123,6 +123,22 @@ contract MERAWalletLoginRegistry is
         _registerLogin(login, loginHash, wallet, secret, deadline, authorization, referrerLoginHash, referrerLogin);
     }
 
+    /// @notice Allows a wallet that already owns a login to set its referrer once,
+    /// only if no referrer was recorded during registration.
+    function setReferrer(string calldata referrerLogin) external override {
+        bytes32 loginHash = loginHashByWallet[msg.sender];
+        require(loginHash != bytes32(0), LoginNotOwned());
+        require(referrerLoginHashByLoginHash[loginHash] == bytes32(0), ReferrerAlreadySet());
+
+        // Reuses validation: non-empty, registered, not self-referral.
+        bytes32 referrerLoginHash = _requireReferrerLoginHash(loginHash, referrerLogin);
+        require(referrerLoginHash != bytes32(0), EmptyLogin());
+
+        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
+
+        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
+    }
+
     function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet)
         external
         override

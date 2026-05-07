@@ -225,6 +225,89 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         factory.deployWallet{value: price}(login, p, secret, 0, "", login);
     }
 
+    function test_setReferrer_records_referral_after_registration() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address aliceWallet = _deployCommitted("alice", p);
+        address bobWallet = _deployCommitted("bob", p);
+        bytes32 bobLoginHash = keccak256(bytes("bob"));
+        bytes32 aliceLoginHash = keccak256(bytes("alice"));
+
+        // Sanity: Bob has no referrer yet.
+        assertEq(registry.referrerLoginHashByLoginHash(bobLoginHash), bytes32(0));
+
+        vm.expectEmit(true, true, false, true);
+        emit IMERAWalletLoginRegistryEvents.LoginReferralRecorded(bobLoginHash, aliceLoginHash, "alice");
+        vm.prank(bobWallet);
+        registry.setReferrer("alice");
+
+        assertEq(registry.referrerLoginHashByLoginHash(bobLoginHash), aliceLoginHash);
+        assertEq(registry.referrerLoginOf("bob"), "alice");
+        // Alice's own referrer remains untouched.
+        assertEq(registry.referrerLoginHashByLoginHash(keccak256(bytes("alice"))), bytes32(0));
+        aliceWallet; // silence unused-var
+    }
+
+    function test_setReferrer_reverts_when_caller_has_no_login() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+
+        vm.prank(address(0xDEADBEEF));
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginNotOwned.selector);
+        registry.setReferrer("alice");
+    }
+
+    function test_setReferrer_reverts_when_referrer_already_set() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+        _deployCommitted("carol", p);
+        address bobWallet = _deployCommittedWithReferrer("bob", p, "alice");
+
+        vm.prank(bobWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.ReferrerAlreadySet.selector);
+        registry.setReferrer("carol");
+    }
+
+    function test_setReferrer_reverts_on_second_call() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _deployCommitted("alice", p);
+        _deployCommitted("carol", p);
+        address bobWallet = _deployCommitted("bob", p);
+
+        vm.prank(bobWallet);
+        registry.setReferrer("alice");
+
+        vm.prank(bobWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.ReferrerAlreadySet.selector);
+        registry.setReferrer("carol");
+    }
+
+    function test_setReferrer_reverts_on_self_referral() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address aliceWallet = _deployCommitted("alice", p);
+
+        vm.prank(aliceWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.SelfReferral.selector);
+        registry.setReferrer("alice");
+    }
+
+    function test_setReferrer_reverts_on_unknown_referrer() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address bobWallet = _deployCommitted("bob", p);
+
+        vm.prank(bobWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.ReferrerLoginNotRegistered.selector);
+        registry.setReferrer("alice");
+    }
+
+    function test_setReferrer_reverts_on_empty_referrer() public {
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address bobWallet = _deployCommitted("bob", p);
+
+        vm.prank(bobWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.EmptyLogin.selector);
+        registry.setReferrer("");
+    }
+
     function test_deploy_with_different_referrer_than_commitment_reverts() public {
         MERAWalletTypes.WalletInitParams memory p = _params();
         _deployCommitted("alice", p);
