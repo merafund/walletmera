@@ -2,7 +2,7 @@
 pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
@@ -81,7 +81,7 @@ contract BaseMERAWalletTest is Test {
             abi.encodeWithSelector(
                 IBaseMERAWalletErrors.CallExecutionFailed.selector,
                 uint256(0),
-                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
+                abi.encodeWithSelector(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector)
             )
         );
         wallet.executeTransaction(outer, 12_001);
@@ -99,7 +99,7 @@ contract BaseMERAWalletTest is Test {
             abi.encodeWithSelector(
                 IBaseMERAWalletErrors.CallExecutionFailed.selector,
                 uint256(0),
-                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
+                abi.encodeWithSelector(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector)
             )
         );
         wallet.executeTransaction(outer, 12_002);

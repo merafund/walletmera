@@ -10,10 +10,10 @@ import {IMERAWalletLoginRegistryMigration} from "./interfaces/IMERAWalletLoginRe
 import {IMERAWalletTransactionChecker} from "./interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMigrationCalls} from "./interfaces/external/IMigrationCalls.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors, ReentrancyGuard {
+contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors, ReentrancyGuardTransient {
     address public primary;
     address public backup;
     address public emergency;
