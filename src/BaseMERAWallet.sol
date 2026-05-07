@@ -498,7 +498,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoCleared(operationId, operation.salt, msg.sender);
     }
 
-    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). The relay reward stays on the wallet balance. Agents cannot call.
+    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at least creator rank (same tier or higher; Emergency highest). Operations created by Emergency cannot be cancelled. The relay reward stays on the wallet balance. Agents cannot call.
     function cancelPending(bytes32 operationId) external override whenLifeAlive {
         // Allow cancellation under freezes/timelocks/SafeMode: only require a core role (not None).
         MERAWalletTypes.Role callerRole = _requireController();
@@ -511,7 +511,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         );
 
         require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation(operationId));
-        require(_roleRank(callerRole) <= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
+        require(_roleRank(callerRole) >= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
 
         // Zero relay reward slot; relay ETH stays on the wallet (no refund to the proposer on cancel).
         relayOperation.relayReward = 0;
@@ -1580,7 +1580,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         revert InvalidRelayConfig();
     }
 
-    /// @dev Numeric rank: Primary < Backup < Emergency (see {MERAWalletConstants}). Used for agent caps and for {cancelPending}/{clearVeto} (lower number = stronger wallet authority).
+    /// @dev Numeric rank: Primary < Backup < Emergency (see {MERAWalletConstants}). Higher number = higher core role. Used for agent caps, ranked actions, {cancelPending}, and {clearVeto}.
     function _roleRank(MERAWalletTypes.Role role) internal pure returns (uint256) {
         if (role == MERAWalletTypes.Role.Emergency) {
             return MERAWalletConstants.ROLE_RANK_EMERGENCY;

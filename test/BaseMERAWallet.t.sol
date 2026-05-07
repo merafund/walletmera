@@ -1381,7 +1381,7 @@ contract BaseMERAWalletTest is Test {
         assertTrue(operationIdA != operationIdB);
     }
 
-    function test_CancelPending_BackupCannotCancelPrimaryOperation() public {
+    function test_CancelPending_BackupMayCancelPrimaryOperation() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
         vm.stopPrank();
@@ -1393,10 +1393,6 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(backup);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
-        wallet.cancelPending(operationId);
-
-        vm.prank(primary);
         wallet.cancelPending(operationId);
 
         (,,,,, MERAWalletTypes.OperationStatus status,,,,,) = wallet.operations(operationId);
@@ -1421,21 +1417,16 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
     }
 
-    function test_CancelPending_DemotionBlocksCancelPrimaryOp() public {
+    function test_CancelPending_PrimaryCannotCancelBackupOperation() public {
         vm.startPrank(emergency);
-        _policyTarget(address(receiver), _callPathPolicy(uint56(1 days), false, 0, false));
+        _setAllRoleTimelocks(1 days);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 88));
 
-        vm.prank(primary);
+        vm.prank(backup);
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
-
-        vm.prank(backup);
-        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setPrimary.selector, backup), 917);
-        vm.prank(backup);
-        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setBackup.selector, primary), 918);
 
         vm.prank(primary);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
@@ -1481,24 +1472,6 @@ contract BaseMERAWalletTest is Test {
         wallet.proposeTransaction(calls, 1);
     }
 
-    function test_CancelPending_PrimaryMayCancelBackupOperation() public {
-        vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
-        vm.stopPrank();
-
-        MERAWalletTypes.Call[] memory calls =
-            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 55));
-
-        vm.prank(backup);
-        bytes32 operationId = wallet.proposeTransaction(calls, 1);
-
-        vm.prank(primary);
-        wallet.cancelPending(operationId);
-
-        (,,,,, MERAWalletTypes.OperationStatus status,,,,,) = wallet.operations(operationId);
-        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
-    }
-
     function test_CancelPending_BackupCannotCancelEmergencyOperation() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -1515,7 +1488,7 @@ contract BaseMERAWalletTest is Test {
         wallet.cancelPending(operationId);
     }
 
-    function test_CancelPending_EmergencyCannotCancelBackupOperation() public {
+    function test_CancelPending_EmergencyMayCancelBackupOperation() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
         vm.stopPrank();
@@ -1527,8 +1500,10 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(emergency);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
         wallet.cancelPending(operationId);
+
+        (,,,,, MERAWalletTypes.OperationStatus status,,,,,) = wallet.operations(operationId);
+        assertEq(uint256(status), uint256(MERAWalletTypes.OperationStatus.Cancelled));
     }
 
     function test_IsValidSignature_RequiresDedicatedSigner() public {
