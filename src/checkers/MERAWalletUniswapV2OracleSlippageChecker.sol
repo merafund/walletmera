@@ -243,19 +243,17 @@ contract MERAWalletUniswapV2OracleSlippageChecker is
     }
 
     /// @dev No-op when no asset list is configured for `wallet`.
+    /// Checks only path endpoints (input and output tokens), not intermediate hop tokens.
     function _requirePathAssetsAllowed(address assetWhitelist, address[] memory path, uint256 callId) internal view {
         if (assetWhitelist == address(0)) {
             return;
         }
-        uint256 len = path.length;
-        for (uint256 i = 0; i < len;) {
-            require(
-                IMERAWalletAssetWhiteList(assetWhitelist).isAssetAllowed(path[i]), AssetNotWhitelisted(path[i], callId)
-            );
-            unchecked {
-                ++i;
-            }
-        }
+        address tokenIn = path[0];
+        address tokenOut = path[path.length - 1];
+        require(IMERAWalletAssetWhiteList(assetWhitelist).isAssetAllowed(tokenIn), AssetNotWhitelisted(tokenIn, callId));
+        require(
+            IMERAWalletAssetWhiteList(assetWhitelist).isAssetAllowed(tokenOut), AssetNotWhitelisted(tokenOut, callId)
+        );
     }
 
     function _decodeSwap(bytes calldata data) internal pure returns (address[] memory path, bool ethIn, bool ethOut) {
