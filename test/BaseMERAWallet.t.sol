@@ -3191,13 +3191,15 @@ contract BaseMERAWalletTest is Test {
 
         BaseMERAWallet newWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
         bytes32 oldSecret = keccak256("old");
-        registry.commit(registry.makeCommitment("old", address(wallet), address(this), oldSecret, 0, keccak256("")));
+        registry.commit(registry.makeCommitment("old", address(wallet), address(this), oldSecret, 0, keccak256(""), ""));
         skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
-        registry.registerLogin{value: registry.priceOf("old")}("old", address(wallet), oldSecret, 0, "");
+        registry.registerLogin{value: registry.priceOf("old")}("old", address(wallet), oldSecret, 0, "", "");
         bytes32 newSecret = keccak256("new");
-        registry.commit(registry.makeCommitment("new", address(newWallet), address(this), newSecret, 0, keccak256("")));
+        registry.commit(
+            registry.makeCommitment("new", address(newWallet), address(this), newSecret, 0, keccak256(""), "")
+        );
         skip(MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE);
-        registry.registerLogin{value: registry.priceOf("new")}("new", address(newWallet), newSecret, 0, "");
+        registry.registerLogin{value: registry.priceOf("new")}("new", address(newWallet), newSecret, 0, "", "");
 
         vm.startPrank(emergency);
         _executeEmergencyWalletSelfCallTimelockedOn(
