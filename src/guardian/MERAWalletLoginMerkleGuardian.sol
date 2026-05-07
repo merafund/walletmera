@@ -31,7 +31,8 @@ contract MERAWalletLoginMerkleGuardian {
     mapping(bytes32 proposalId => Proposal proposal) public proposals;
     mapping(bytes32 proposalId => mapping(bytes32 loginHash => bool approved)) public hasApproved;
 
-    event LoginListPublished(bytes32 indexed loginRoot, uint256 loginCount);
+    event LoginHashPublished(bytes32 indexed loginHash);
+    event LoginListPublished(uint256 loginCount);
     event EmergencyChangeProposed(
         bytes32 indexed proposalId, address indexed proposer, bytes32 indexed proposerLoginHash, address newEmergency
     );
@@ -98,6 +99,7 @@ contract MERAWalletLoginMerkleGuardian {
                 senderCanPublish = true;
             }
             publishedLoginHash[loginHash] = true;
+            emit LoginHashPublished(loginHash);
             unchecked {
                 ++i;
             }
@@ -106,7 +108,7 @@ contract MERAWalletLoginMerkleGuardian {
 
         loginListPublished = true;
         publishedLoginCount += loginCount;
-        emit LoginListPublished(LOGIN_ROOT, loginCount);
+        emit LoginListPublished(loginCount);
     }
 
     function proposeEmergencyChange(address wallet_, address newEmergency) external returns (bytes32 proposalId) {

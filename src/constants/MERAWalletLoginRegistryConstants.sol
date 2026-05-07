@@ -4,7 +4,7 @@ pragma solidity 0.8.34;
 /// @notice Shared constants for MERAWalletLoginRegistry (commitment windows, login format, paid-tier pricing bounds).
 library MERAWalletLoginRegistryConstants {
     uint256 internal constant MIN_COMMITMENT_AGE = 60 seconds;
-    uint256 internal constant MAX_COMMITMENT_AGE = 15 minutes;
+    uint256 internal constant MAX_COMMITMENT_AGE = 1 hours;
     uint256 internal constant MIN_LOGIN_LENGTH = 3;
     uint256 internal constant MAX_LOGIN_LENGTH = 32;
     uint256 internal constant PAID_LOGIN_MAX_LENGTH = 9;

@@ -103,24 +103,74 @@ contract MERAWalletLoginRegistry is
         address wallet,
         bytes32 secret,
         uint256 deadline,
-        bytes calldata authorization
-    ) external payable override onlyFactory {
-        bytes32 loginHash = _requireLoginHash(login);
-        _registerLogin(login, loginHash, wallet, secret, deadline, authorization, bytes32(0), "");
-    }
-
-    function registerLogin(
-        string calldata login,
-        address wallet,
-        bytes32 secret,
-        uint256 deadline,
         bytes calldata authorization,
         string calldata referrerLogin
     ) external payable override onlyFactory {
         require(wallet != address(0), InvalidAddress());
         bytes32 loginHash = _requireLoginHash(login);
         bytes32 referrerLoginHash = _requireReferrerLoginHash(loginHash, referrerLogin);
-        _registerLogin(login, loginHash, wallet, secret, deadline, authorization, referrerLoginHash, referrerLogin);
+        require(walletByLoginHash[loginHash] == address(0), LoginAlreadyRegistered());
+        require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
+
+        uint256 loginLength = bytes(login).length;
+        if (loginLength > MERAWalletLoginRegistryConstants.PAID_LOGIN_MAX_LENGTH) {
+            require(msg.value == 0, InvalidPayment());
+        } else if (REQUIRE_SHORT_LOGIN_AUTHORIZATION) {
+            require(msg.value == 0, InvalidPayment());
+            address verifier = authorizationVerifier;
+            require(verifier != address(0), AuthorizationVerifierNotSet());
+            MERAWalletLoginRegistryTypes.RegistrationValidationParams memory registrationValidation =
+                MERAWalletLoginRegistryTypes.RegistrationValidationParams({
+                    registry: address(this),
+                    factory: msg.sender,
+                    loginHash: loginHash,
+                    login: login,
+                    wallet: wallet,
+                    deadline: deadline,
+                    authorization: authorization
+                });
+            IMERALoginAuthorizationVerifier(verifier).validateRegistration(registrationValidation);
+        } else {
+            require(msg.value == _priceOfValidatedLength(loginLength), InvalidPayment());
+            bytes32 commitment = _makeCommitment(
+                login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash
+            );
+            uint256 committedAtPlusOne = commitments[commitment];
+            require(committedAtPlusOne != 0, CommitmentNotFound());
+            uint256 committedAt = committedAtPlusOne - 1;
+            require(
+                block.timestamp >= committedAt + MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE, CommitmentTooNew()
+            );
+            require(
+                block.timestamp <= committedAt + MERAWalletLoginRegistryConstants.MAX_COMMITMENT_AGE,
+                CommitmentExpired()
+            );
+            delete commitments[commitment];
+        }
+
+        walletByLoginHash[loginHash] = wallet;
+        loginHashByWallet[wallet] = loginHash;
+        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
+        _loginByHash[loginHash] = login;
+
+        emit LoginRegistered(loginHash, login, wallet, msg.sender);
+        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
+    }
+
+    /// @notice Allows a wallet that already owns a login to set its referrer once,
+    /// only if no referrer was recorded during registration.
+    function setReferrer(string calldata referrerLogin) external override {
+        bytes32 loginHash = loginHashByWallet[msg.sender];
+        require(loginHash != bytes32(0), LoginNotOwned());
+        require(referrerLoginHashByLoginHash[loginHash] == bytes32(0), ReferrerAlreadySet());
+
+        // Reuses validation: non-empty, registered, not self-referral.
+        bytes32 referrerLoginHash = _requireReferrerLoginHash(loginHash, referrerLogin);
+        require(referrerLoginHash != bytes32(0), EmptyLogin());
+
+        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
+
+        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
     function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet)
@@ -225,82 +275,12 @@ contract MERAWalletLoginRegistry is
         address factory,
         bytes32 secret,
         uint256 deadline,
-        bytes32 authorizationHash
-    ) external pure override returns (bytes32) {
-        return _makeCommitment(login, wallet, factory, secret, deadline, authorizationHash, bytes32(0));
-    }
-
-    function makeCommitment(
-        string calldata login,
-        address wallet,
-        address factory,
-        bytes32 secret,
-        uint256 deadline,
         bytes32 authorizationHash,
         string calldata referrerLogin
     ) external pure override returns (bytes32) {
         return _makeCommitment(
             login, wallet, factory, secret, deadline, authorizationHash, _optionalLoginHash(referrerLogin)
         );
-    }
-
-    function _registerLogin(
-        string calldata login,
-        bytes32 loginHash,
-        address wallet,
-        bytes32 secret,
-        uint256 deadline,
-        bytes calldata authorization,
-        bytes32 referrerLoginHash,
-        string memory referrerLogin
-    ) private {
-        require(wallet != address(0), InvalidAddress());
-        require(walletByLoginHash[loginHash] == address(0), LoginAlreadyRegistered());
-        require(loginHashByWallet[wallet] == bytes32(0), AddressAlreadyHasLogin());
-
-        uint256 loginLength = bytes(login).length;
-        if (loginLength > MERAWalletLoginRegistryConstants.PAID_LOGIN_MAX_LENGTH) {
-            require(msg.value == 0, InvalidPayment());
-        } else if (REQUIRE_SHORT_LOGIN_AUTHORIZATION) {
-            require(msg.value == 0, InvalidPayment());
-            address verifier = authorizationVerifier;
-            require(verifier != address(0), AuthorizationVerifierNotSet());
-            MERAWalletLoginRegistryTypes.RegistrationValidationParams memory registrationValidation =
-                MERAWalletLoginRegistryTypes.RegistrationValidationParams({
-                    registry: address(this),
-                    factory: msg.sender,
-                    loginHash: loginHash,
-                    login: login,
-                    wallet: wallet,
-                    deadline: deadline,
-                    authorization: authorization
-                });
-            IMERALoginAuthorizationVerifier(verifier).validateRegistration(registrationValidation);
-        } else {
-            require(msg.value == _priceOfValidatedLength(loginLength), InvalidPayment());
-            bytes32 commitment = _makeCommitment(
-                login, wallet, msg.sender, secret, deadline, keccak256(authorization), referrerLoginHash
-            );
-            uint256 committedAtPlusOne = commitments[commitment];
-            require(committedAtPlusOne != 0, CommitmentNotFound());
-            uint256 committedAt = committedAtPlusOne - 1;
-            require(
-                block.timestamp >= committedAt + MERAWalletLoginRegistryConstants.MIN_COMMITMENT_AGE, CommitmentTooNew()
-            );
-            require(
-                block.timestamp <= committedAt + MERAWalletLoginRegistryConstants.MAX_COMMITMENT_AGE,
-                CommitmentExpired()
-            );
-            delete commitments[commitment];
-        }
-
-        walletByLoginHash[loginHash] = wallet;
-        loginHashByWallet[wallet] = loginHash;
-        referrerLoginHashByLoginHash[loginHash] = referrerLoginHash;
-        _loginByHash[loginHash] = login;
-
-        emit LoginRegistered(loginHash, login, wallet, msg.sender);
-        emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
     function _requireReferrerLoginHash(bytes32 loginHash, string calldata referrerLogin)

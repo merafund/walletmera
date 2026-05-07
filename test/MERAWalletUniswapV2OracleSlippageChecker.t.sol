@@ -119,10 +119,15 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function _executeEmergencyWalletSelfCallTimelocked(bytes memory data, uint256 salt) internal {
-        bytes32 opId = wallet.proposeTransaction(_singleCall(address(wallet), 0, data), salt);
+        MERAWalletTypes.Call[] memory calls = _singleCall(address(wallet), 0, data);
+        if (wallet.getRequiredDelay(calls) == 0) {
+            wallet.executeTransaction(calls, salt);
+            return;
+        }
+        bytes32 opId = wallet.proposeTransaction(calls, salt);
         (,,, uint64 executeAfter,,,,,,,) = wallet.operations(opId);
         vm.warp(executeAfter);
-        wallet.executePending(_singleCall(address(wallet), 0, data), salt);
+        wallet.executePending(calls, salt);
     }
 
     function _executeWalletSelfCall(bytes memory data, uint256 salt) internal {

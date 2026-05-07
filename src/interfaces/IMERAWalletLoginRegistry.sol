@@ -33,17 +33,11 @@ interface IMERAWalletLoginRegistry is IMERAWalletLoginRegistryMigration {
         address wallet,
         bytes32 secret,
         uint256 deadline,
-        bytes calldata authorization
-    ) external payable;
-
-    function registerLogin(
-        string calldata login,
-        address wallet,
-        bytes32 secret,
-        uint256 deadline,
         bytes calldata authorization,
         string calldata referrerLogin
     ) external payable;
+
+    function setReferrer(string calldata referrerLogin) external;
 
     function priceOf(string calldata login) external view returns (uint256);
     function walletOf(string calldata login) external view returns (address);
@@ -52,15 +46,6 @@ interface IMERAWalletLoginRegistry is IMERAWalletLoginRegistryMigration {
     function referrerLoginHashOf(string calldata login) external view returns (bytes32);
     function referrerLoginOf(string calldata login) external view returns (string memory);
     function validateLogin(string calldata login) external pure returns (bytes32);
-
-    function makeCommitment(
-        string calldata login,
-        address wallet,
-        address factory,
-        bytes32 secret,
-        uint256 deadline,
-        bytes32 authorizationHash
-    ) external pure returns (bytes32);
 
     function makeCommitment(
         string calldata login,

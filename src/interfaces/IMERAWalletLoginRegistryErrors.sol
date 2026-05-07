@@ -14,6 +14,7 @@ interface IMERAWalletLoginRegistryErrors {
     error LoginNotOwned();
     error AddressAlreadyHasLogin();
     error ReferrerLoginNotRegistered();
+    error ReferrerAlreadySet();
     error SelfReferral();
     error CommitmentAlreadyExists();
     error CommitmentNotFound();

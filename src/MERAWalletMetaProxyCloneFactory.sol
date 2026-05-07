@@ -25,17 +25,6 @@ contract MERAWalletMetaProxyCloneFactory {
         LOGIN_REGISTRY = IMERAWalletLoginRegistry(loginRegistry);
     }
 
-    /// @notice Deploys a new `BaseMERAWallet` meta-proxy clone and stores `login` -> wallet.
-    function deployWallet(
-        string calldata login,
-        MERAWalletTypes.WalletInitParams calldata params,
-        bytes32 secret,
-        uint256 deadline,
-        bytes calldata authorization
-    ) external payable returns (address wallet) {
-        return _deployWallet(login, params, secret, deadline, authorization, "");
-    }
-
     function deployWallet(
         string calldata login,
         MERAWalletTypes.WalletInitParams calldata params,
@@ -44,7 +33,14 @@ contract MERAWalletMetaProxyCloneFactory {
         bytes calldata authorization,
         string calldata referrerLogin
     ) external payable returns (address wallet) {
-        return _deployWallet(login, params, secret, deadline, authorization, referrerLogin);
+        bytes32 loginHash = _loginHash(login);
+        require(LOGIN_REGISTRY.walletByLoginHash(loginHash) == address(0), LoginAlreadyRegistered());
+
+        wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, abi.encode(params), loginHash);
+        BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
+
+        LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization, referrerLogin);
+        emit WalletDeployed(loginHash, login, wallet);
     }
 
     /// @notice Counterfactual wallet address for `login` and `params` using this factory as CREATE2 deployer.
@@ -56,24 +52,6 @@ contract MERAWalletMetaProxyCloneFactory {
         return Clones.predictDeterministicAddressWithImmutableArgs(
             WALLET_IMPLEMENTATION, abi.encode(params), _loginHash(login), address(this)
         );
-    }
-
-    function _deployWallet(
-        string calldata login,
-        MERAWalletTypes.WalletInitParams calldata params,
-        bytes32 secret,
-        uint256 deadline,
-        bytes calldata authorization,
-        string memory referrerLogin
-    ) private returns (address wallet) {
-        bytes32 loginHash = _loginHash(login);
-        require(LOGIN_REGISTRY.walletByLoginHash(loginHash) == address(0), LoginAlreadyRegistered());
-
-        wallet = Clones.cloneDeterministicWithImmutableArgs(WALLET_IMPLEMENTATION, abi.encode(params), loginHash);
-        BaseMERAWallet(payable(wallet)).initializeFromImmutableArgs();
-
-        LOGIN_REGISTRY.registerLogin{value: msg.value}(login, wallet, secret, deadline, authorization, referrerLogin);
-        emit WalletDeployed(loginHash, login, wallet);
     }
 
     function _loginHash(string calldata login) private pure returns (bytes32 loginHash) {

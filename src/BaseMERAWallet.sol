@@ -10,10 +10,10 @@ import {IMERAWalletLoginRegistryMigration} from "./interfaces/IMERAWalletLoginRe
 import {IMERAWalletTransactionChecker} from "./interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMigrationCalls} from "./interfaces/external/IMigrationCalls.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors, ReentrancyGuard {
+contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWalletErrors, ReentrancyGuardTransient {
     address public primary;
     address public backup;
     address public emergency;
@@ -98,6 +98,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function setPrimary(address newPrimary) external override onlySelf whenLifeAlive {
         require(newPrimary != address(0), InvalidAddress());
+        require(newPrimary != address(this), WalletCannotBeCoreRole());
 
         _requireControllerCoreAvailable();
 
@@ -111,6 +112,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function setBackup(address newBackup) external override onlySelf whenLifeAlive {
         require(newBackup != address(0), InvalidAddress());
+        require(newBackup != address(this), WalletCannotBeCoreRole());
 
         MERAWalletTypes.Role callerRole = _requireControllerCoreAvailable();
 
@@ -133,6 +135,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             _onlySelfAsEmergency();
         }
         require(newEmergency != address(0), InvalidAddress());
+        require(newEmergency != address(this), WalletCannotBeCoreRole());
 
         address previousEmergency = emergency;
         emergency = newEmergency;
@@ -228,7 +231,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setTargetCallPolicies(address[] calldata targets, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = targets.length;
@@ -244,7 +247,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setSelectorCallPolicies(bytes4[] calldata selectors, MERAWalletTypes.CallPathPolicy[] calldata policies)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = selectors.length;
@@ -261,7 +264,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address[] calldata targets,
         bytes4[] calldata selectors,
         MERAWalletTypes.CallPathPolicy[] calldata policies
-    ) external override onlySelfAsEmergency whenLifeAlive {
+    ) external override onlySelf whenLifeAlive {
         uint256 n = targets.length;
         require(n == selectors.length, ArrayLengthMismatch(n, selectors.length));
         require(n == policies.length, ArrayLengthMismatch(n, policies.length));
@@ -276,7 +279,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setRequiredCheckers(MERAWalletTypes.RequiredCheckerUpdate[] calldata updates)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = updates.length;
@@ -292,7 +295,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
     function setOptionalCheckers(MERAWalletTypes.OptionalCheckerUpdate[] calldata updates)
         external
         override
-        onlySelfAsEmergency
+        onlySelf
         whenLifeAlive
     {
         uint256 n = updates.length;
@@ -495,7 +498,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         emit PendingTransactionVetoCleared(operationId, operation.salt, msg.sender);
     }
 
-    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at most creator rank (stronger or same tier). The relay reward stays on the wallet balance. Agents cannot call.
+    /// @notice Irreversible cancel: any core controller (allowed even when the caller's role is frozen or under SafeMode); uses {_roleRank} (Primary=1 .. Emergency=3). Cancel if caller rank is at least creator rank (same tier or higher; Emergency highest). Operations created by Emergency cannot be cancelled. The relay reward stays on the wallet balance. Agents cannot call.
     function cancelPending(bytes32 operationId) external override whenLifeAlive {
         // Allow cancellation under freezes/timelocks/SafeMode: only require a core role (not None).
         MERAWalletTypes.Role callerRole = _requireController();
@@ -508,7 +511,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         );
 
         require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation(operationId));
-        require(_roleRank(callerRole) <= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
+        require(_roleRank(callerRole) >= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
 
         // Zero relay reward slot; relay ETH stays on the wallet (no refund to the proposer on cancel).
         relayOperation.relayReward = 0;
@@ -947,11 +950,17 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _setSelectorCallPolicy(
             IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
         );
-        _setSelectorCallPolicy(IBaseMERAWallet.setTargetCallPolicies.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setSelectorCallPolicies.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setTargetSelectorCallPolicies.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setRequiredCheckers.selector, ownershipAndGrantRolePolicy);
-        _setSelectorCallPolicy(IBaseMERAWallet.setOptionalCheckers.selector, ownershipAndGrantRolePolicy);
+        MERAWalletTypes.CallPathPolicy memory adminNoTimelockPolicy = MERAWalletTypes.CallPathPolicy({
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            emergencyDelay: 0,
+            exists: true
+        });
+        _setSelectorCallPolicy(IBaseMERAWallet.setTargetCallPolicies.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setSelectorCallPolicies.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setTargetSelectorCallPolicies.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setRequiredCheckers.selector, adminNoTimelockPolicy);
+        _setSelectorCallPolicy(IBaseMERAWallet.setOptionalCheckers.selector, adminNoTimelockPolicy);
     }
 
     function _invokeBeforeRequiredCheckers(MERAWalletTypes.Call calldata callData, bytes32 operationId, uint256 callId)
@@ -1483,9 +1492,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         // `activeFrom == 0`: Emergency agent assigned but activity not started yet.
         if (role == MERAWalletTypes.Role.Emergency && agent.activeFrom != 0) {
             uint256 expiresAt = uint256(agent.activeFrom) + emergencyAgentLifetime;
-            if (block.timestamp > expiresAt) {
-                revert AgentExpired(account, expiresAt);
-            }
+            require(block.timestamp <= expiresAt, AgentExpired(account, expiresAt));
         }
     }
 
@@ -1573,7 +1580,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         revert InvalidRelayConfig();
     }
 
-    /// @dev Numeric rank: Primary < Backup < Emergency (see {MERAWalletConstants}). Used for agent caps and for {cancelPending}/{clearVeto} (lower number = stronger wallet authority).
+    /// @dev Numeric rank: Primary < Backup < Emergency (see {MERAWalletConstants}). Higher number = higher core role. Used for agent caps, ranked actions, {cancelPending}, and {clearVeto}.
     function _roleRank(MERAWalletTypes.Role role) internal pure returns (uint256) {
         if (role == MERAWalletTypes.Role.Emergency) {
             return MERAWalletConstants.ROLE_RANK_EMERGENCY;
