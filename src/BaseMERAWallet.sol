@@ -360,7 +360,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
     function resetSafeMode() external override onlySelfAsEmergency {
         require(safeModeUsed, SafeModeNotUsed());
-        require(block.timestamp > safeModeBefore, SafeModeStillActive(safeModeBefore));
 
         safeModeUsed = false;
         safeModeBefore = 0;
