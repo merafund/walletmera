@@ -32,6 +32,13 @@ contract MERAWalletTargetCheckersTest is Test {
         c = MERAWalletTypes.Call({target: target, value: 0, data: data, checker: address(0), checkerData: ""});
     }
 
+    function test_Blacklist_CheckBefore_PassesWhenNotBlocked() public {
+        MERAWalletTypes.Call memory call =
+            _call(address(receiver), abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
+        vm.prank(walletAddr);
+        bl.checkBefore(call, bytes32(0), 0);
+    }
+
     function test_BlacklistOwnable_NonOwnerCannotSetBlockedTarget() public {
         vm.prank(outsider);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, outsider));
