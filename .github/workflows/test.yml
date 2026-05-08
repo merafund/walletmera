@@ -31,8 +31,9 @@ jobs:
       - name: Run Forge fmt
         run: forge fmt --check
 
+      # Contract sizes for deployable code only; test harnesses can exceed EIP-170.
       - name: Run Forge build
-        run: forge build --sizes
+        run: forge build --sizes src
 
       - name: Run Forge tests
         run: forge test -vvv
