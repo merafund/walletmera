@@ -2268,7 +2268,7 @@ contract BaseMERAWalletTest is Test {
 
     function test_SetOptionalChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
         MERAWalletUniswapV2OracleSlippageChecker slip =
-            new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
+            new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600, true);
         MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({

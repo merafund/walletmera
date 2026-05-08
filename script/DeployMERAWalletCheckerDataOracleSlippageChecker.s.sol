@@ -8,11 +8,12 @@ import {
 
 /// @notice Deploys `MERAWalletCheckerDataOracleSlippageChecker`.
 /// @dev Env: `CHECKER_INITIAL_OWNER` (optional, defaults to broadcaster), `SLIPPAGE_MAX_NEGATIVE_DEVIATION_BPS` (default 100),
-///      `SLIPPAGE_MAX_ORACLE_STALE_SECONDS` (default 3600).
+///      `SLIPPAGE_MAX_ORACLE_STALE_SECONDS` (default 3600), `SLIPPAGE_REQUIRE_ROUTER_ALLOWLIST` (default true).
 contract DeployMERAWalletCheckerDataOracleSlippageChecker is Script {
     function run() external returns (MERAWalletCheckerDataOracleSlippageChecker checker) {
         uint256 maxNegBps = vm.envOr("SLIPPAGE_MAX_NEGATIVE_DEVIATION_BPS", uint256(100));
         uint256 maxStale = vm.envOr("SLIPPAGE_MAX_ORACLE_STALE_SECONDS", uint256(3600));
+        bool requireRouterAllowlist = vm.envOr("SLIPPAGE_REQUIRE_ROUTER_ALLOWLIST", true);
         require(maxStale != 0, "SLIPPAGE_MAX_ORACLE_STALE_SECONDS must be non-zero");
 
         vm.startBroadcast();
@@ -24,7 +25,8 @@ contract DeployMERAWalletCheckerDataOracleSlippageChecker is Script {
         console2.log("Initial owner:", owner);
         console2.log("maxOracleNegativeDeviationBps:", maxNegBps);
         console2.log("maxOracleStaleSeconds:", maxStale);
-        checker = new MERAWalletCheckerDataOracleSlippageChecker(owner, maxNegBps, maxStale);
+        console2.log("requireRouterAllowlist:", requireRouterAllowlist);
+        checker = new MERAWalletCheckerDataOracleSlippageChecker(owner, maxNegBps, maxStale, requireRouterAllowlist);
         vm.stopBroadcast();
 
         console2.log("MERAWalletCheckerDataOracleSlippageChecker deployed at:", address(checker));

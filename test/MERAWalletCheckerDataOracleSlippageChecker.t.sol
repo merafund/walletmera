@@ -35,7 +35,7 @@ contract MERAWalletCheckerDataOracleSlippageCheckerTest is Test {
         vm.warp(1_000_000);
 
         wallet = new BaseMERAWallet(primary, vm.addr(0xB0B), emergency, address(0), address(0));
-        checker = new MERAWalletCheckerDataOracleSlippageChecker(emergency, 100, 3600);
+        checker = new MERAWalletCheckerDataOracleSlippageChecker(emergency, 100, 3600, true);
         tokenA = new ERC20Mock();
         tokenB = new ERC20Mock();
         tokenC = new ERC20Mock();
@@ -170,6 +170,14 @@ contract MERAWalletCheckerDataOracleSlippageCheckerTest is Test {
         view
         returns (MERAWalletTypes.Call[] memory calls)
     {
+        return _approveAndSwapCallsWith(address(checker), checkerData);
+    }
+
+    function _approveAndSwapCallsWith(address slippageChecker, bytes memory checkerData)
+        internal
+        view
+        returns (MERAWalletTypes.Call[] memory calls)
+    {
         calls = new MERAWalletTypes.Call[](2);
         calls[0] = MERAWalletTypes.Call({
             target: address(tokenA),
@@ -182,7 +190,7 @@ contract MERAWalletCheckerDataOracleSlippageCheckerTest is Test {
             target: address(router),
             value: 0,
             data: _swapCallData(1 ether, 0, address(tokenA), address(tokenB)),
-            checker: address(checker),
+            checker: slippageChecker,
             checkerData: checkerData
         });
     }
@@ -316,5 +324,24 @@ contract MERAWalletCheckerDataOracleSlippageCheckerTest is Test {
             )
         );
         wallet.executeTransaction(_approveAndSwapCalls(_checkerData(address(tokenA), address(tokenB), false, false)), 5);
+    }
+
+    /// @dev Router allowlist disabled at deploy: swap succeeds even when router is not in `allowedRouter`.
+    function test_CheckerDataRequireRouterAllowlistFalse_SkipsRouterGate() public {
+        MERAWalletCheckerDataOracleSlippageChecker looseChecker =
+            new MERAWalletCheckerDataOracleSlippageChecker(emergency, 100, 3600, false);
+        assertFalse(looseChecker.REQUIRE_ROUTER_ALLOWLIST());
+
+        vm.startPrank(emergency);
+        looseChecker.setDefaultAssetWhitelist(checker.defaultAssetWhitelist());
+        vm.stopPrank();
+
+        _setOptionalCheckers(_mkWl(address(checker), false, ""));
+        _setOptionalCheckers(_mkWl(address(looseChecker), true, ""));
+
+        bytes memory cd = _checkerData(address(tokenA), address(tokenB), false, false);
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCallsWith(address(looseChecker), cd), 55_001);
     }
 }

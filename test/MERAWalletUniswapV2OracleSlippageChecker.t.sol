@@ -64,7 +64,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         vm.warp(1_000_000);
 
         wallet = new BaseMERAWallet(primary, vm.addr(0xB0B), emergency, address(0), address(0));
-        checker = new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600);
+        checker = new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600, true);
         tokenA = new ERC20Mock();
         tokenB = new ERC20Mock();
         tokenC = new ERC20Mock();
@@ -161,6 +161,14 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     }
 
     function _approveAndSwapCalls() internal view returns (MERAWalletTypes.Call[] memory calls) {
+        return _approveAndSwapCallsWith(address(checker));
+    }
+
+    function _approveAndSwapCallsWith(address slippageChecker)
+        internal
+        view
+        returns (MERAWalletTypes.Call[] memory calls)
+    {
         calls = new MERAWalletTypes.Call[](2);
         calls[0] = MERAWalletTypes.Call({
             target: address(tokenA),
@@ -173,7 +181,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
             target: address(router),
             value: 0,
             data: _swapCallData(1 ether, 0),
-            checker: address(checker),
+            checker: slippageChecker,
             checkerData: ""
         });
     }
@@ -573,6 +581,24 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         wallet.executeTransaction(calls, 1);
     }
 
+    /// @dev Router allowlist disabled at deploy: swap succeeds even when router is not in `allowedRouter`.
+    function test_RequireRouterAllowlistFalse_SkipsRouterGate() public {
+        MERAWalletUniswapV2OracleSlippageChecker looseChecker =
+            new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600, false);
+        assertFalse(looseChecker.REQUIRE_ROUTER_ALLOWLIST());
+
+        vm.startPrank(emergency);
+        looseChecker.setDefaultAssetWhitelist(checker.defaultAssetWhitelist());
+        vm.stopPrank();
+
+        _setOptionalCheckers(_mkWl(address(checker), false, ""));
+        _setOptionalCheckers(_mkWl(address(looseChecker), true, ""));
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCallsWith(address(looseChecker)), 77_001);
+    }
+
     function test_UnsupportedSelector_Reverts() public {
         bytes4 badSel = 0xdeadbeef;
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
@@ -648,7 +674,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
     function test_Constructor_InvalidBpsReverts() public {
         uint256 bps = checker.BPS();
         vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SlippageInvalidDeviationBps.selector);
-        new MERAWalletUniswapV2OracleSlippageChecker(emergency, bps, 3600);
+        new MERAWalletUniswapV2OracleSlippageChecker(emergency, bps, 3600, true);
     }
 
     function test_Owner_Unpause_AfterAgentPause_SwapSucceeds() public {
@@ -665,7 +691,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
     function test_Constructor_InvalidStaleReverts() public {
         vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SlippageInvalidStaleSeconds.selector);
-        new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 0);
+        new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 0, true);
     }
 
     function test_SetAllowedRouters_LengthMismatch_Reverts() public {

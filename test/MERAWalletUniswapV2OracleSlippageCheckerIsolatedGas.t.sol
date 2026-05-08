@@ -54,7 +54,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerIsolatedGasTest is Test {
         weth = new ERC20Mock();
         router = new MockUniV2Router02(address(weth));
         wallet = new IsolatedSlippageWallet();
-        checker = new MERAWalletUniswapV2OracleSlippageChecker(OWNER, 100, 3600);
+        checker = new MERAWalletUniswapV2OracleSlippageChecker(OWNER, 100, 3600, true);
 
         MockAggregatorV3 feedA = new MockAggregatorV3(1e8, 8);
         MockAggregatorV3 feedB = new MockAggregatorV3(1e8, 8);

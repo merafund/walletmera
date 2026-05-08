@@ -37,6 +37,10 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     /// @dev Reject Chainlink answers older than this many seconds.
     uint256 public immutable MAX_ORACLE_STALE_SECONDS;
 
+    /// @dev When false, {allowedRouter} and {setAllowedRouters} are ignored; any `call.target` passes the router gate.
+    /// Asset whitelist and oracle checks still apply; malicious routers are not blocked by allowlist.
+    bool public immutable REQUIRE_ROUTER_ALLOWLIST;
+
     mapping(address agent => bool allowed) public isPauseAgent;
 
     mapping(address router => bool allowed) public allowedRouter;
@@ -47,16 +51,21 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     /// @dev Used when `walletSlippageCheckerConfig[wallet].assetWhitelist` is zero.
     address public defaultAssetWhitelist;
 
-    /// @param initialOwner Admin for router allowlist (see {Ownable}).
+    /// @param initialOwner Admin for router allowlist when `requireRouterAllowlist` is true (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS` so `BPS - value` does not underflow.
     /// @param maxOracleStaleSeconds Max age of Chainlink `updatedAt`; must be `> 0`.
-    constructor(address initialOwner, uint256 maxOracleNegativeDeviationBps, uint256 maxOracleStaleSeconds)
-        Ownable(initialOwner)
-    {
+    /// @param requireRouterAllowlist If true, only routers in {allowedRouter} may be used; if false, router allowlist is not enforced.
+    constructor(
+        address initialOwner,
+        uint256 maxOracleNegativeDeviationBps,
+        uint256 maxOracleStaleSeconds,
+        bool requireRouterAllowlist
+    ) Ownable(initialOwner) {
         require(maxOracleNegativeDeviationBps < BPS, SlippageInvalidDeviationBps());
         require(maxOracleStaleSeconds != 0, SlippageInvalidStaleSeconds());
         MAX_ORACLE_NEGATIVE_DEVIATION_BPS = maxOracleNegativeDeviationBps;
         MAX_ORACLE_STALE_SECONDS = maxOracleStaleSeconds;
+        REQUIRE_ROUTER_ALLOWLIST = requireRouterAllowlist;
     }
 
     function hookModes() external pure override returns (bool enableBefore, bool enableAfter) {
@@ -275,6 +284,9 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     }
 
     function _requireAllowedRouter(address router, uint256 callId) internal view {
+        if (!REQUIRE_ROUTER_ALLOWLIST) {
+            return;
+        }
         require(allowedRouter[router], RouterNotAllowed(router, callId));
     }
 
