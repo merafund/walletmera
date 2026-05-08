@@ -8,6 +8,9 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {MERAWalletTypes} from "../types/MERAWalletTypes.sol";
+import {
+    IMERAWalletOracleSlippageCheckerEvents
+} from "../interfaces/checkers/IMERAWalletOracleSlippageCheckerEvents.sol";
 import {IMERAWalletTransactionChecker} from "../interfaces/checkers/IMERAWalletTransactionChecker.sol";
 import {IMERAWalletAssetWhiteList} from "../interfaces/checkers/IMERAWalletAssetWhiteList.sol";
 import {IMERAWalletWhitelistRouter} from "../interfaces/checkers/IMERAWalletWhitelistRouter.sol";
@@ -20,6 +23,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     Ownable,
     Pausable,
     IMERAWalletTransactionChecker,
+    IMERAWalletOracleSlippageCheckerEvents,
     IMERAWalletUniswapV2SlippageErrors
 {
     using MERAWalletUniswapV2SlippageTypes for bytes32;
@@ -32,16 +36,6 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
 
     /// @dev Reject Chainlink answers older than this many seconds.
     uint256 public immutable MAX_ORACLE_STALE_SECONDS;
-
-    event AllowedRouterUpdated(address indexed router, bool allowed, address indexed caller);
-    event PauseAgentUpdated(address indexed agent, bool allowed, address indexed caller);
-    /// @dev Emits full stored per-wallet config values.
-    event WalletSlippageCheckerConfigUpdated(
-        address indexed wallet, MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig config
-    );
-    event DefaultAssetWhitelistUpdated(
-        address indexed previous, address indexed assetWhitelist, address indexed caller
-    );
 
     mapping(address agent => bool allowed) public isPauseAgent;
 
