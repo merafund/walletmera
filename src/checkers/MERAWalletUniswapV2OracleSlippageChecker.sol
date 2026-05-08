@@ -42,33 +42,34 @@ contract MERAWalletUniswapV2OracleSlippageChecker is MERAWalletOracleSlippageChe
         returns (address[] memory path, bool ethIn, bool ethOut)
     {
         require(data.length >= 4, UnsupportedRouterCall(bytes4(0)));
-        bytes4 sel = bytes4(data[0:4]);
+        bytes4 functionSelector = bytes4(data[0:4]);
         bytes calldata body = data[4:];
 
         if (
-            sel == IUniswapV2Router02.swapExactTokensForTokens.selector
-                || sel == IUniswapV2Router02.swapTokensForExactTokens.selector
-                || sel == IUniswapV2Router02.swapExactTokensForETH.selector
-                || sel == IUniswapV2Router02.swapTokensForExactETH.selector
-                || sel == IUniswapV2Router02.swapExactTokensForTokensSupportingFeeOnTransferTokens.selector
-                || sel == IUniswapV2Router02.swapExactTokensForETHSupportingFeeOnTransferTokens.selector
+            functionSelector == IUniswapV2Router02.swapExactTokensForTokens.selector
+                || functionSelector == IUniswapV2Router02.swapTokensForExactTokens.selector
+                || functionSelector == IUniswapV2Router02.swapExactTokensForETH.selector
+                || functionSelector == IUniswapV2Router02.swapTokensForExactETH.selector
+                || functionSelector == IUniswapV2Router02.swapExactTokensForTokensSupportingFeeOnTransferTokens.selector
+                || functionSelector == IUniswapV2Router02.swapExactTokensForETHSupportingFeeOnTransferTokens.selector
         ) {
             (,, path,,) = abi.decode(body, (uint256, uint256, address[], address, uint256));
             ethIn = false;
             ethOut =
-                (sel == IUniswapV2Router02.swapExactTokensForETH.selector
-                        || sel == IUniswapV2Router02.swapTokensForExactETH.selector)
-                    || (sel == IUniswapV2Router02.swapExactTokensForETHSupportingFeeOnTransferTokens.selector);
+                (functionSelector == IUniswapV2Router02.swapExactTokensForETH.selector
+                        || functionSelector == IUniswapV2Router02.swapTokensForExactETH.selector)
+                    || (functionSelector
+                            == IUniswapV2Router02.swapExactTokensForETHSupportingFeeOnTransferTokens.selector);
         } else if (
-            sel == IUniswapV2Router02.swapExactETHForTokens.selector
-                || sel == IUniswapV2Router02.swapETHForExactTokens.selector
-                || sel == IUniswapV2Router02.swapExactETHForTokensSupportingFeeOnTransferTokens.selector
+            functionSelector == IUniswapV2Router02.swapExactETHForTokens.selector
+                || functionSelector == IUniswapV2Router02.swapETHForExactTokens.selector
+                || functionSelector == IUniswapV2Router02.swapExactETHForTokensSupportingFeeOnTransferTokens.selector
         ) {
             (, path,,) = abi.decode(body, (uint256, address[], address, uint256));
             ethIn = true;
             ethOut = false;
         } else {
-            revert UnsupportedRouterCall(sel);
+            revert UnsupportedRouterCall(functionSelector);
         }
     }
 }

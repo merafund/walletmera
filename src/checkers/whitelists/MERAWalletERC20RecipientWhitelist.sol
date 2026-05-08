@@ -53,9 +53,9 @@ contract MERAWalletERC20RecipientWhitelist is
         if (allowedRecipient[recipient]) {
             return true;
         }
-        address fb = fallbackWhitelist;
-        if (fb != address(0)) {
-            return IMERAWalletERC20RecipientWhitelist(fb).isRecipientAllowed(recipient);
+        address fallbackWhitelistAddress = fallbackWhitelist;
+        if (fallbackWhitelistAddress != address(0)) {
+            return IMERAWalletERC20RecipientWhitelist(fallbackWhitelistAddress).isRecipientAllowed(recipient);
         }
         return false;
     }

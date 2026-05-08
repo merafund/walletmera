@@ -43,7 +43,11 @@ contract MERAWalletExtensionsHarness is MERAWalletNative, MERAWalletERC20 {
         _validateCallsMemory(calls);
     }
 
-    function exposedOperationIdForTransfer(address target, uint256 value, uint256 salt) external view returns (bytes32) {
+    function exposedOperationIdForTransfer(address target, uint256 value, uint256 salt)
+        external
+        view
+        returns (bytes32)
+    {
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         _setSingleCallMemory(calls, target, value, "", address(0), "");
         return _computeOperationIdMemory(calls, salt);

@@ -180,32 +180,32 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         bool ethOut,
         address assetWhitelist
     ) private {
-        address feed0 = _effectivePriceFeed(assetWhitelist, tokenIn);
-        address feed1 = _effectivePriceFeed(assetWhitelist, tokenOut);
-        uint256 b0;
-        uint256 b1;
-        uint256 ethB;
+        address priceFeedAddressTokenIn = _effectivePriceFeed(assetWhitelist, tokenIn);
+        address priceFeedAddressTokenOut = _effectivePriceFeed(assetWhitelist, tokenOut);
+        uint256 erc20BalanceTokenInBefore;
+        uint256 erc20BalanceTokenOutBefore;
+        uint256 nativeEthBalanceBefore;
         if (ethIn) {
-            ethB = wallet.balance;
-            b1 = IERC20(tokenOut).balanceOf(wallet);
+            nativeEthBalanceBefore = wallet.balance;
+            erc20BalanceTokenOutBefore = IERC20(tokenOut).balanceOf(wallet);
         } else if (ethOut) {
-            b0 = IERC20(tokenIn).balanceOf(wallet);
-            ethB = wallet.balance;
+            erc20BalanceTokenInBefore = IERC20(tokenIn).balanceOf(wallet);
+            nativeEthBalanceBefore = wallet.balance;
         } else {
-            b0 = IERC20(tokenIn).balanceOf(wallet);
-            b1 = IERC20(tokenOut).balanceOf(wallet);
+            erc20BalanceTokenInBefore = IERC20(tokenIn).balanceOf(wallet);
+            erc20BalanceTokenOutBefore = IERC20(tokenOut).balanceOf(wallet);
         }
 
         bytes32 key = _snapshotKey(wallet, operationId, callId);
         key.storeSnapshot(
             MERAWalletUniswapV2SlippageTypes.Snapshot({
-                token0Path: tokenIn,
-                token1Path: tokenOut,
-                priceFeed0: feed0,
-                priceFeed1: feed1,
-                erc20Bal0: b0,
-                erc20Bal1: b1,
-                ethBal: ethB,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                priceFeedTokenIn: priceFeedAddressTokenIn,
+                priceFeedTokenOut: priceFeedAddressTokenOut,
+                erc20BalanceTokenInBefore: erc20BalanceTokenInBefore,
+                erc20BalanceTokenOutBefore: erc20BalanceTokenOutBefore,
+                nativeEthBalanceBefore: nativeEthBalanceBefore,
                 ethIn: ethIn,
                 ethOut: ethOut,
                 active: true
@@ -227,17 +227,17 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         uint256 amountOut;
 
         if (snapshot.ethIn) {
-            amountIn = snapshot.ethBal - wallet.balance;
+            amountIn = snapshot.nativeEthBalanceBefore - wallet.balance;
         } else {
-            uint256 inputTokenBalanceAfter = IERC20(snapshot.token0Path).balanceOf(wallet);
-            amountIn = snapshot.erc20Bal0 - inputTokenBalanceAfter;
+            uint256 inputTokenBalanceAfter = IERC20(snapshot.tokenIn).balanceOf(wallet);
+            amountIn = snapshot.erc20BalanceTokenInBefore - inputTokenBalanceAfter;
         }
 
         if (snapshot.ethOut) {
-            amountOut = wallet.balance - snapshot.ethBal;
+            amountOut = wallet.balance - snapshot.nativeEthBalanceBefore;
         } else {
-            uint256 outputTokenBalanceAfter = IERC20(snapshot.token1Path).balanceOf(wallet);
-            amountOut = outputTokenBalanceAfter - snapshot.erc20Bal1;
+            uint256 outputTokenBalanceAfter = IERC20(snapshot.tokenOut).balanceOf(wallet);
+            amountOut = outputTokenBalanceAfter - snapshot.erc20BalanceTokenOutBefore;
         }
 
         require(amountIn != 0 && amountOut != 0, InvalidMeasuredAmounts());
@@ -246,12 +246,12 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         uint256 maxOracleStaleSeconds = _effectiveMaxOracleStaleSeconds(wallet);
 
         (uint256 oracleAnswerIn, uint8 priceFeedDecimalsIn) =
-            _readFeed(snapshot.token0Path, snapshot.priceFeed0, maxOracleStaleSeconds);
+            _readFeed(snapshot.tokenIn, snapshot.priceFeedTokenIn, maxOracleStaleSeconds);
         (uint256 oracleAnswerOut, uint8 priceFeedDecimalsOut) =
-            _readFeed(snapshot.token1Path, snapshot.priceFeed1, maxOracleStaleSeconds);
+            _readFeed(snapshot.tokenOut, snapshot.priceFeedTokenOut, maxOracleStaleSeconds);
 
-        uint8 inputTokenDecimals = IERC20Metadata(snapshot.token0Path).decimals();
-        uint8 outputTokenDecimals = IERC20Metadata(snapshot.token1Path).decimals();
+        uint8 inputTokenDecimals = IERC20Metadata(snapshot.tokenIn).decimals();
+        uint8 outputTokenDecimals = IERC20Metadata(snapshot.tokenOut).decimals();
 
         uint256 priceScalingDenominatorIn = 10 ** (uint256(inputTokenDecimals) + uint256(priceFeedDecimalsIn));
         uint256 priceScalingDenominatorOut = 10 ** (uint256(outputTokenDecimals) + uint256(priceFeedDecimalsOut));
@@ -266,15 +266,16 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     }
 
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
-        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig storage cfg =
+        MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig storage walletSlippageCheckerConfigStorage =
             walletSlippageCheckerConfig[wallet];
-        address w = cfg.assetWhitelist;
-        if (w != address(0)) {
-            return w;
+        address assetWhitelistAddress = walletSlippageCheckerConfigStorage.assetWhitelist;
+        if (assetWhitelistAddress != address(0)) {
+            return assetWhitelistAddress;
         }
-        w = _routerWhitelist(cfg.whitelistRouter, _ASSET_WHITELIST_KEY);
-        if (w != address(0)) {
-            return w;
+        assetWhitelistAddress =
+            _routerWhitelist(walletSlippageCheckerConfigStorage.whitelistRouter, _ASSET_WHITELIST_KEY);
+        if (assetWhitelistAddress != address(0)) {
+            return assetWhitelistAddress;
         }
         return defaultAssetWhitelist;
     }
@@ -324,34 +325,34 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     /// @dev Price feeds come only from {IMERAWalletAssetWhiteList-assetSource} on the effective whitelist.
     function _effectivePriceFeed(address assetWhitelist, address token) internal view returns (address) {
         require(assetWhitelist != address(0), PriceFeedNotSet(token));
-        address feedAddr = IMERAWalletAssetWhiteList(assetWhitelist).assetSource(token);
-        require(feedAddr != address(0), PriceFeedNotSet(token));
-        return feedAddr;
+        address priceFeedAddress = IMERAWalletAssetWhiteList(assetWhitelist).assetSource(token);
+        require(priceFeedAddress != address(0), PriceFeedNotSet(token));
+        return priceFeedAddress;
     }
 
     /// @dev Matches `keccak256(abi.encode(wallet, operationId, callId))` without `abi.encode` allocation.
     function _snapshotKey(address wallet, bytes32 operationId, uint256 callId) private pure returns (bytes32 key) {
         assembly ("memory-safe") {
-            let p := mload(0x40)
-            mstore(p, wallet)
-            mstore(add(p, 0x20), operationId)
-            mstore(add(p, 0x40), callId)
-            key := keccak256(p, 0x60)
-            mstore(0x40, add(p, 0x60))
+            let freeMemoryPointer := mload(0x40)
+            mstore(freeMemoryPointer, wallet)
+            mstore(add(freeMemoryPointer, 0x20), operationId)
+            mstore(add(freeMemoryPointer, 0x40), callId)
+            key := keccak256(freeMemoryPointer, 0x60)
+            mstore(0x40, add(freeMemoryPointer, 0x60))
         }
     }
 
-    function _readFeed(address token, address feedAddr, uint256 maxOracleStaleSeconds)
+    function _readFeed(address token, address priceFeedAddress, uint256 maxOracleStaleSeconds)
         internal
         view
         returns (uint256 answer, uint8 feedDecimals)
     {
-        require(feedAddr != address(0), PriceFeedNotSet(token));
-        IAggregatorV3 feed = IAggregatorV3(feedAddr);
+        require(priceFeedAddress != address(0), PriceFeedNotSet(token));
+        IAggregatorV3 feed = IAggregatorV3(priceFeedAddress);
         feedDecimals = feed.decimals();
-        (, int256 ans,, uint256 updatedAt,) = feed.latestRoundData();
-        require(ans > 0, OracleAnswerInvalid(token));
+        (, int256 signedLatestRoundAnswer,, uint256 updatedAt,) = feed.latestRoundData();
+        require(signedLatestRoundAnswer > 0, OracleAnswerInvalid(token));
         require(block.timestamp - updatedAt <= maxOracleStaleSeconds, StaleOraclePrice(token, updatedAt));
-        answer = uint256(ans);
+        answer = uint256(signedLatestRoundAnswer);
     }
 }

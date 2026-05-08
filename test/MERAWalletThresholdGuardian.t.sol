@@ -150,9 +150,7 @@ contract MERAWalletThresholdGuardianTest is Test {
         bytes32 proposalId = _propose(address(0xE2101), 1 days, member1);
 
         vm.prank(member1);
-        vm.expectRevert(
-            abi.encodeWithSelector(MERAWalletThresholdGuardian.NotApproved.selector, proposalId, member1)
-        );
+        vm.expectRevert(abi.encodeWithSelector(MERAWalletThresholdGuardian.NotApproved.selector, proposalId, member1));
         guardian.revokeApproval(proposalId);
     }
 

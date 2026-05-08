@@ -76,8 +76,8 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         bytes calldata data = call.data;
         require(data.length >= _ERC20_TRANSFER_OR_APPROVE_BODY_LEN, Erc20WhitelistCalldataTooShort(callId));
 
-        bytes4 sel = bytes4(data[0:4]);
-        require(sel == _expectedSelector(), Erc20WhitelistUnexpectedSelector(sel, callId));
+        bytes4 functionSelector = bytes4(data[0:4]);
+        require(functionSelector == _expectedSelector(), Erc20WhitelistUnexpectedSelector(functionSelector, callId));
 
         (address counterparty,) = abi.decode(data[4:], (address, uint256));
 
@@ -91,27 +91,29 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     function checkAfter(MERAWalletTypes.Call calldata, bytes32, uint256) external override {}
 
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
-        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage cfg = walletConfig[wallet];
-        address w = cfg.assetWhitelist;
-        if (w != address(0)) {
-            return w;
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage walletCheckerConfig =
+            walletConfig[wallet];
+        address assetWhitelistAddress = walletCheckerConfig.assetWhitelist;
+        if (assetWhitelistAddress != address(0)) {
+            return assetWhitelistAddress;
         }
-        w = _routerWhitelist(cfg.whitelistRouter, _ASSET_WHITELIST_KEY);
-        if (w != address(0)) {
-            return w;
+        assetWhitelistAddress = _routerWhitelist(walletCheckerConfig.whitelistRouter, _ASSET_WHITELIST_KEY);
+        if (assetWhitelistAddress != address(0)) {
+            return assetWhitelistAddress;
         }
         return defaultAssetWhitelist;
     }
 
     function _effectiveRecipientWhitelist(address wallet) internal view returns (address) {
-        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage cfg = walletConfig[wallet];
-        address w = cfg.recipientWhitelist;
-        if (w != address(0)) {
-            return w;
+        MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage walletCheckerConfig =
+            walletConfig[wallet];
+        address recipientWhitelistAddress = walletCheckerConfig.recipientWhitelist;
+        if (recipientWhitelistAddress != address(0)) {
+            return recipientWhitelistAddress;
         }
-        w = _routerWhitelist(cfg.whitelistRouter, _RECIPIENT_WHITELIST_KEY);
-        if (w != address(0)) {
-            return w;
+        recipientWhitelistAddress = _routerWhitelist(walletCheckerConfig.whitelistRouter, _RECIPIENT_WHITELIST_KEY);
+        if (recipientWhitelistAddress != address(0)) {
+            return recipientWhitelistAddress;
         }
         return defaultRecipientWhitelist;
     }
@@ -125,21 +127,24 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
 
     /// @dev No-op when no asset list is configured for `wallet`.
     function _requireTokenAllowed(address wallet, address token, uint256 callId) internal view {
-        address wl = _effectiveAssetWhitelist(wallet);
-        if (wl == address(0)) {
+        address effectiveAssetWhitelist = _effectiveAssetWhitelist(wallet);
+        if (effectiveAssetWhitelist == address(0)) {
             return;
         }
-        require(IMERAWalletAssetWhiteList(wl).isAssetAllowed(token), Erc20WhitelistTokenNotAllowed(token, callId));
+        require(
+            IMERAWalletAssetWhiteList(effectiveAssetWhitelist).isAssetAllowed(token),
+            Erc20WhitelistTokenNotAllowed(token, callId)
+        );
     }
 
     /// @dev No-op when no counterparty list is configured for `wallet`; `account` is transfer `to` or approve `spender`.
     function _requireCounterpartyAllowed(address wallet, address account, uint256 callId) internal view {
-        address wl = _effectiveRecipientWhitelist(wallet);
-        if (wl == address(0)) {
+        address effectiveRecipientWhitelist = _effectiveRecipientWhitelist(wallet);
+        if (effectiveRecipientWhitelist == address(0)) {
             return;
         }
         require(
-            IMERAWalletERC20RecipientWhitelist(wl).isRecipientAllowed(account),
+            IMERAWalletERC20RecipientWhitelist(effectiveRecipientWhitelist).isRecipientAllowed(account),
             Erc20WhitelistCounterpartyNotAllowed(account, callId)
         );
     }

@@ -67,9 +67,9 @@ contract MERAWalletAssetWhiteList is Ownable, IMERAWalletAssetWhiteList, IMERAWa
         if (allowedAsset[asset]) {
             return true;
         }
-        address fb = fallbackWhitelist;
-        if (fb != address(0)) {
-            return IMERAWalletAssetWhiteList(fb).isAssetAllowed(asset);
+        address fallbackWhitelistAddress = fallbackWhitelist;
+        if (fallbackWhitelistAddress != address(0)) {
+            return IMERAWalletAssetWhiteList(fallbackWhitelistAddress).isAssetAllowed(asset);
         }
         return false;
     }
@@ -80,9 +80,9 @@ contract MERAWalletAssetWhiteList is Ownable, IMERAWalletAssetWhiteList, IMERAWa
         if (source != address(0)) {
             return source;
         }
-        address fb = fallbackWhitelist;
-        if (fb != address(0)) {
-            return IMERAWalletAssetWhiteList(fb).assetSource(asset);
+        address fallbackWhitelistAddress = fallbackWhitelist;
+        if (fallbackWhitelistAddress != address(0)) {
+            return IMERAWalletAssetWhiteList(fallbackWhitelistAddress).assetSource(asset);
         }
         return address(0);
     }

@@ -747,19 +747,19 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         MERAWalletUniswapV2SlippageTypes.Snapshot memory snapshot = h.load(bytes32(uint256(77)));
 
         assertFalse(snapshot.active);
-        assertEq(snapshot.token0Path, address(0));
+        assertEq(snapshot.tokenIn, address(0));
     }
 
     function test_SnapshotLoad_NonEth_LoadsBothErc20Balances() public {
         SlippageSnapshotHarness h = new SlippageSnapshotHarness();
         MERAWalletUniswapV2SlippageTypes.Snapshot memory stored = MERAWalletUniswapV2SlippageTypes.Snapshot({
-            token0Path: address(tokenA),
-            token1Path: address(tokenB),
-            priceFeed0: address(feedA),
-            priceFeed1: address(feedB),
-            erc20Bal0: 11,
-            erc20Bal1: 22,
-            ethBal: 0,
+            tokenIn: address(tokenA),
+            tokenOut: address(tokenB),
+            priceFeedTokenIn: address(feedA),
+            priceFeedTokenOut: address(feedB),
+            erc20BalanceTokenInBefore: 11,
+            erc20BalanceTokenOutBefore: 22,
+            nativeEthBalanceBefore: 0,
             ethIn: false,
             ethOut: false,
             active: true
@@ -770,20 +770,20 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         assertTrue(loaded.active);
         assertFalse(loaded.ethIn);
         assertFalse(loaded.ethOut);
-        assertEq(loaded.erc20Bal0, 11);
-        assertEq(loaded.erc20Bal1, 22);
+        assertEq(loaded.erc20BalanceTokenInBefore, 11);
+        assertEq(loaded.erc20BalanceTokenOutBefore, 22);
     }
 
     function test_SnapshotLoad_EthIn_SkipsInputErc20AndLoadsEthBalance() public {
         SlippageSnapshotHarness h = new SlippageSnapshotHarness();
         MERAWalletUniswapV2SlippageTypes.Snapshot memory stored = MERAWalletUniswapV2SlippageTypes.Snapshot({
-            token0Path: address(weth),
-            token1Path: address(tokenB),
-            priceFeed0: address(feedA),
-            priceFeed1: address(feedB),
-            erc20Bal0: 11,
-            erc20Bal1: 22,
-            ethBal: 33,
+            tokenIn: address(weth),
+            tokenOut: address(tokenB),
+            priceFeedTokenIn: address(feedA),
+            priceFeedTokenOut: address(feedB),
+            erc20BalanceTokenInBefore: 11,
+            erc20BalanceTokenOutBefore: 22,
+            nativeEthBalanceBefore: 33,
             ethIn: true,
             ethOut: false,
             active: true
@@ -793,21 +793,21 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         assertTrue(loaded.ethIn);
         assertFalse(loaded.ethOut);
-        assertEq(loaded.erc20Bal0, 0);
-        assertEq(loaded.erc20Bal1, 22);
-        assertEq(loaded.ethBal, 33);
+        assertEq(loaded.erc20BalanceTokenInBefore, 0);
+        assertEq(loaded.erc20BalanceTokenOutBefore, 22);
+        assertEq(loaded.nativeEthBalanceBefore, 33);
     }
 
     function test_SnapshotLoad_EthOut_SkipsOutputErc20AndLoadsEthBalance() public {
         SlippageSnapshotHarness h = new SlippageSnapshotHarness();
         MERAWalletUniswapV2SlippageTypes.Snapshot memory stored = MERAWalletUniswapV2SlippageTypes.Snapshot({
-            token0Path: address(tokenA),
-            token1Path: address(weth),
-            priceFeed0: address(feedA),
-            priceFeed1: address(feedB),
-            erc20Bal0: 11,
-            erc20Bal1: 22,
-            ethBal: 44,
+            tokenIn: address(tokenA),
+            tokenOut: address(weth),
+            priceFeedTokenIn: address(feedA),
+            priceFeedTokenOut: address(feedB),
+            erc20BalanceTokenInBefore: 11,
+            erc20BalanceTokenOutBefore: 22,
+            nativeEthBalanceBefore: 44,
             ethIn: false,
             ethOut: true,
             active: true
@@ -817,9 +817,9 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
 
         assertFalse(loaded.ethIn);
         assertTrue(loaded.ethOut);
-        assertEq(loaded.erc20Bal0, 11);
-        assertEq(loaded.erc20Bal1, 0);
-        assertEq(loaded.ethBal, 44);
+        assertEq(loaded.erc20BalanceTokenInBefore, 11);
+        assertEq(loaded.erc20BalanceTokenOutBefore, 0);
+        assertEq(loaded.nativeEthBalanceBefore, 44);
     }
 
     function test_CheckBefore_ZeroTokenIn_Reverts() public {
@@ -1006,7 +1006,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
             target: address(router), value: 0, data: swapData, checker: address(checker), checkerData: ""
         });
         bytes32 opId = bytes32(uint256(9995));
-        // checkBefore: stores snapshot with ethOut=TRUE, ethBal stored (covers storeSnapshot ethIn||ethOut branch)
+        // checkBefore: stores snapshot with ethOut=TRUE, nativeEthBalanceBefore stored (covers storeSnapshot ethIn||ethOut branch)
         checker.checkBefore(call, opId, 0);
         // checkAfter: loads snapshot with ethOut=TRUE (covers loadAndClearSnapshot ethIn||ethOut branch),
         // then amountIn=0 and amountOut=0 since no actual swap happened → InvalidMeasuredAmounts
@@ -1035,13 +1035,7 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is Test {
         path[0] = address(weth);
         path[1] = address(tokenB);
         bytes4 sel = bytes4(keccak256("swapExactETHForTokens(uint256,address[],address,uint256)"));
-        bytes memory swapData = abi.encodeWithSelector(
-            sel,
-            uint256(0),
-            path,
-            address(this),
-            block.timestamp + 1
-        );
+        bytes memory swapData = abi.encodeWithSelector(sel, uint256(0), path, address(this), block.timestamp + 1);
         return MERAWalletTypes.Call({
             target: address(router), value: 1 ether, data: swapData, checker: address(checker), checkerData: ""
         });

@@ -39,13 +39,13 @@ library MERAWalletUniswapV2SlippageTypes {
 
     /// @dev Swap snapshot: balances and path endpoints recorded in the before-hook, read in the after-hook for oracle comparison.
     struct Snapshot {
-        address token0Path;
-        address token1Path;
-        address priceFeed0;
-        address priceFeed1;
-        uint256 erc20Bal0;
-        uint256 erc20Bal1;
-        uint256 ethBal;
+        address tokenIn;
+        address tokenOut;
+        address priceFeedTokenIn;
+        address priceFeedTokenOut;
+        uint256 erc20BalanceTokenInBefore;
+        uint256 erc20BalanceTokenOutBefore;
+        uint256 nativeEthBalanceBefore;
         bool ethIn;
         bool ethOut;
         bool active;
@@ -54,70 +54,70 @@ library MERAWalletUniswapV2SlippageTypes {
     function storeSnapshot(bytes32 key, Snapshot memory snapshot) internal {
         bytes32 baseSlot = _snapshotBaseSlot(key);
         baseSlot.offset(0).asUint256()
-            .tstore(_packToken0AndFlags(snapshot.token0Path, snapshot.ethIn, snapshot.ethOut, snapshot.active));
-        baseSlot.offset(1).asAddress().tstore(snapshot.token1Path);
-        baseSlot.offset(2).asAddress().tstore(snapshot.priceFeed0);
-        baseSlot.offset(3).asAddress().tstore(snapshot.priceFeed1);
+            .tstore(_packTokenInAndFlags(snapshot.tokenIn, snapshot.ethIn, snapshot.ethOut, snapshot.active));
+        baseSlot.offset(1).asAddress().tstore(snapshot.tokenOut);
+        baseSlot.offset(2).asAddress().tstore(snapshot.priceFeedTokenIn);
+        baseSlot.offset(3).asAddress().tstore(snapshot.priceFeedTokenOut);
         if (!snapshot.ethIn) {
-            baseSlot.offset(4).asUint256().tstore(snapshot.erc20Bal0);
+            baseSlot.offset(4).asUint256().tstore(snapshot.erc20BalanceTokenInBefore);
         }
         if (!snapshot.ethOut) {
-            baseSlot.offset(5).asUint256().tstore(snapshot.erc20Bal1);
+            baseSlot.offset(5).asUint256().tstore(snapshot.erc20BalanceTokenOutBefore);
         }
         if (snapshot.ethIn || snapshot.ethOut) {
-            baseSlot.offset(6).asUint256().tstore(snapshot.ethBal);
+            baseSlot.offset(6).asUint256().tstore(snapshot.nativeEthBalanceBefore);
         }
     }
 
     function loadSnapshot(bytes32 key) internal view returns (Snapshot memory snapshot) {
         bytes32 baseSlot = _snapshotBaseSlot(key);
-        uint256 packedToken0AndFlags = baseSlot.offset(0).asUint256().tload();
-        snapshot.active = packedToken0AndFlags & _FLAG_ACTIVE != 0;
+        uint256 packedTokenInAndFlags = baseSlot.offset(0).asUint256().tload();
+        snapshot.active = packedTokenInAndFlags & _FLAG_ACTIVE != 0;
         if (!snapshot.active) {
             return snapshot;
         }
 
-        snapshot.token0Path = address(uint160(packedToken0AndFlags & _ADDRESS_MASK));
-        snapshot.token1Path = baseSlot.offset(1).asAddress().tload();
-        snapshot.priceFeed0 = baseSlot.offset(2).asAddress().tload();
-        snapshot.priceFeed1 = baseSlot.offset(3).asAddress().tload();
-        snapshot.ethIn = packedToken0AndFlags & _FLAG_ETH_IN != 0;
-        snapshot.ethOut = packedToken0AndFlags & _FLAG_ETH_OUT != 0;
+        snapshot.tokenIn = address(uint160(packedTokenInAndFlags & _ADDRESS_MASK));
+        snapshot.tokenOut = baseSlot.offset(1).asAddress().tload();
+        snapshot.priceFeedTokenIn = baseSlot.offset(2).asAddress().tload();
+        snapshot.priceFeedTokenOut = baseSlot.offset(3).asAddress().tload();
+        snapshot.ethIn = packedTokenInAndFlags & _FLAG_ETH_IN != 0;
+        snapshot.ethOut = packedTokenInAndFlags & _FLAG_ETH_OUT != 0;
         if (!snapshot.ethIn) {
-            snapshot.erc20Bal0 = baseSlot.offset(4).asUint256().tload();
+            snapshot.erc20BalanceTokenInBefore = baseSlot.offset(4).asUint256().tload();
         }
         if (!snapshot.ethOut) {
-            snapshot.erc20Bal1 = baseSlot.offset(5).asUint256().tload();
+            snapshot.erc20BalanceTokenOutBefore = baseSlot.offset(5).asUint256().tload();
         }
         if (snapshot.ethIn || snapshot.ethOut) {
-            snapshot.ethBal = baseSlot.offset(6).asUint256().tload();
+            snapshot.nativeEthBalanceBefore = baseSlot.offset(6).asUint256().tload();
         }
     }
 
     function loadAndClearSnapshot(bytes32 key) internal returns (Snapshot memory snapshot) {
         bytes32 baseSlot = _snapshotBaseSlot(key);
-        uint256 packedToken0AndFlags = baseSlot.offset(0).asUint256().tload();
-        snapshot.active = packedToken0AndFlags & _FLAG_ACTIVE != 0;
+        uint256 packedTokenInAndFlags = baseSlot.offset(0).asUint256().tload();
+        snapshot.active = packedTokenInAndFlags & _FLAG_ACTIVE != 0;
         if (!snapshot.active) {
             return snapshot;
         }
 
         // Clearing only the active flag deactivates the snapshot for this tx.
         baseSlot.offset(0).asUint256().tstore(0);
-        snapshot.token0Path = address(uint160(packedToken0AndFlags & _ADDRESS_MASK));
-        snapshot.token1Path = baseSlot.offset(1).asAddress().tload();
-        snapshot.priceFeed0 = baseSlot.offset(2).asAddress().tload();
-        snapshot.priceFeed1 = baseSlot.offset(3).asAddress().tload();
-        snapshot.ethIn = packedToken0AndFlags & _FLAG_ETH_IN != 0;
-        snapshot.ethOut = packedToken0AndFlags & _FLAG_ETH_OUT != 0;
+        snapshot.tokenIn = address(uint160(packedTokenInAndFlags & _ADDRESS_MASK));
+        snapshot.tokenOut = baseSlot.offset(1).asAddress().tload();
+        snapshot.priceFeedTokenIn = baseSlot.offset(2).asAddress().tload();
+        snapshot.priceFeedTokenOut = baseSlot.offset(3).asAddress().tload();
+        snapshot.ethIn = packedTokenInAndFlags & _FLAG_ETH_IN != 0;
+        snapshot.ethOut = packedTokenInAndFlags & _FLAG_ETH_OUT != 0;
         if (!snapshot.ethIn) {
-            snapshot.erc20Bal0 = baseSlot.offset(4).asUint256().tload();
+            snapshot.erc20BalanceTokenInBefore = baseSlot.offset(4).asUint256().tload();
         }
         if (!snapshot.ethOut) {
-            snapshot.erc20Bal1 = baseSlot.offset(5).asUint256().tload();
+            snapshot.erc20BalanceTokenOutBefore = baseSlot.offset(5).asUint256().tload();
         }
         if (snapshot.ethIn || snapshot.ethOut) {
-            snapshot.ethBal = baseSlot.offset(6).asUint256().tload();
+            snapshot.nativeEthBalanceBefore = baseSlot.offset(6).asUint256().tload();
         }
     }
 
@@ -131,12 +131,12 @@ library MERAWalletUniswapV2SlippageTypes {
         return _SNAPSHOTS_TSTORE_ROOT.deriveMapping(key);
     }
 
-    function _packToken0AndFlags(address token0Path, bool ethIn, bool ethOut, bool active)
+    function _packTokenInAndFlags(address tokenIn, bool ethIn, bool ethOut, bool active)
         private
         pure
         returns (uint256 packed)
     {
-        packed = uint256(uint160(token0Path));
+        packed = uint256(uint160(tokenIn));
         if (ethIn) {
             packed |= _FLAG_ETH_IN;
         }
