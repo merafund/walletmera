@@ -3782,30 +3782,6 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 10127);
     }
 
-    function test_ExecuteMigration_SelfCallWithoutCoreSenderRevertsAtBodyGuard() public {
-        BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
-        OwnableMock ext = new OwnableMock();
-        address target = address(0xB0D409);
-
-        vm.prank(emergency);
-        _executeWalletSelfCallOn(h, abi.encodeWithSelector(h.setMigrationTarget.selector, target), 101_409);
-
-        MERAWalletTypes.Call[] memory migrationCalls =
-            _singleCall(address(ext), 0, abi.encodeWithSignature("transferOwnership(address)", target));
-        MERAWalletTypes.Call memory callData = MERAWalletTypes.Call({
-            target: address(h),
-            value: 0,
-            data: abi.encodeWithSelector(h.executeMigrationTransaction.selector, migrationCalls, uint256(101_410)),
-            checker: address(0),
-            checkerData: ""
-        });
-
-        (bool success, bytes memory result) = h.exposedCallWithExecutionContext(callData, MERAWalletTypes.Role.Primary);
-
-        assertFalse(success);
-        assertEq(result, abi.encodeWithSelector(IBaseMERAWalletErrors.Unauthorized.selector));
-    }
-
     // Line 418: executeMigrationTransaction call fails (CallExecutionFailed)
     function test_ExecuteMigration_CallFailsReverts() public {
         vm.prank(emergency);

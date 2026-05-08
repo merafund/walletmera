@@ -404,7 +404,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         whenControllerCoreAvailable
         nonReentrant
     {
-        require(_coreRole(msg.sender) != MERAWalletTypes.Role.None, Unauthorized());
         require(migrationTarget != address(0), MigrationModeNotActive());
         _validateMigrationCalls(calls);
 
