@@ -182,9 +182,11 @@ contract MERAWalletLoginRegistry is
         bytes32 oldLoginHash = _requireLoginHash(oldLogin);
         bytes32 newLoginHash = _requireLoginHash(newLogin);
         require(oldLoginHash != newLoginHash, LoginAlreadyRegistered());
-        require(walletByLoginHash[oldLoginHash] == msg.sender, LoginNotOwned());
-        require(walletByLoginHash[newLoginHash] == newWallet, LoginNotOwned());
-        require(loginHashByWallet[newWallet] == newLoginHash, LoginNotOwned());
+        require(
+            walletByLoginHash[oldLoginHash] == msg.sender && walletByLoginHash[newLoginHash] == newWallet
+                && loginHashByWallet[newWallet] == newLoginHash,
+            LoginNotOwned()
+        );
         require(
             pendingLoginMigrationByOldLoginHash[oldLoginHash].previousWallet == address(0),
             LoginMigrationAlreadyPending()
