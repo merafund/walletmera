@@ -20,6 +20,15 @@ SCRIPT := script/DeployMERAWalletMetaProxyCloneFactory.s.sol:DeployMERAWalletMet
 .PHONY: deploy-target-blacklist-checker-polygon deploy-target-blacklist-checker-amoy deploy-target-blacklist-checker-bsc
 .PHONY: deploy-target-whitelist-checker-polygon deploy-target-whitelist-checker-amoy deploy-target-whitelist-checker-bsc
 .PHONY: deploy-uniswap-v2-oracle-slippage-checker-polygon deploy-uniswap-v2-oracle-slippage-checker-amoy deploy-uniswap-v2-oracle-slippage-checker-bsc
+.PHONY: deploy-factory-asset-whitelist deploy-factory-asset-whitelist-polygon deploy-factory-asset-whitelist-amoy deploy-factory-asset-whitelist-bsc
+.PHONY: deploy-factory-erc20-recipient-whitelist deploy-factory-erc20-recipient-whitelist-polygon deploy-factory-erc20-recipient-whitelist-amoy deploy-factory-erc20-recipient-whitelist-bsc
+.PHONY: deploy-factory-whitelist-router deploy-factory-whitelist-router-polygon deploy-factory-whitelist-router-amoy deploy-factory-whitelist-router-bsc
+.PHONY: deploy-factory-erc20-approve-checker deploy-factory-erc20-approve-checker-polygon deploy-factory-erc20-approve-checker-amoy deploy-factory-erc20-approve-checker-bsc
+.PHONY: deploy-factory-erc20-transfer-checker deploy-factory-erc20-transfer-checker-polygon deploy-factory-erc20-transfer-checker-amoy deploy-factory-erc20-transfer-checker-bsc
+.PHONY: deploy-factory-target-blacklist-checker deploy-factory-target-blacklist-checker-polygon deploy-factory-target-blacklist-checker-amoy deploy-factory-target-blacklist-checker-bsc
+.PHONY: deploy-factory-target-whitelist-checker deploy-factory-target-whitelist-checker-polygon deploy-factory-target-whitelist-checker-amoy deploy-factory-target-whitelist-checker-bsc
+.PHONY: deploy-factory-checker-data-oracle-slippage deploy-factory-checker-data-oracle-slippage-polygon deploy-factory-checker-data-oracle-slippage-amoy deploy-factory-checker-data-oracle-slippage-bsc
+.PHONY: deploy-factory-uniswap-v2-oracle-slippage deploy-factory-uniswap-v2-oracle-slippage-polygon deploy-factory-uniswap-v2-oracle-slippage-amoy deploy-factory-uniswap-v2-oracle-slippage-bsc
 .PHONY: verify-json-base-wallet
 
 # Standard JSON for Polygonscan "Solidity (Standard-Json-Input)" (matches foundry.toml: via_ir, runs 1000, solc 0.8.34).
@@ -129,6 +138,115 @@ deploy-uniswap-v2-oracle-slippage-checker-amoy:
 
 deploy-uniswap-v2-oracle-slippage-checker-bsc:
 	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2OracleSlippageChecker.s.sol:DeployMERAWalletUniswapV2OracleSlippageChecker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+# On-chain factory contracts (deploy wrapper contracts that expose `deploy(...)` for child contracts).
+deploy-factory-asset-whitelist:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletAssetWhiteListFactory.s.sol:DeployMERAWalletAssetWhiteListFactory
+
+deploy-factory-asset-whitelist-polygon:
+	@$(MAKE) deploy-factory-asset-whitelist RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-asset-whitelist-amoy:
+	@$(MAKE) deploy-factory-asset-whitelist RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-asset-whitelist-bsc:
+	@$(MAKE) deploy-factory-asset-whitelist RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-erc20-recipient-whitelist:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletERC20RecipientWhitelistFactory.s.sol:DeployMERAWalletERC20RecipientWhitelistFactory
+
+deploy-factory-erc20-recipient-whitelist-polygon:
+	@$(MAKE) deploy-factory-erc20-recipient-whitelist RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-erc20-recipient-whitelist-amoy:
+	@$(MAKE) deploy-factory-erc20-recipient-whitelist RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-erc20-recipient-whitelist-bsc:
+	@$(MAKE) deploy-factory-erc20-recipient-whitelist RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-whitelist-router:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletWhitelistRouterFactory.s.sol:DeployMERAWalletWhitelistRouterFactory
+
+deploy-factory-whitelist-router-polygon:
+	@$(MAKE) deploy-factory-whitelist-router RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-whitelist-router-amoy:
+	@$(MAKE) deploy-factory-whitelist-router RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-whitelist-router-bsc:
+	@$(MAKE) deploy-factory-whitelist-router RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-erc20-approve-checker:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletERC20ApproveWhitelistCheckerFactory.s.sol:DeployMERAWalletERC20ApproveWhitelistCheckerFactory
+
+deploy-factory-erc20-approve-checker-polygon:
+	@$(MAKE) deploy-factory-erc20-approve-checker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-erc20-approve-checker-amoy:
+	@$(MAKE) deploy-factory-erc20-approve-checker RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-erc20-approve-checker-bsc:
+	@$(MAKE) deploy-factory-erc20-approve-checker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-erc20-transfer-checker:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletERC20TransferWhitelistCheckerFactory.s.sol:DeployMERAWalletERC20TransferWhitelistCheckerFactory
+
+deploy-factory-erc20-transfer-checker-polygon:
+	@$(MAKE) deploy-factory-erc20-transfer-checker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-erc20-transfer-checker-amoy:
+	@$(MAKE) deploy-factory-erc20-transfer-checker RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-erc20-transfer-checker-bsc:
+	@$(MAKE) deploy-factory-erc20-transfer-checker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-target-blacklist-checker:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetBlacklistCheckerFactory.s.sol:DeployMERAWalletTargetBlacklistCheckerFactory
+
+deploy-factory-target-blacklist-checker-polygon:
+	@$(MAKE) deploy-factory-target-blacklist-checker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-target-blacklist-checker-amoy:
+	@$(MAKE) deploy-factory-target-blacklist-checker RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-target-blacklist-checker-bsc:
+	@$(MAKE) deploy-factory-target-blacklist-checker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-target-whitelist-checker:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletTargetWhitelistCheckerFactory.s.sol:DeployMERAWalletTargetWhitelistCheckerFactory
+
+deploy-factory-target-whitelist-checker-polygon:
+	@$(MAKE) deploy-factory-target-whitelist-checker RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-target-whitelist-checker-amoy:
+	@$(MAKE) deploy-factory-target-whitelist-checker RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-target-whitelist-checker-bsc:
+	@$(MAKE) deploy-factory-target-whitelist-checker RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-checker-data-oracle-slippage:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletCheckerDataOracleSlippageCheckerFactory.s.sol:DeployMERAWalletCheckerDataOracleSlippageCheckerFactory
+
+deploy-factory-checker-data-oracle-slippage-polygon:
+	@$(MAKE) deploy-factory-checker-data-oracle-slippage RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-checker-data-oracle-slippage-amoy:
+	@$(MAKE) deploy-factory-checker-data-oracle-slippage RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-checker-data-oracle-slippage-bsc:
+	@$(MAKE) deploy-factory-checker-data-oracle-slippage RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
+
+deploy-factory-uniswap-v2-oracle-slippage:
+	@$(MAKE) deploy-factory SCRIPT=script/DeployMERAWalletUniswapV2OracleSlippageCheckerFactory.s.sol:DeployMERAWalletUniswapV2OracleSlippageCheckerFactory
+
+deploy-factory-uniswap-v2-oracle-slippage-polygon:
+	@$(MAKE) deploy-factory-uniswap-v2-oracle-slippage RPC_URL="$(RPC_URL_POLYGON)" CHAIN_ID=137 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-uniswap-v2-oracle-slippage-amoy:
+	@$(MAKE) deploy-factory-uniswap-v2-oracle-slippage RPC_URL="$(RPC_URL_AMOY)" CHAIN_ID=80002 VERIFY_API_KEY="$(POLYGONSCAN_API_KEY)"
+
+deploy-factory-uniswap-v2-oracle-slippage-bsc:
+	@$(MAKE) deploy-factory-uniswap-v2-oracle-slippage RPC_URL="$(RPC_URL_BSC)" CHAIN_ID=56 VERIFY_API_KEY="$(BSCSCAN_API_KEY)"
 
 verify-json-base-wallet:
 	@mkdir -p $(OUT_VERIFY_JSON_DIR)
