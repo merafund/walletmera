@@ -353,7 +353,6 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         view
         returns (uint256 answer, uint8 feedDecimals)
     {
-        require(priceFeedAddress != address(0), PriceFeedNotSet(token));
         IAggregatorV3 feed = IAggregatorV3(priceFeedAddress);
         feedDecimals = feed.decimals();
         (, int256 signedLatestRoundAnswer,, uint256 updatedAt,) = feed.latestRoundData();
