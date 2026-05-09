@@ -351,4 +351,100 @@ contract MERAWalletExtensionsTest is Test {
         });
         wallet.executeTransaction(calls, 900_000 + uint160(checker));
     }
+
+    function _setRequiredChecker(address checker, bool enabled) internal {
+        MERAWalletTypes.RequiredCheckerUpdate[] memory updates = new MERAWalletTypes.RequiredCheckerUpdate[](1);
+        updates[0] = MERAWalletTypes.RequiredCheckerUpdate({checker: checker, enabled: enabled, config: ""});
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        calls[0] = MERAWalletTypes.Call({
+            target: address(wallet),
+            value: 0,
+            data: abi.encodeWithSelector(wallet.setRequiredCheckers.selector, updates),
+            checker: address(0),
+            checkerData: ""
+        });
+        wallet.executeTransaction(calls, 800_000 + uint160(checker));
+    }
+
+    // ── MERAWalletNative: callExternal overload with checker ──────────────────
+
+    function test_CallExternal_WithCheckerOverload_RunsHooks() public {
+        vm.prank(emergency);
+        _setOptionalChecker(address(checkerBothHooks), true, "");
+
+        vm.prank(primary);
+        wallet.callExternal(
+            address(receiver),
+            0,
+            abi.encodeWithSelector(ReceiverMock.setValue.selector, 42),
+            address(checkerBothHooks),
+            "",
+            2001
+        );
+        assertEq(receiver.value(), 42);
+    }
+
+    function test_CallExternalWithChecker_Works() public {
+        vm.prank(emergency);
+        _setOptionalChecker(address(checkerBothHooks), true, "");
+
+        vm.prank(primary);
+        wallet.callExternalWithChecker(
+            address(receiver),
+            0,
+            abi.encodeWithSelector(ReceiverMock.setValue.selector, 77),
+            address(checkerBothHooks),
+            "",
+            2002
+        );
+        assertEq(receiver.value(), 77);
+    }
+
+    // ── MERAWalletERC20: proposeApproveERC20 / executePendingApproveERC20 ─────
+
+    function test_ProposeApproveERC20_StoresPendingOperation() public {
+        address spender = address(0xBEEF);
+        vm.prank(emergency);
+        _setRoleTimelock(MERAWalletTypes.Role.Primary, 1 days);
+
+        vm.prank(primary);
+        bytes32 opId = wallet.proposeApproveERC20(address(token), spender, 500 ether, address(0), "", 2003);
+        assertTrue(opId != bytes32(0));
+    }
+
+    function test_ExecutePendingApproveERC20_Works() public {
+        address spender = address(0xBEEF);
+        vm.prank(emergency);
+        _setRoleTimelock(MERAWalletTypes.Role.Primary, 1 days);
+
+        vm.prank(primary);
+        wallet.proposeApproveERC20(address(token), spender, 500 ether, address(0), "", 2004);
+        vm.warp(block.timestamp + 1 days);
+
+        vm.prank(primary);
+        wallet.executePendingApproveERC20(address(token), spender, 500 ether, address(0), "", 2004);
+
+        assertEq(token.allowance(address(wallet), spender), 500 ether);
+    }
+
+    // ── Required checkers: memory-path loop body coverage ────────────────────
+    // Covers BaseMERAWallet._invokeBeforeRequiredCheckersWithCallMemory (lines 1037-1040)
+    // and _invokeAfterRequiredCheckersWithCallMemory (lines 1057-1060)
+
+    function test_RequiredChecker_MemoryPath_LoopBodyReached() public {
+        // checkerBothHooks has hookModes() = (true, true): both before & after required hooks
+        vm.startPrank(emergency);
+        _setRequiredChecker(address(checkerBothHooks), true);
+        vm.stopPrank();
+
+        // callExternal uses memory path; target is external (not address(this))
+        vm.prank(primary);
+        wallet.callExternal(
+            address(receiver),
+            0,
+            abi.encodeWithSelector(ReceiverMock.setValue.selector, 55),
+            2005
+        );
+        assertEq(receiver.value(), 55);
+    }
 }

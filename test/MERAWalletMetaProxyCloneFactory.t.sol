@@ -991,4 +991,18 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationStale.selector);
         registry.confirmLoginMigration("stl-alice");
     }
+
+    function test_registry_loginByHash_returnsLogin() public {
+        string memory login = "alice";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        _commit(login, p);
+        factory.deployWallet{value: registry.priceOf(login)}(login, p, secret, 0, "", "");
+
+        bytes32 hash = keccak256(bytes(login));
+        assertEq(registry.loginByHash(hash), login);
+    }
+
+    function test_registry_loginByHash_unknownHashReturnsEmpty() public view {
+        assertEq(registry.loginByHash(keccak256(bytes("unknown"))), "");
+    }
 }

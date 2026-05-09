@@ -128,4 +128,60 @@ contract MERAWalletTargetCheckersTest is Test {
         vm.prank(walletAddr);
         wl.checkBefore(call, bytes32(0), 0);
     }
+
+    // ── Blacklist: setBlockedTargets (batch variant) ──────────────────────────
+
+    function test_Blacklist_SetBlockedTargets_BatchBlocks() public {
+        MERAWalletBlacklistTypes.TargetBlockState[] memory states = new MERAWalletBlacklistTypes.TargetBlockState[](2);
+        states[0] = MERAWalletBlacklistTypes.TargetBlockState({target: address(receiver), blocked: true});
+        states[1] = MERAWalletBlacklistTypes.TargetBlockState({target: address(0xDEAD), blocked: true});
+
+        vm.prank(owner);
+        bl.setBlockedTargets(states);
+
+        MERAWalletTypes.Call memory call =
+            _call(address(receiver), abi.encodeWithSelector(ReceiverMock.setValue.selector, 99));
+        vm.prank(walletAddr);
+        vm.expectRevert(abi.encodeWithSelector(IMERAWalletBlacklistErrors.TargetBlocked.selector, address(receiver), 0));
+        bl.checkBefore(call, bytes32(0), 0);
+    }
+
+    function test_Blacklist_HookModes_ReturnsTrueAndFalse() public view {
+        (bool before_, bool after_) = bl.hookModes();
+        assertTrue(before_);
+        assertFalse(after_);
+    }
+
+    function test_Blacklist_CheckAfter_DoesNothing() public {
+        MERAWalletTypes.Call memory call = _call(address(receiver), "");
+        vm.prank(walletAddr);
+        bl.checkAfter(call, bytes32(0), 0); // must not revert
+    }
+
+    // ── Whitelist: setAllowedTargets (batch variant) ──────────────────────────
+
+    function test_Whitelist_SetAllowedTargets_BatchAllows() public {
+        MERAWalletWhitelistTypes.TargetPermission[] memory perms = new MERAWalletWhitelistTypes.TargetPermission[](1);
+        perms[0] = MERAWalletWhitelistTypes.TargetPermission({target: address(receiver), allowed: true});
+
+        vm.prank(owner);
+        wl.setAllowedTargets(perms);
+
+        MERAWalletTypes.Call memory call =
+            _call(address(receiver), abi.encodeWithSelector(ReceiverMock.setValue.selector, 3));
+        vm.prank(walletAddr);
+        wl.checkBefore(call, bytes32(0), 0); // must not revert
+    }
+
+    function test_Whitelist_HookModes_ReturnsTrueAndFalse() public view {
+        (bool before_, bool after_) = wl.hookModes();
+        assertTrue(before_);
+        assertFalse(after_);
+    }
+
+    function test_Whitelist_CheckAfter_DoesNothing() public {
+        MERAWalletTypes.Call memory call = _call(address(receiver), "");
+        vm.prank(walletAddr);
+        wl.checkAfter(call, bytes32(0), 0); // must not revert
+    }
 }

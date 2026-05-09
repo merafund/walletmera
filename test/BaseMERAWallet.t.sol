@@ -4467,6 +4467,25 @@ contract BaseMERAWalletTest is Test {
         );
         w.executePending(calls, 10155);
     }
+
+    // ── Required-checker calldata loop body (lines 973-976, 994) ─────────────
+    // Both _invokeBeforeRequiredCheckers and _invokeAfterRequiredCheckers must
+    // iterate at least once through a successful checker call to an external target.
+
+    function test_RequiredChecker_CalldataPath_LoopBodyReached() public {
+        // checkerBothHooks: hookModes()=(true,true), revertBefore=false, revertAfter=false
+        vm.startPrank(emergency);
+        _setRequiredCheckers(_mkReq(address(checkerBothHooks), true, ""));
+        vm.stopPrank();
+
+        // executeTransaction -> _executeCallsWithHooks (calldata path) -> both loops
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 999));
+        vm.prank(primary);
+        wallet.executeTransaction(calls, 10_201);
+
+        assertEq(receiver.value(), 999);
+    }
 }
 
 contract OwnableMock {

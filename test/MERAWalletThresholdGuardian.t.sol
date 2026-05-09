@@ -232,6 +232,22 @@ contract MERAWalletThresholdGuardianTest is Test {
         guardian.setWallet(address(0x1234));
     }
 
+    function test_GetMembers_ReturnsAllThree() public view {
+        address[] memory members = guardian.getMembers();
+        assertEq(members.length, 3);
+        assertEq(members[0], member1);
+        assertEq(members[1], member2);
+        assertEq(members[2], member3);
+    }
+
+    function test_Constructor_ThresholdExceedsMembersCountReverts() public {
+        address[] memory members = new address[](2);
+        members[0] = member1;
+        members[1] = member2;
+        vm.expectRevert(MERAWalletThresholdGuardian.InvalidThreshold.selector);
+        new MERAWalletThresholdGuardian(address(0), 3, members);
+    }
+
     function _propose(address newEmergency, uint64 delta, address proposer) internal returns (bytes32 proposalId) {
         vm.prank(proposer);
         proposalId = guardian.proposeEmergencyChange(newEmergency, uint64(block.timestamp + delta));

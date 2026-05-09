@@ -548,4 +548,22 @@ contract MERAWalletERC20WhitelistCheckersTest is Test {
         wallet.executeTransaction(_transferErc20Calls(address(token), recipient, 100, address(transferChecker)), 3);
         assertEq(token.balanceOf(recipient), 100);
     }
+
+    function test_HookModes_ReturnsTrueAndFalse() public view {
+        (bool before_, bool after_) = transferChecker.hookModes();
+        assertTrue(before_);
+        assertFalse(after_);
+    }
+
+    function test_CheckAfter_DoesNothing() public {
+        MERAWalletTypes.Call memory call = MERAWalletTypes.Call({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(IERC20.transfer.selector, recipient, 1),
+            checker: address(0),
+            checkerData: ""
+        });
+        vm.prank(address(wallet));
+        transferChecker.checkAfter(call, bytes32(0), 0); // must not revert
+    }
 }
