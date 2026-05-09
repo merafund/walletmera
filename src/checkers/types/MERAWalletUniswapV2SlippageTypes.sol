@@ -121,12 +121,6 @@ library MERAWalletUniswapV2SlippageTypes {
         }
     }
 
-    function clearSnapshot(bytes32 key) internal {
-        bytes32 baseSlot = _snapshotBaseSlot(key);
-        // Clearing the packed active flag is enough; remaining transient slots expire at tx end.
-        baseSlot.offset(0).asUint256().tstore(0);
-    }
-
     function _snapshotBaseSlot(bytes32 key) private pure returns (bytes32) {
         return _SNAPSHOTS_TSTORE_ROOT.deriveMapping(key);
     }

@@ -239,21 +239,6 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         (operationId,,,) = _proposeTransactionFromMemory(calls, salt);
     }
 
-    /// @dev Single-call propose with calldata checker payload.
-    function _proposeSingleCallCalldata(
-        address target,
-        uint256 value,
-        bytes calldata data,
-        address checker,
-        bytes calldata checkerData,
-        uint256 salt
-    ) internal returns (bytes32 operationId) {
-        bytes memory checkerDataMem = checker == address(0) ? new bytes(0) : _bytesCalldataToMemory(checkerData);
-        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
-        _setSingleCallMemory(calls, target, value, _bytesCalldataToMemory(data), checker, checkerDataMem);
-        (operationId,,,) = _proposeTransactionFromMemory(calls, salt);
-    }
-
     /// @dev Single-call pending execution built from memory `data`.
     function _executePendingSingleCallMemory(
         address target,
@@ -269,19 +254,4 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         _executePendingFromMemory(calls, salt, empty);
     }
 
-    /// @dev Single-call pending execution with calldata checker payload.
-    function _executePendingSingleCallCalldata(
-        address target,
-        uint256 value,
-        bytes calldata data,
-        address checker,
-        bytes calldata checkerData,
-        uint256 salt
-    ) internal {
-        bytes memory checkerDataMem = checker == address(0) ? new bytes(0) : _bytesCalldataToMemory(checkerData);
-        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
-        _setSingleCallMemory(calls, target, value, _bytesCalldataToMemory(data), checker, checkerDataMem);
-        address[] memory empty = new address[](0);
-        _executePendingFromMemory(calls, salt, empty);
-    }
 }
