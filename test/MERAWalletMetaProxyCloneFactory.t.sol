@@ -1005,4 +1005,16 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     function test_registry_loginByHash_unknownHashReturnsEmpty() public view {
         assertEq(registry.loginByHash(keccak256(bytes("unknown"))), "");
     }
+
+    // makeCommitment is a public pure wrapper around _makeCommitment; both wallet and factory
+    // are validated non-zero inside _makeCommitment, not only at the internal call sites.
+    function test_registry_makeCommitment_zeroWalletReverts() public {
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidAddress.selector);
+        registry.makeCommitment("alice", address(0), address(factory), bytes32(0), 0, bytes32(0), "");
+    }
+
+    function test_registry_makeCommitment_zeroFactoryReverts() public {
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.InvalidAddress.selector);
+        registry.makeCommitment("alice", address(0x1), address(0), bytes32(0), 0, bytes32(0), "");
+    }
 }

@@ -17,3 +17,4 @@ lcov.info
 .cursor
 broadcast
 .DS_Store
+coverage/

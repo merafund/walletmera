@@ -44,6 +44,25 @@ contract BaseMERAWalletHarness is BaseMERAWallet {
     function exposedRemoveMissingAfterChecker(address checker) external {
         _removeChecker(requiredAfterCheckers, _requiredAfterIndexPlusOne, checker);
     }
+
+    function exposedRoleRank(MERAWalletTypes.Role role) external pure returns (uint256) {
+        return _roleRank(role);
+    }
+
+    function exposedRolePolicySlice(MERAWalletTypes.CallPathPolicy calldata policy, MERAWalletTypes.Role role)
+        external
+        pure
+        returns (MERAWalletTypes.RoleCallPolicy memory)
+    {
+        return _rolePolicySlice(policy, role);
+    }
+
+    function exposedValidateRelayConfig(MERAWalletTypes.RelayProposeConfig calldata relayConfig, uint256 reward)
+        external
+        pure
+    {
+        _validateRelayConfig(relayConfig, reward);
+    }
 }
 
 contract BaseMERAWalletTest is Test {
@@ -4485,6 +4504,25 @@ contract BaseMERAWalletTest is Test {
         wallet.executeTransaction(calls, 10_201);
 
         assertEq(receiver.value(), 999);
+    }
+
+    // ── Dead-branch coverage: _roleRank(Role.None) → ROLE_RANK_NONE (line 1591) ─
+    // Role.None (value 0) is a valid enum value so this is callable through the harness.
+
+    function test_DeadBranch_RoleRankNone_ReturnsZero() public {
+        BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
+        assertEq(h.exposedRoleRank(MERAWalletTypes.Role.None), 0);
+    }
+
+    // ── Dead-branch coverage: _rolePolicySlice(policy, Role.None) → revert InvalidRole (line 1483) ─
+    // Role.None (value 0) falls through all three if-branches → revert InvalidRole().
+
+    function test_DeadBranch_RolePolicySliceNone_RevertsInvalidRole() public {
+        BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
+        MERAWalletTypes.CallPathPolicy memory policy;
+        policy.exists = true;
+        vm.expectRevert(IBaseMERAWalletErrors.InvalidRole.selector);
+        h.exposedRolePolicySlice(policy, MERAWalletTypes.Role.None);
     }
 }
 

@@ -1444,7 +1444,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             revert RelayExecutorNotAllowed(msg.sender);
         }
 
-        revert InvalidRelayConfig();
+        // Defensive fallback: unreachable while the enum has exactly 3 non-CoreExecute values.
+        revert InvalidRelayConfig(); // LCOV_EXCL_LINE
     }
 
     function _isCoreController(address account) internal view returns (bool) {
@@ -1565,7 +1566,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return;
         }
 
-        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) {
+        if (relayConfig.relayPolicy == MERAWalletTypes.RelayExecutorPolicy.CoreExecute) { // LCOV_EXCL_BR_LINE
             require(relayReward == 0, RelayRewardNotAllowed());
             require(
                 relayConfig.designatedExecutor == address(0) && relayConfig.executorSetHash == bytes32(0),
@@ -1574,7 +1575,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             return;
         }
 
-        revert InvalidRelayConfig();
+        // Defensive fallback: unreachable while the enum has exactly 4 values.
+        revert InvalidRelayConfig(); // LCOV_EXCL_LINE
     }
 
     /// @dev Numeric rank: Primary < Backup < Emergency (see {MERAWalletConstants}). Higher number = higher core role. Used for agent caps, ranked actions, {cancelPending}, and {clearVeto}.

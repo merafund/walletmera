@@ -182,7 +182,7 @@ contract MERAWalletLoginRegistry is
         bytes32 oldLoginHash = _requireLoginHash(oldLogin);
         bytes32 newLoginHash = _requireLoginHash(newLogin);
         require(oldLoginHash != newLoginHash, LoginAlreadyRegistered());
-        require(
+        require( // LCOV_EXCL_BR_LINE
             walletByLoginHash[oldLoginHash] == msg.sender && walletByLoginHash[newLoginHash] == newWallet
                 && loginHashByWallet[newWallet] == newLoginHash,
             LoginNotOwned()
