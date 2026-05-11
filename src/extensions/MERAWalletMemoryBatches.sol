@@ -7,7 +7,8 @@ import {MERAWalletMemoryBatchExecution} from "./MERAWalletMemoryBatchExecution.s
 
 /// @notice Memory-built `Call[]` helpers for extensions (ERC20 / native convenience entrypoints).
 abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
-    /// @dev First 4 bytes of ABI-encoded calldata (`bytes memory` has no slice operator in Solidity).
+    /// @notice Extracts the first four bytes from ABI calldata held in memory.
+    /// @dev `bytes memory` has no slice operator in Solidity.
     function _extractSelectorFromMemoryBytes(bytes memory data) internal pure returns (bytes4 selector) {
         if (data.length < MERAWalletConstants.FUNCTION_SELECTOR_LENGTH) {
             return bytes4(0);
@@ -17,6 +18,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         }
     }
 
+    /// @notice Returns the call delay for a target and memory calldata payload.
     function _getCallDelayForPolicyRoleFromMemoryData(
         MERAWalletTypes.Role policyRole,
         address target,
@@ -25,6 +27,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         return _getCallDelayForPolicyRoleFromSelector(policyRole, target, _extractSelectorFromMemoryBytes(data));
     }
 
+    /// @notice Returns the call delay for a memory-built call.
     function _getCallDelayWithCallMemory(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call memory callData)
         internal
         view
@@ -33,6 +36,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         return _getCallDelayForPolicyRoleFromMemoryData(callerRole, callData.target, callData.data);
     }
 
+    /// @notice Validates a memory-built call batch.
     /// @dev Must stay aligned with {BaseMERAWallet._validateCalls} (calldata batch path).
     function _validateCallsMemory(MERAWalletTypes.Call[] memory calls) internal view {
         require(calls.length > 0, EmptyCalls());
@@ -52,6 +56,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         }
     }
 
+    /// @notice Computes the operation id for a memory-built call batch.
     /// @dev Must stay aligned with {BaseMERAWallet._computeOperationId}.
     function _computeOperationIdMemory(MERAWalletTypes.Call[] memory calls, uint256 salt)
         internal
@@ -64,6 +69,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         }
     }
 
+    /// @notice Returns the maximum required delay for a memory-built call batch.
     /// @dev Must stay aligned with {BaseMERAWallet._getRequiredDelay} (uses per-call memory delay helpers on base).
     function _getRequiredDelayMemory(MERAWalletTypes.Role callerRole, MERAWalletTypes.Call[] memory calls)
         internal
@@ -82,6 +88,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         }
     }
 
+    /// @notice Stores a pending operation from a memory-built call batch.
     function _proposeTransactionFromMemory(MERAWalletTypes.Call[] memory memoryCalls, uint256 salt)
         internal
         whenControllerCoreAvailable
@@ -113,6 +120,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         emit TransactionProposed(operationId, salt, msg.sender, callerRole, executeAfter, requiredDelay);
     }
 
+    /// @notice Executes a pending operation from a memory-built call batch.
     function _executePendingFromMemory(
         MERAWalletTypes.Call[] memory memoryCalls,
         uint256 salt,
@@ -144,6 +152,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         emit PendingTransactionExecuted(operationId, salt, msg.sender);
     }
 
+    /// @notice Executes a memory-built call batch immediately.
     function _executeImmediateFromCalls(MERAWalletTypes.Call[] memory calls, uint256 salt)
         internal
         whenLifeAlive
@@ -161,6 +170,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         emit ImmediateTransactionExecuted(operationId, salt, msg.sender);
     }
 
+    /// @notice Executes a single memory-built call immediately.
     function _executeSingleCall(
         address target,
         uint256 value,
@@ -176,7 +186,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         _executeImmediateFromCalls(calls, salt);
     }
 
-    /// @dev Copies dynamic calldata bytes into memory for a single-call batch (one allocation).
+    /// @notice Copies dynamic calldata bytes into memory for a single-call batch.
     function _bytesCalldataToMemory(bytes calldata data) internal pure returns (bytes memory) {
         uint256 len = data.length;
         bytes memory out = new bytes(len);
@@ -189,7 +199,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         return out;
     }
 
-    /// @dev Fills `calls[0]` for a single immediate or timelock helper path.
+    /// @notice Fills `calls[0]` for a single immediate or timelock helper path.
     function _setSingleCallMemory(
         MERAWalletTypes.Call[] memory calls,
         address target,
@@ -203,14 +213,14 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         });
     }
 
-    /// @dev Single-call immediate execution with calldata payload (no optional checker).
+    /// @notice Executes a single calldata payload immediately without an optional checker.
     function _executeSingleCallCalldata(address target, uint256 value, bytes calldata data, uint256 salt) internal {
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         _setSingleCallMemory(calls, target, value, _bytesCalldataToMemory(data), address(0), new bytes(0));
         _executeImmediateFromCalls(calls, salt);
     }
 
-    /// @dev Single-call immediate execution with calldata payload and optional checker data.
+    /// @notice Executes a single calldata payload immediately with optional checker data.
     function _executeSingleCallCalldata(
         address target,
         uint256 value,
@@ -225,7 +235,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         _executeImmediateFromCalls(calls, salt);
     }
 
-    /// @dev Single-call propose built from memory `data` (e.g. ERC20 ABI payload).
+    /// @notice Proposes a single-call operation built from memory `data`.
     function _proposeSingleCallMemory(
         address target,
         uint256 value,
@@ -239,7 +249,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         (operationId,,,) = _proposeTransactionFromMemory(calls, salt);
     }
 
-    /// @dev Single-call pending execution built from memory `data`.
+    /// @notice Executes a pending single-call operation built from memory `data`.
     function _executePendingSingleCallMemory(
         address target,
         uint256 value,
@@ -253,5 +263,4 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         address[] memory empty = new address[](0);
         _executePendingFromMemory(calls, salt, empty);
     }
-
 }

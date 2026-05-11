@@ -7,41 +7,64 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 
 /// @notice Login-based threshold guardian backed by incrementally revealed Merkle login proofs.
 contract MERAWalletLoginMerkleGuardian {
+    /// @notice Emergency-change proposal approved by eligible login owners.
     struct Proposal {
+        /// @notice Wallet whose emergency controller will change.
         address targetWallet;
+        /// @notice Proposed emergency controller.
         address newEmergency;
+        /// @notice Address that created the proposal.
         address proposer;
+        /// @notice Timestamp when the proposal was created.
         uint64 createdAt;
+        /// @notice Number of current approvals.
         uint16 approvals;
+        /// @notice Whether the proposal has been executed.
         bool executed;
     }
 
+    /// @notice Login registry used to map wallets to login hashes.
     MERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
+    /// @notice Merkle root of eligible login hashes.
     bytes32 public immutable LOGIN_ROOT;
+    /// @notice Number of login-owner approvals required for execution.
     uint256 public immutable THRESHOLD;
+    /// @notice Lifetime of an emergency-change proposal.
     uint64 public immutable PROPOSAL_LIFETIME;
     /// @notice Lower bound enforced in the constructor for `proposalLifetime_` (72 hours).
     uint64 public constant MIN_PROPOSAL_LIFETIME = 72 hours;
 
+    /// @notice Whether at least one login hash batch has been published.
     bool public loginListPublished;
+    /// @notice Total number of published login hashes.
     uint256 public publishedLoginCount;
+    /// @notice Monotonic nonce used when deriving proposal ids.
     uint256 public proposalNonce;
 
+    /// @notice Whether a login hash has been published with a valid Merkle proof.
     mapping(bytes32 loginHash => bool published) public publishedLoginHash;
+    /// @notice Stored proposals by proposal id.
     mapping(bytes32 proposalId => Proposal proposal) public proposals;
+    /// @notice Whether a login hash has approved a proposal.
     mapping(bytes32 proposalId => mapping(bytes32 loginHash => bool approved)) public hasApproved;
 
+    /// @notice Emitted after a login hash is published.
     event LoginHashPublished(bytes32 indexed loginHash);
+    /// @notice Emitted after a batch of login hashes is published.
     event LoginListPublished(uint256 loginCount);
+    /// @notice Emitted when an eligible login owner proposes an emergency change.
     event EmergencyChangeProposed(
         bytes32 indexed proposalId, address indexed proposer, bytes32 indexed proposerLoginHash, address newEmergency
     );
+    /// @notice Emitted when an eligible login hash approves a proposal.
     event ProposalApproved(
         bytes32 indexed proposalId, bytes32 indexed loginHash, address indexed owner, uint256 approvals
     );
+    /// @notice Emitted when an eligible login hash revokes approval.
     event ProposalApprovalRevoked(
         bytes32 indexed proposalId, bytes32 indexed loginHash, address indexed owner, uint256 approvals
     );
+    /// @notice Emitted when a proposal changes a wallet emergency controller.
     event ProposalExecuted(bytes32 indexed proposalId, address indexed by, address indexed newEmergency);
 
     error InvalidWallet();
@@ -70,6 +93,11 @@ contract MERAWalletLoginMerkleGuardian {
     error NotApproved(bytes32 proposalId, bytes32 loginHash);
     error ThresholdNotReached(bytes32 proposalId, uint256 approvals, uint256 threshold);
 
+    /// @notice Creates a login Merkle guardian.
+    /// @param loginRegistry_ Login registry used to resolve wallet ownership.
+    /// @param loginRoot_ Merkle root of eligible login hashes.
+    /// @param threshold_ Number of approvals required for execution.
+    /// @param proposalLifetime_ Proposal lifetime in seconds.
     constructor(address loginRegistry_, bytes32 loginRoot_, uint256 threshold_, uint64 proposalLifetime_) {
         require(loginRegistry_ != address(0) && loginRegistry_.code.length != 0, InvalidLoginRegistry());
         require(loginRoot_ != bytes32(0), InvalidLoginRoot());
@@ -82,6 +110,7 @@ contract MERAWalletLoginMerkleGuardian {
         PROPOSAL_LIFETIME = proposalLifetime_;
     }
 
+    /// @notice Publishes eligible login hashes with Merkle proofs.
     function publishLoginList(bytes32[] calldata loginHashes, bytes32[][] calldata proofs) external {
         uint256 loginCount = loginHashes.length;
         require(loginCount != 0, EmptyLoginList());
@@ -111,6 +140,7 @@ contract MERAWalletLoginMerkleGuardian {
         emit LoginListPublished(loginCount);
     }
 
+    /// @notice Proposes an emergency controller change for `wallet_`.
     function proposeEmergencyChange(address wallet_, address newEmergency) external returns (bytes32 proposalId) {
         require(wallet_ != address(0), InvalidWallet());
         require(newEmergency != address(0), InvalidEmergency());
@@ -135,6 +165,7 @@ contract MERAWalletLoginMerkleGuardian {
         emit ProposalApproved(proposalId, loginHash, msg.sender, 1);
     }
 
+    /// @notice Approves an active proposal with the caller's registered login.
     function approveProposal(bytes32 proposalId) external {
         bytes32 loginHash = _requireEligibleLoginOwner(msg.sender);
         Proposal storage proposal = _activeProposal(proposalId);
@@ -145,6 +176,7 @@ contract MERAWalletLoginMerkleGuardian {
         emit ProposalApproved(proposalId, loginHash, msg.sender, proposal.approvals);
     }
 
+    /// @notice Revokes the caller's registered-login approval for an active proposal.
     function revokeApproval(bytes32 proposalId) external {
         bytes32 loginHash = _requireEligibleLoginOwner(msg.sender);
         Proposal storage proposal = _activeProposal(proposalId);
@@ -155,6 +187,7 @@ contract MERAWalletLoginMerkleGuardian {
         emit ProposalApprovalRevoked(proposalId, loginHash, msg.sender, proposal.approvals);
     }
 
+    /// @notice Executes an approved proposal.
     function executeProposal(bytes32 proposalId) external {
         Proposal storage proposal = _activeProposal(proposalId);
         require(proposal.approvals >= THRESHOLD, ThresholdNotReached(proposalId, proposal.approvals, THRESHOLD));
@@ -164,18 +197,21 @@ contract MERAWalletLoginMerkleGuardian {
         emit ProposalExecuted(proposalId, msg.sender, proposal.newEmergency);
     }
 
+    /// @notice Freezes the primary role on a target wallet protected by this guardian.
     function freezePrimary(address wallet_) external {
         _requireEligibleLoginOwner(msg.sender);
         _requireTargetWallet(wallet_);
         IBaseMERAWallet(payable(wallet_)).setFrozenPrimary(true);
     }
 
+    /// @notice Freezes the backup role on a target wallet protected by this guardian.
     function freezeBackup(address wallet_) external {
         _requireEligibleLoginOwner(msg.sender);
         _requireTargetWallet(wallet_);
         IBaseMERAWallet(payable(wallet_)).setFrozenBackup(true);
     }
 
+    /// @notice Enters safe mode on a target wallet protected by this guardian.
     function enterSafeMode(address wallet_, uint256 duration) external {
         _requireEligibleLoginOwner(msg.sender);
         _requireTargetWallet(wallet_);

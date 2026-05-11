@@ -17,40 +17,57 @@ library MERAWalletUniswapV2SlippageTypes {
     uint256 private constant _FLAG_ETH_OUT = uint256(1) << 161;
     uint256 private constant _FLAG_ACTIVE = uint256(1) << 162;
 
-    /// @dev ABI payload for {IMERAWalletTransactionChecker-applyConfig} on the slippage checker.
+    /// @notice ABI payload for {IMERAWalletTransactionChecker-applyConfig} on the slippage checker.
     struct UniswapV2SlippageCheckerConfig {
-        /// @dev Optional ERC20 allowlist contract; address(0) disables per-wallet asset gating for that wallet.
+        /// @notice Optional ERC20 allowlist contract; address(0) disables per-wallet asset gating for that wallet.
         address assetWhitelist;
-        /// @dev Optional per-wallet max oracle shortfall in BPS; 0 means fallback to checker default.
+        /// @notice Optional per-wallet max oracle shortfall in BPS; 0 means fallback to checker default.
         uint256 maxOracleNegativeDeviationBps;
-        /// @dev Optional per-wallet max Chainlink staleness in seconds; 0 means fallback to checker default.
+        /// @notice Optional per-wallet max Chainlink staleness in seconds; 0 means fallback to checker default.
         uint256 maxOracleStaleSeconds;
-        /// @dev Optional route registry checked before default asset whitelist when `assetWhitelist` is zero.
+        /// @notice Optional route registry checked before default asset whitelist when `assetWhitelist` is zero.
         address whitelistRouter;
     }
 
-    /// @dev ABI payload for per-call checker data when swap endpoints must not be decoded from `call.data`.
+    /// @notice ABI payload for per-call checker data when swap endpoints must not be decoded from `call.data`.
     struct CheckerDataSlippageCheckData {
+        /// @notice Input asset measured by the checker.
         address tokenIn;
+        /// @notice Output asset measured by the checker.
         address tokenOut;
+        /// @notice Whether the input side is native ETH.
         bool ethIn;
+        /// @notice Whether the output side is native ETH.
         bool ethOut;
     }
 
-    /// @dev Swap snapshot: balances and path endpoints recorded in the before-hook, read in the after-hook for oracle comparison.
+    /// @notice Swap snapshot recorded in the before-hook and read in the after-hook for oracle comparison.
     struct Snapshot {
+        /// @notice Input token address, or wrapped/native marker depending on checker path.
         address tokenIn;
+        /// @notice Output token address, or wrapped/native marker depending on checker path.
         address tokenOut;
+        /// @notice Token whose feed prices `tokenIn`.
         address priceFeedTokenIn;
+        /// @notice Token whose feed prices `tokenOut`.
         address priceFeedTokenOut;
+        /// @notice Wallet ERC20 input-token balance before the swap.
         uint256 erc20BalanceTokenInBefore;
+        /// @notice Wallet ERC20 output-token balance before the swap.
         uint256 erc20BalanceTokenOutBefore;
+        /// @notice Wallet native ETH balance before the swap.
         uint256 nativeEthBalanceBefore;
+        /// @notice Whether the input side is native ETH.
         bool ethIn;
+        /// @notice Whether the output side is native ETH.
         bool ethOut;
+        /// @notice Whether the snapshot exists for the current transaction.
         bool active;
     }
 
+    /// @notice Store a transient swap snapshot under `key`.
+    /// @param key Snapshot key derived from wallet, operation id, and call id.
+    /// @param snapshot Snapshot data to store until the after-hook reads it.
     function storeSnapshot(bytes32 key, Snapshot memory snapshot) internal {
         bytes32 baseSlot = _snapshotBaseSlot(key);
         baseSlot.offset(0).asUint256()
@@ -69,6 +86,9 @@ library MERAWalletUniswapV2SlippageTypes {
         }
     }
 
+    /// @notice Load a transient swap snapshot without clearing it.
+    /// @param key Snapshot key derived from wallet, operation id, and call id.
+    /// @return snapshot Snapshot data, with `active == false` when no snapshot is present.
     function loadSnapshot(bytes32 key) internal view returns (Snapshot memory snapshot) {
         bytes32 baseSlot = _snapshotBaseSlot(key);
         uint256 packedTokenInAndFlags = baseSlot.offset(0).asUint256().tload();
@@ -94,6 +114,9 @@ library MERAWalletUniswapV2SlippageTypes {
         }
     }
 
+    /// @notice Load a transient swap snapshot and deactivate it.
+    /// @param key Snapshot key derived from wallet, operation id, and call id.
+    /// @return snapshot Snapshot data, with `active == false` when no snapshot is present.
     function loadAndClearSnapshot(bytes32 key) internal returns (Snapshot memory snapshot) {
         bytes32 baseSlot = _snapshotBaseSlot(key);
         uint256 packedTokenInAndFlags = baseSlot.offset(0).asUint256().tload();

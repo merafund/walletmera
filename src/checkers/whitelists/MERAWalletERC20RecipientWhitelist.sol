@@ -14,16 +14,20 @@ contract MERAWalletERC20RecipientWhitelist is
     IMERAWalletERC20RecipientWhitelist,
     IMERAWalletERC20RecipientWhitelistErrors
 {
+    /// @notice Emitted when a recipient's local allow flag changes.
     event RecipientAllowedUpdated(address indexed recipient, bool allowed, address indexed caller);
+    /// @notice Emitted when the fallback whitelist changes.
     event FallbackWhitelistUpdated(
         address indexed previousFallback, address indexed newFallback, address indexed caller
     );
 
+    /// @notice Local allow flags by recipient or spender address.
     mapping(address recipient => bool allowed) public allowedRecipient;
 
-    /// @dev Secondary list consulted when `allowedRecipient[recipient]` is false.
+    /// @notice Secondary list consulted when `allowedRecipient[recipient]` is false.
     address public fallbackWhitelist;
 
+    /// @notice Creates a recipient whitelist owned by `initialOwner`.
     constructor(address initialOwner) Ownable(initialOwner) {}
 
     /// @notice Batch-set local allow flags; pairs `recipients[i]` with `allowed[i]`.
@@ -41,7 +45,7 @@ contract MERAWalletERC20RecipientWhitelist is
         }
     }
 
-    /// @notice Set optional fallback contract; pass address(0) to disable delegation.
+    /// @notice Sets optional fallback contract; pass address(0) to disable delegation.
     function setFallbackWhitelist(address newFallback) external onlyOwner {
         address previous = fallbackWhitelist;
         fallbackWhitelist = newFallback;

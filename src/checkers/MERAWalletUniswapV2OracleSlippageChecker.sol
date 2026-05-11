@@ -9,6 +9,7 @@ import {MERAWalletUniswapV2SlippageTypes} from "./types/MERAWalletUniswapV2Slipp
 /// @notice Validates Uniswap V2 Router02 swap calls against Chainlink spot prices using wallet balance deltas.
 /// @dev Swap endpoints are decoded from `call.data`; oracle stale/date checks are enforced.
 contract MERAWalletUniswapV2OracleSlippageChecker is MERAWalletOracleSlippageCheckerBase {
+    /// @notice Creates a Uniswap V2 oracle slippage checker.
     /// @param initialOwner Admin for router allowlist when `requireRouterAllowlist` is true (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS`.
     /// @param maxOracleStaleSeconds Max age of Chainlink `updatedAt`; must be `> 0`.
@@ -24,6 +25,7 @@ contract MERAWalletUniswapV2OracleSlippageChecker is MERAWalletOracleSlippageChe
         )
     {}
 
+    /// @inheritdoc MERAWalletOracleSlippageCheckerBase
     function _decodeSwapCheckData(MERAWalletTypes.Call calldata call)
         internal
         pure
@@ -44,6 +46,11 @@ contract MERAWalletUniswapV2OracleSlippageChecker is MERAWalletOracleSlippageChe
         });
     }
 
+    /// @notice Decodes supported Uniswap V2 Router02 swap calldata.
+    /// @param data Router calldata.
+    /// @return path Swap path.
+    /// @return ethIn Whether the input side is native ETH.
+    /// @return ethOut Whether the output side is native ETH.
     function _decodeUniswapV2Swap(bytes calldata data)
         private
         pure

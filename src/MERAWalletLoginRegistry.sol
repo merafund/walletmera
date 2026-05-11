@@ -18,19 +18,29 @@ contract MERAWalletLoginRegistry is
     IMERAWalletLoginRegistryErrors,
     Ownable
 {
+    /// @notice Optional authorization verifier used for short-login registrations.
     address public override authorizationVerifier;
+    /// @notice Whether short paid logins require verifier authorization.
     bool public immutable override REQUIRE_SHORT_LOGIN_AUTHORIZATION;
+    /// @notice Whether a factory address may register logins.
     mapping(address factory => bool allowed) public override isFactory;
+    /// @notice Stored registration commitments as `committedAt + 1`; zero means absent.
     mapping(bytes32 commitment => uint256 committedAt) public override commitments;
+    /// @notice Wallet registered for each login hash.
     mapping(bytes32 loginHash => address wallet) public override walletByLoginHash;
+    /// @notice Login hash registered for each wallet.
     mapping(address wallet => bytes32 loginHash) public override loginHashByWallet;
+    /// @notice Referrer login hash recorded for each login hash.
     mapping(bytes32 loginHash => bytes32 referrerLoginHash) public override referrerLoginHashByLoginHash;
+    /// @notice Pending migration data by old login hash.
     mapping(bytes32 oldLoginHash => MERAWalletLoginRegistryTypes.PendingLoginMigration migration)
         public
         override pendingLoginMigrationByOldLoginHash;
     mapping(bytes32 loginHash => string login) private _loginByHash;
 
+    /// @notice Base paid-login price.
     uint256 public override baseLoginPrice = MERAWalletLoginRegistryConstants.DEFAULT_BASE_LOGIN_PRICE;
+    /// @notice Multiplier applied to shorter paid logins.
     uint256 public override loginPriceMultiplier = MERAWalletLoginRegistryConstants.DEFAULT_LOGIN_PRICE_MULTIPLIER;
 
     modifier onlyFactory() {
@@ -42,13 +52,14 @@ contract MERAWalletLoginRegistry is
         REQUIRE_SHORT_LOGIN_AUTHORIZATION = requireShortLoginAuthorization;
     }
 
-    /// @notice Whitelist a factory permanently; removal is not supported (avoids bricking deployed factories).
+    /// @inheritdoc IMERAWalletLoginRegistry
     function addFactory(address factory) external override onlyOwner {
         require(factory != address(0), InvalidAddress());
         isFactory[factory] = true;
         emit FactoryAdded(factory);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function setAuthorizationVerifier(address newVerifier) external override onlyOwner {
         if (newVerifier != address(0)) {
             require(newVerifier.code.length != 0, InvalidAddress());
@@ -58,7 +69,7 @@ contract MERAWalletLoginRegistry is
         emit AuthorizationVerifierUpdated(previousVerifier, newVerifier);
     }
 
-    /// @notice Updates the base login price; must stay within pricing bounds in {MERAWalletLoginRegistryConstants}.
+    /// @inheritdoc IMERAWalletLoginRegistry
     function setBaseLoginPrice(uint256 newBaseLoginPrice) external override onlyOwner {
         require(
             newBaseLoginPrice >= MERAWalletLoginRegistryConstants.MIN_BASE_LOGIN_PRICE
@@ -70,6 +81,7 @@ contract MERAWalletLoginRegistry is
         emit BaseLoginPriceUpdated(previousPrice, newBaseLoginPrice);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function setLoginPriceMultiplier(uint256 newMultiplier) external override onlyOwner {
         require(
             newMultiplier >= MERAWalletLoginRegistryConstants.MIN_LOGIN_PRICE_MULTIPLIER
@@ -81,6 +93,7 @@ contract MERAWalletLoginRegistry is
         emit LoginPriceMultiplierUpdated(previousMultiplier, newMultiplier);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function withdraw() external override onlyOwner {
         uint256 amount = address(this).balance;
         require(amount != 0, NothingToWithdraw());
@@ -92,12 +105,14 @@ contract MERAWalletLoginRegistry is
         emit EthWithdrawn(to, amount);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function commit(bytes32 commitment) external override {
         require(commitments[commitment] == 0, CommitmentAlreadyExists());
         commitments[commitment] = block.timestamp + 1;
         emit LoginCommitmentMade(commitment, block.timestamp);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function registerLogin(
         string calldata login,
         address wallet,
@@ -157,8 +172,7 @@ contract MERAWalletLoginRegistry is
         emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
-    /// @notice Allows a wallet that already owns a login to set its referrer once,
-    /// only if no referrer was recorded during registration.
+    /// @inheritdoc IMERAWalletLoginRegistry
     function setReferrer(string calldata referrerLogin) external override {
         bytes32 loginHash = loginHashByWallet[msg.sender];
         require(loginHash != bytes32(0), LoginNotOwned());
@@ -173,6 +187,7 @@ contract MERAWalletLoginRegistry is
         emit LoginReferralRecorded(loginHash, referrerLoginHash, referrerLogin);
     }
 
+    /// @notice Requests migration of `oldLogin` to `newLogin` and `newWallet`.
     function requestLoginMigration(string calldata oldLogin, string calldata newLogin, address newWallet)
         external
         override
@@ -201,6 +216,7 @@ contract MERAWalletLoginRegistry is
         emit LoginMigrationRequested(oldLoginHash, oldLogin, newLoginHash, newLogin, msg.sender, newWallet);
     }
 
+    /// @notice Confirms a pending login migration as the new wallet.
     function confirmLoginMigration(string calldata oldLogin) external override {
         bytes32 oldLoginHash = _requireLoginHash(oldLogin);
         MERAWalletLoginRegistryTypes.PendingLoginMigration memory migration =
@@ -233,11 +249,13 @@ contract MERAWalletLoginRegistry is
         emit LoginTransferred(newLoginHash, newLogin, newWallet, previousWallet);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function priceOf(string calldata login) external view override returns (uint256) {
         _requireLoginHash(login);
         return _priceOfValidatedLength(bytes(login).length);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function walletOf(string calldata login) external view override returns (address) {
         if (bytes(login).length == 0) {
             return address(0);
@@ -245,14 +263,17 @@ contract MERAWalletLoginRegistry is
         return walletByLoginHash[_loginHash(login)];
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function loginOf(address wallet) external view override returns (string memory) {
         return _loginByHash[loginHashByWallet[wallet]];
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function loginByHash(bytes32 loginHash) external view override returns (string memory) {
         return _loginByHash[loginHash];
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function referrerLoginHashOf(string calldata login) external view override returns (bytes32) {
         if (bytes(login).length == 0) {
             return bytes32(0);
@@ -260,6 +281,7 @@ contract MERAWalletLoginRegistry is
         return referrerLoginHashByLoginHash[_loginHash(login)];
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function referrerLoginOf(string calldata login) external view override returns (string memory) {
         if (bytes(login).length == 0) {
             return "";
@@ -267,10 +289,12 @@ contract MERAWalletLoginRegistry is
         return _loginByHash[referrerLoginHashByLoginHash[_loginHash(login)]];
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function validateLogin(string calldata login) external pure override returns (bytes32) {
         return _requireLoginHash(login);
     }
 
+    /// @inheritdoc IMERAWalletLoginRegistry
     function makeCommitment(
         string calldata login,
         address wallet,

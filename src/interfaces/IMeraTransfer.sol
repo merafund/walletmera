@@ -6,22 +6,27 @@ pragma solidity 0.8.34;
 interface IMeraTransfer {
     /// @notice Category of right being transferred (e.g. role, allowance scope, governance).
     enum RightKind {
+        /// @notice No specific right kind was selected.
         Unspecified,
+        /// @notice A wallet role or controller authority.
         Role,
+        /// @notice An allowance or spending scope.
         Allowance,
+        /// @notice A governance power or delegation scope.
         Governance
     }
 
+    /// @notice Draft transfer intent for an abstract MERA-managed right.
     struct TransferIntent {
-        /// @dev Recipient of the right after migration or handover.
+        /// @notice Recipient of the right after migration or handover.
         address recipient;
-        /// @dev Kind of right (extend enum as products require).
+        /// @notice Kind of right (extend enum as products require).
         RightKind kind;
-        /// @dev Optional amount or weight (e.g. shares, token amount cap).
+        /// @notice Optional amount or weight (e.g. shares, token amount cap).
         uint256 amount;
-        /// @dev Optional deadline or valid-unix timestamp for the intent.
+        /// @notice Optional deadline or valid-unix timestamp for the intent.
         uint64 validUntil;
-        /// @dev Opaque payload (e.g. contract-specific metadata hash).
+        /// @notice Opaque payload (e.g. contract-specific metadata hash).
         bytes data;
     }
 }

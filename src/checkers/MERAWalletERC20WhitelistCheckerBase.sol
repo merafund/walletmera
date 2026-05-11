@@ -22,24 +22,32 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
     bytes32 internal constant _ASSET_WHITELIST_KEY = keccak256("MERA_ASSET_WHITELIST");
     bytes32 internal constant _RECIPIENT_WHITELIST_KEY = keccak256("MERA_RECIPIENT_WHITELIST");
 
+    /// @notice Reserved pause-agent flag getter kept for ABI compatibility.
     mapping(address agent => bool allowed) public isPauseAgent;
 
+    /// @notice Wallet-specific checker config written through {applyConfig}.
     mapping(address wallet => MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig) public walletConfig;
 
+    /// @notice Global fallback asset whitelist used when a wallet has no explicit asset whitelist.
     address public defaultAssetWhitelist;
+    /// @notice Global fallback recipient whitelist used when a wallet has no explicit recipient whitelist.
     address public defaultRecipientWhitelist;
 
+    /// @notice Emitted when a wallet-specific checker config changes.
     event WalletErc20WhitelistCheckerConfigUpdated(
         address indexed wallet, MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig config
     );
+    /// @notice Emitted when the global fallback asset whitelist changes.
     event DefaultAssetWhitelistUpdated(address indexed previous, address indexed newWhitelist, address indexed caller);
+    /// @notice Emitted when the global fallback recipient whitelist changes.
     event DefaultRecipientWhitelistUpdated(
         address indexed previous, address indexed newWhitelist, address indexed caller
     );
 
+    /// @notice Creates the checker with `initialOwner` as owner.
     constructor(address initialOwner) Ownable(initialOwner) {}
 
-    /// @dev Expected ERC20 selector (`IERC20.transfer` or `IERC20.approve`).
+    /// @notice Expected ERC20 selector (`IERC20.transfer` or `IERC20.approve`).
     function _expectedSelector() internal pure virtual returns (bytes4);
 
     /// @inheritdoc IMERAWalletTransactionChecker
@@ -53,12 +61,14 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         emit WalletErc20WhitelistCheckerConfigUpdated(msg.sender, decoded);
     }
 
+    /// @notice Sets the global fallback asset whitelist.
     function setDefaultAssetWhitelist(address newWhitelist) external onlyOwner {
         address previous = defaultAssetWhitelist;
         defaultAssetWhitelist = newWhitelist;
         emit DefaultAssetWhitelistUpdated(previous, newWhitelist, msg.sender);
     }
 
+    /// @notice Sets the global fallback recipient whitelist.
     function setDefaultRecipientWhitelist(address newWhitelist) external onlyOwner {
         address previous = defaultRecipientWhitelist;
         defaultRecipientWhitelist = newWhitelist;
@@ -70,6 +80,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         return (true, false);
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
     function checkBefore(MERAWalletTypes.Call calldata call, bytes32, uint256 callId) external override {
         require(call.value == 0, Erc20WhitelistNonZeroValue(callId));
 
@@ -88,8 +99,10 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         _requireCounterpartyAllowed(wallet, counterparty, callId);
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
     function checkAfter(MERAWalletTypes.Call calldata, bytes32, uint256) external override {}
 
+    /// @notice Returns the asset whitelist that applies to `wallet`.
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
         MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage walletCheckerConfig =
             walletConfig[wallet];
@@ -104,6 +117,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         return defaultAssetWhitelist;
     }
 
+    /// @notice Returns the recipient whitelist that applies to `wallet`.
     function _effectiveRecipientWhitelist(address wallet) internal view returns (address) {
         MERAWalletERC20WhitelistCheckerTypes.Erc20WhitelistCheckerConfig storage walletCheckerConfig =
             walletConfig[wallet];
@@ -118,6 +132,7 @@ abstract contract MERAWalletERC20WhitelistCheckerBase is
         return defaultRecipientWhitelist;
     }
 
+    /// @notice Resolves a whitelist route through `whitelistRouter`.
     function _routerWhitelist(address whitelistRouter, bytes32 key) internal view returns (address) {
         if (whitelistRouter == address(0)) {
             return address(0);

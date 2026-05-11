@@ -9,15 +9,24 @@ import {IMERAWalletLoginRegistry} from "./interfaces/IMERAWalletLoginRegistry.so
 /// @title MERAWalletMetaProxyCloneFactory
 /// @notice Deploys deterministic `BaseMERAWallet` meta-proxy clones with init params embedded as immutable args.
 contract MERAWalletMetaProxyCloneFactory {
+    /// @notice Base wallet implementation cloned by this factory.
     address public immutable WALLET_IMPLEMENTATION;
+    /// @notice Login registry used when registering deployed wallets.
     IMERAWalletLoginRegistry public immutable LOGIN_REGISTRY;
 
+    /// @notice Emitted after a wallet clone is deployed and registered.
     event WalletDeployed(bytes32 indexed loginHash, string login, address wallet);
 
+    /// @notice Reverts when the requested login is already registered.
     error LoginAlreadyRegistered();
+    /// @notice Reverts when the wallet implementation address has no code.
     error WalletImplementationNotDeployed();
+    /// @notice Reverts when the login registry address has no code.
     error LoginRegistryNotDeployed();
 
+    /// @notice Creates the factory.
+    /// @param walletImplementation Base wallet implementation to clone.
+    /// @param loginRegistry Registry used for login registration.
     constructor(address walletImplementation, address loginRegistry) {
         require(walletImplementation.code.length != 0, WalletImplementationNotDeployed());
         require(loginRegistry.code.length != 0, LoginRegistryNotDeployed());
@@ -25,6 +34,14 @@ contract MERAWalletMetaProxyCloneFactory {
         LOGIN_REGISTRY = IMERAWalletLoginRegistry(loginRegistry);
     }
 
+    /// @notice Deploys a deterministic wallet clone and registers `login`.
+    /// @param login Login to register for the new wallet.
+    /// @param params Wallet initialization parameters embedded as immutable args.
+    /// @param secret Commitment secret for paid registration.
+    /// @param deadline Registration authorization deadline.
+    /// @param authorization Optional authorization payload for short-login registration.
+    /// @param referrerLogin Optional referrer login.
+    /// @return wallet Deployed wallet clone address.
     function deployWallet(
         string calldata login,
         MERAWalletTypes.WalletInitParams calldata params,
@@ -44,6 +61,9 @@ contract MERAWalletMetaProxyCloneFactory {
     }
 
     /// @notice Counterfactual wallet address for `login` and `params` using this factory as CREATE2 deployer.
+    /// @param login Login used as the deterministic salt source.
+    /// @param params Wallet initialization parameters embedded as immutable args.
+    /// @return Counterfactual wallet address.
     function predictWallet(string calldata login, MERAWalletTypes.WalletInitParams calldata params)
         external
         view

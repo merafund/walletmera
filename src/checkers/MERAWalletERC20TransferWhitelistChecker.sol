@@ -7,6 +7,7 @@ import {MERAWalletERC20WhitelistCheckerBase} from "./MERAWalletERC20WhitelistChe
 
 /// @notice Validates wallet ERC20 `transfer` calls: optional token allowlist plus recipient (`to`) allowlist.
 contract MERAWalletERC20TransferWhitelistChecker is MERAWalletERC20WhitelistCheckerBase {
+    /// @notice Creates a transfer whitelist checker owned by `initialOwner`.
     constructor(address initialOwner) MERAWalletERC20WhitelistCheckerBase(initialOwner) {}
 
     /// @inheritdoc MERAWalletERC20WhitelistCheckerBase

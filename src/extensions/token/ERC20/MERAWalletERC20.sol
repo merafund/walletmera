@@ -5,7 +5,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {MERAWalletMemoryBatches} from "../../MERAWalletMemoryBatches.sol";
 
+/// @notice ERC20 convenience entrypoints for MERA wallets.
 abstract contract MERAWalletERC20 is MERAWalletMemoryBatches {
+    /// @notice Executes a single ERC20 transfer immediately.
     function transferERC20(
         address token,
         address to,

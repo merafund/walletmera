@@ -9,21 +9,29 @@ import {MERAWalletLoginRegistryTypes} from "./types/MERAWalletLoginRegistryTypes
 /// @title MERALoginSignatureVerifier
 /// @notice Verifies MERA login deployment authorizations signed by an EOA or EIP-1271 wallet.
 contract MERALoginSignatureVerifier is EIP712, IMERALoginAuthorizationVerifier {
+    /// @notice EIP-712 type hash for login authorization messages.
     bytes32 public constant AUTHORIZATION_TYPEHASH = keccak256(
         "LoginAuthorization(address registry,address factory,bytes32 loginHash,address wallet,uint256 chainId,uint256 deadline)"
     );
 
+    /// @notice Account whose EOA or EIP-1271 signature authorizes protected registrations.
     address public immutable AUTHORIZER;
 
+    /// @notice Reverts when the configured authorizer is zero.
     error InvalidAuthorizer();
+    /// @notice Reverts when a registration authorization is past its deadline.
     error AuthorizationExpired();
+    /// @notice Reverts when authorization bytes are empty or fail signature validation.
     error InvalidAuthorization();
 
+    /// @notice Creates a verifier bound to `authorizer`.
+    /// @param authorizer EOA or EIP-1271 wallet allowed to sign login authorizations.
     constructor(address authorizer) EIP712("MERA Login Authorization", "1") {
         require(authorizer != address(0), InvalidAuthorizer());
         AUTHORIZER = authorizer;
     }
 
+    /// @inheritdoc IMERALoginAuthorizationVerifier
     function validateRegistration(MERAWalletLoginRegistryTypes.RegistrationValidationParams calldata params)
         external
         view
@@ -35,6 +43,13 @@ contract MERALoginSignatureVerifier is EIP712, IMERALoginAuthorizationVerifier {
         require(SignatureChecker.isValidSignatureNow(AUTHORIZER, digest, params.authorization), InvalidAuthorization());
     }
 
+    /// @notice Computes the EIP-712 digest that must be signed by {AUTHORIZER}.
+    /// @param registry Registry address included in the authorization.
+    /// @param factory Factory address included in the authorization.
+    /// @param loginHash Login hash included in the authorization.
+    /// @param wallet Wallet address included in the authorization.
+    /// @param deadline Authorization deadline.
+    /// @return EIP-712 digest for signature validation.
     function hashAuthorization(address registry, address factory, bytes32 loginHash, address wallet, uint256 deadline)
         public
         view

@@ -10,18 +10,24 @@ import {IMERAWalletAssetWhiteListErrors} from "../errors/IMERAWalletAssetWhiteLi
 /// @notice Ownable allowlist for swap path assets with optional fallback list contract.
 /// @dev Avoid circular `fallbackWhitelist` graphs; resolution is unbounded recursion in the EVM.
 contract MERAWalletAssetWhiteList is Ownable, IMERAWalletAssetWhiteList, IMERAWalletAssetWhiteListErrors {
+    /// @notice Emitted when an asset's local allow flag changes.
     event AssetAllowedUpdated(address indexed asset, bool allowed, address indexed caller);
+    /// @notice Emitted when an asset's local oracle source changes.
     event AssetSourceUpdated(address indexed asset, address indexed source, address indexed caller);
+    /// @notice Emitted when the fallback whitelist changes.
     event FallbackWhitelistUpdated(
         address indexed previousFallback, address indexed newFallback, address indexed caller
     );
 
+    /// @notice Local allow flags by asset address.
     mapping(address asset => bool allowed) public allowedAsset;
+    /// @notice Local price-feed sources by asset address.
     mapping(address asset => address source) public localAssetSource;
 
-    /// @dev Secondary list consulted when `allowedAsset[asset]` is false.
+    /// @notice Secondary list consulted when local allow/source data is absent.
     address public fallbackWhitelist;
 
+    /// @notice Creates an asset whitelist owned by `initialOwner`.
     constructor(address initialOwner) Ownable(initialOwner) {}
 
     /// @notice Batch-set local allow flags; pairs `assets[i]` with `allowed[i]`.
@@ -55,7 +61,7 @@ contract MERAWalletAssetWhiteList is Ownable, IMERAWalletAssetWhiteList, IMERAWa
         }
     }
 
-    /// @notice Set optional fallback contract; pass address(0) to disable delegation.
+    /// @notice Sets optional fallback contract; pass address(0) to disable delegation.
     function setFallbackWhitelist(address newFallback) external onlyOwner {
         address previous = fallbackWhitelist;
         fallbackWhitelist = newFallback;

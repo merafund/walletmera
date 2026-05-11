@@ -6,10 +6,10 @@ import {BaseMERAWallet} from "../BaseMERAWallet.sol";
 
 /// @notice Execution helpers for memory-built `Call[]` batches (used by {MERAWalletMemoryBatches} extensions).
 abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
-    /// @dev Hook before proposing extension batches built in memory; default no-op.
+    /// @notice Hook before proposing extension batches built in memory; default no-op.
     function _beforeProposeWithCallsMemory(MERAWalletTypes.Call[] memory calls, bytes32 operationId) internal virtual {}
 
-    /// @dev Memory-batch equivalent of { _beforeExecute }; override in extensions if needed.
+    /// @notice Memory-batch equivalent of {_beforeExecute}; override in extensions if needed.
     function _beforeExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
         internal
         virtual
@@ -18,7 +18,7 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
         _invokeBeforeOptionalCheckerWithCallMemory(callData, operationId, callId);
     }
 
-    /// @dev Memory-batch equivalent of { _afterExecute }; override in extensions if needed.
+    /// @notice Memory-batch equivalent of {_afterExecute}; override in extensions if needed.
     function _afterExecuteWithCallMemory(MERAWalletTypes.Call memory callData, bytes32 operationId, uint256 callId)
         internal
         virtual
@@ -27,7 +27,7 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
         _invokeAfterOptionalCheckerWithCallMemory(callData, operationId, callId);
     }
 
-    /// @dev Same as { _executeCallsWithHooks } for batches built in memory (extensions).
+    /// @notice Executes memory-built batches with the same hook flow as calldata execution.
     function _executeCallsWithHooksWithCallsMemory(
         MERAWalletTypes.Call[] memory calls,
         bytes32 operationId,
@@ -46,6 +46,7 @@ abstract contract MERAWalletMemoryBatchExecution is BaseMERAWallet {
         }
     }
 
+    /// @notice Executes `callData` while setting transient execution context for self-calls.
     function _callWithExecutionContextMemory(MERAWalletTypes.Call memory callData, MERAWalletTypes.Role contextRole)
         internal
         returns (bool success, bytes memory result)

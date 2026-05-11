@@ -28,27 +28,31 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
 {
     using MERAWalletUniswapV2SlippageTypes for bytes32;
 
-    /// @dev Max allowed shortfall vs oracle-implied output (basis points). E.g. 100 = 1% worse than oracle is allowed.
+    /// @notice Max allowed shortfall vs oracle-implied output in basis points.
     uint256 public immutable MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
 
+    /// @notice Basis-point denominator.
     uint256 public constant BPS = 10_000;
     bytes32 internal constant _ASSET_WHITELIST_KEY = keccak256("MERA_ASSET_WHITELIST");
 
-    /// @dev Reject Chainlink answers older than this many seconds.
+    /// @notice Reject Chainlink answers older than this many seconds.
     uint256 public immutable MAX_ORACLE_STALE_SECONDS;
 
+    /// @notice Whether router calls must target an explicitly allowed router.
     /// @dev When false, {allowedRouter} and {setAllowedRouters} are ignored; any `call.target` passes the router gate.
     /// Asset whitelist and oracle checks still apply; malicious routers are not blocked by allowlist.
     bool public immutable REQUIRE_ROUTER_ALLOWLIST;
 
+    /// @notice Whether an address may pause the checker.
     mapping(address agent => bool allowed) public isPauseAgent;
 
+    /// @notice Router allow flags used when {REQUIRE_ROUTER_ALLOWLIST} is true.
     mapping(address router => bool allowed) public allowedRouter;
 
-    /// @dev Full per-wallet config from {applyConfig}; `assetWhitelist` may be zero to fall back to {defaultAssetWhitelist}.
+    /// @notice Full per-wallet config from {applyConfig}.
     mapping(address wallet => MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig) public
         walletSlippageCheckerConfig;
-    /// @dev Used when `walletSlippageCheckerConfig[wallet].assetWhitelist` is zero.
+    /// @notice Fallback asset whitelist used when wallet config and router do not provide one.
     address public defaultAssetWhitelist;
 
     /// @param initialOwner Admin for router allowlist when `requireRouterAllowlist` is true (see {Ownable}).
@@ -68,10 +72,12 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         REQUIRE_ROUTER_ALLOWLIST = requireRouterAllowlist;
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
     function hookModes() external pure override returns (bool enableBefore, bool enableAfter) {
         return (true, true);
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
     function checkBefore(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId)
         external
         override
@@ -98,6 +104,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         );
     }
 
+    /// @inheritdoc IMERAWalletTransactionChecker
     function checkAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId)
         external
         override
@@ -155,17 +162,20 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         emit DefaultAssetWhitelistUpdated(previous, newWhitelist, msg.sender);
     }
 
+    /// @notice Pauses before/after checks.
     /// @dev Callable by the owner or any address marked as a pause agent via {setPauseAgents}. Uses {Pausable-_pause}.
     function pause() external {
         require(msg.sender == owner() || isPauseAgent[msg.sender], SlippageNotPauseAuthorized());
         _pause();
     }
 
+    /// @notice Resumes before/after checks.
     /// @dev Only the owner may resume checks after {pause}. Uses {Pausable-_unpause}.
     function unpause() external onlyOwner {
         _unpause();
     }
 
+    /// @notice Decodes swap endpoint data for one checker flavor.
     function _decodeSwapCheckData(MERAWalletTypes.Call calldata call)
         internal
         view
@@ -216,6 +226,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         );
     }
 
+    /// @notice Performs the balance-delta oracle comparison after the swap call.
     function _checkSwapAfter(MERAWalletTypes.Call calldata call, bytes32 operationId, uint256 callId) internal {
         address wallet = msg.sender;
         bytes32 key = _snapshotKey(wallet, operationId, callId);
@@ -268,6 +279,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         require(scaledOutputNotionalNumerator >= scaledInputNotionalNumeratorWithTolerance, SwapWorseThanOracle());
     }
 
+    /// @notice Returns the asset whitelist that applies to `wallet`.
     function _effectiveAssetWhitelist(address wallet) internal view returns (address) {
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig storage walletSlippageCheckerConfigStorage =
             walletSlippageCheckerConfig[wallet];
@@ -283,6 +295,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         return defaultAssetWhitelist;
     }
 
+    /// @notice Reverts when `router` is not allowed and router allowlisting is required.
     function _requireAllowedRouter(address router, uint256 callId) internal view {
         if (!REQUIRE_ROUTER_ALLOWLIST) {
             return;
@@ -290,6 +303,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         require(allowedRouter[router], RouterNotAllowed(router, callId));
     }
 
+    /// @notice Resolves a whitelist route through `whitelistRouter`.
     function _routerWhitelist(address whitelistRouter, bytes32 key) internal view returns (address) {
         if (whitelistRouter == address(0)) {
             return address(0);
@@ -297,6 +311,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         return IMERAWalletWhitelistRouter(whitelistRouter).whitelistByHash(key);
     }
 
+    /// @notice Returns wallet-specific oracle deviation limit or the immutable default.
     function _effectiveMaxOracleNegativeDeviationBps(address wallet) internal view returns (uint256) {
         uint256 walletLimit = walletSlippageCheckerConfig[wallet].maxOracleNegativeDeviationBps;
         if (walletLimit != 0) {
@@ -305,6 +320,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         return MAX_ORACLE_NEGATIVE_DEVIATION_BPS;
     }
 
+    /// @notice Returns wallet-specific oracle staleness limit or the immutable default.
     function _effectiveMaxOracleStaleSeconds(address wallet) internal view returns (uint256) {
         uint256 walletLimit = walletSlippageCheckerConfig[wallet].maxOracleStaleSeconds;
         if (walletLimit != 0) {
@@ -348,6 +364,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         }
     }
 
+    /// @notice Reads and validates the latest oracle answer for `token`.
     function _readFeed(address token, address priceFeedAddress, uint256 maxOracleStaleSeconds)
         internal
         view

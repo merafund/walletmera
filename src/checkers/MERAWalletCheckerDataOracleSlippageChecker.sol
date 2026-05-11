@@ -8,6 +8,7 @@ import {MERAWalletUniswapV2SlippageTypes} from "./types/MERAWalletUniswapV2Slipp
 /// @notice Validates swaps against Chainlink spot prices using endpoint tokens supplied in `call.checkerData`.
 /// @dev This checker never decodes `call.data`; calldata path/deadline are intentionally ignored.
 contract MERAWalletCheckerDataOracleSlippageChecker is MERAWalletOracleSlippageCheckerBase {
+    /// @notice Creates a checker-data oracle slippage checker.
     /// @param initialOwner Admin for router allowlist when `requireRouterAllowlist` is true (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS`.
     /// @param maxOracleStaleSeconds Max age of Chainlink `updatedAt`; must be `> 0`.
@@ -23,6 +24,7 @@ contract MERAWalletCheckerDataOracleSlippageChecker is MERAWalletOracleSlippageC
         )
     {}
 
+    /// @inheritdoc MERAWalletOracleSlippageCheckerBase
     function _decodeSwapCheckData(MERAWalletTypes.Call calldata call)
         internal
         pure

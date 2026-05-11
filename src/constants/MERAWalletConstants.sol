@@ -6,7 +6,9 @@ library MERAWalletConstants {
     /// @dev Global deterministic CREATE2 deployer (Nick Johnson / Arachnid); same address on chains where it is deployed.
     address internal constant DETERMINISTIC_CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     // --- EIP-1271 (https://eips.ethereum.org/EIPS/eip-1271) ---
+    /// @notice Magic value returned by successful EIP-1271 signature validation.
     bytes4 internal constant EIP1271_MAGICVALUE = 0x1626ba7e;
+    /// @notice Value returned by failed EIP-1271 signature validation.
     bytes4 internal constant EIP1271_INVALID = 0xffffffff;
 
     // --- Calldata ---
@@ -14,16 +16,25 @@ library MERAWalletConstants {
     uint256 internal constant FUNCTION_SELECTOR_LENGTH = 4;
 
     // --- Role ranks (numeric: Primary < Backup < Emergency; agent caps and cancel/clearVeto use {_roleRank}; lower = stronger for wallet authority) ---
+    /// @notice Numeric rank for `Role.None`.
     uint256 internal constant ROLE_RANK_NONE = 0;
+    /// @notice Numeric rank for `Role.Primary`.
     uint256 internal constant ROLE_RANK_PRIMARY = 1;
+    /// @notice Numeric rank for `Role.Backup`.
     uint256 internal constant ROLE_RANK_BACKUP = 2;
+    /// @notice Numeric rank for `Role.Emergency`.
     uint256 internal constant ROLE_RANK_EMERGENCY = 3;
 
     // --- Timelock bounds (aligned with uint56 per-path delays in call policies) ---
+    /// @notice Minimum allowed timelock delay.
     uint256 internal constant MIN_TIMELOCK_DELAY = 0;
+    /// @notice Maximum allowed timelock delay.
     uint256 internal constant MAX_TIMELOCK_DELAY = 90 days;
+    /// @notice Default timelock delay for primary-controlled paths.
     uint256 internal constant DEFAULT_PRIMARY_TIMELOCK = 24 hours;
+    /// @notice Default timelock delay for backup-controlled paths.
     uint256 internal constant DEFAULT_BACKUP_TIMELOCK = 12 hours;
+    /// @notice Default timelock delay for emergency-controlled paths.
     uint256 internal constant DEFAULT_EMERGENCY_TIMELOCK = 0;
     /// @dev Emergency-only delay for `transferOwnership` / `grantRole` call-path policies installed in wallet init (primary/backup forbidden for those selectors).
     uint256 internal constant OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY = 12 hours;
@@ -42,10 +53,13 @@ library MERAWalletConstants {
     uint256 internal constant MAX_REQUIRED_CHECKERS_PER_LIST = 8;
 
     // --- Safe mode ---
+    /// @notice Minimum duration for a safe-mode activation.
     uint256 internal constant SAFE_MODE_MIN_DURATION = 30 days;
+    /// @notice Maximum duration for a safe-mode activation.
     uint256 internal constant SAFE_MODE_MAX_DURATION = 90 days;
 
     // --- Emergency agents ---
+    /// @notice Default lifetime for emergency-level agents after activation.
     uint256 internal constant DEFAULT_EMERGENCY_AGENT_LIFETIME = 30 days;
     /// @dev Upper bound for `emergencyAgentLifetime` (max active window for emergency-level agents).
     uint256 internal constant MAX_EMERGENCY_AGENT_LIFETIME = 90 days;
