@@ -123,6 +123,62 @@ contract MERAWalletThresholdGuardianTest is Test {
         assertEq(wallet.emergency(), newEmergency);
     }
 
+    function test_MemberCanFreezePrimary() public {
+        vm.prank(member1);
+        guardian.freezePrimary();
+
+        assertTrue(wallet.frozenPrimary());
+    }
+
+    function test_MemberCanFreezeBackup() public {
+        vm.prank(member1);
+        guardian.freezeBackup();
+
+        assertTrue(wallet.frozenBackup());
+    }
+
+    function test_MemberCanEnterSafeMode() public {
+        uint256 duration = 30 days;
+
+        vm.prank(member1);
+        guardian.enterSafeMode(duration);
+
+        assertEq(wallet.safeModeBefore(), block.timestamp + duration);
+        assertTrue(wallet.safeModeUsed());
+    }
+
+    function test_NonMember_CannotFreezeOrEnterSafeMode() public {
+        vm.prank(outsider);
+        vm.expectRevert(MERAWalletThresholdGuardian.NotMember.selector);
+        guardian.freezePrimary();
+
+        vm.prank(outsider);
+        vm.expectRevert(MERAWalletThresholdGuardian.NotMember.selector);
+        guardian.freezeBackup();
+
+        vm.prank(outsider);
+        vm.expectRevert(MERAWalletThresholdGuardian.NotMember.selector);
+        guardian.enterSafeMode(30 days);
+    }
+
+    function test_MemberCannotFreezeOrEnterSafeModeBeforeWalletSet() public {
+        address[] memory members = new address[](1);
+        members[0] = member1;
+        MERAWalletThresholdGuardian g = new MERAWalletThresholdGuardian(address(0), 1, members);
+
+        vm.prank(member1);
+        vm.expectRevert(MERAWalletThresholdGuardian.InvalidWallet.selector);
+        g.freezePrimary();
+
+        vm.prank(member1);
+        vm.expectRevert(MERAWalletThresholdGuardian.InvalidWallet.selector);
+        g.freezeBackup();
+
+        vm.prank(member1);
+        vm.expectRevert(MERAWalletThresholdGuardian.InvalidWallet.selector);
+        g.enterSafeMode(30 days);
+    }
+
     function test_NonMember_CannotProposeOrApprove() public {
         vm.prank(outsider);
         vm.expectRevert(MERAWalletThresholdGuardian.NotMember.selector);

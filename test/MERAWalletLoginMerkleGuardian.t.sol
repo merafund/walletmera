@@ -215,6 +215,96 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         assertEq(wallet.emergency(), newEmergency);
     }
 
+    function test_EligibleLoginOwnerCanFreezePrimary() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+
+        vm.prank(address(aliceWallet));
+        guardian.freezePrimary(address(wallet));
+
+        assertTrue(wallet.frozenPrimary());
+    }
+
+    function test_EligibleLoginOwnerCanFreezeBackup() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+
+        vm.prank(address(aliceWallet));
+        guardian.freezeBackup(address(wallet));
+
+        assertTrue(wallet.frozenBackup());
+    }
+
+    function test_EligibleLoginOwnerCanEnterSafeMode() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+        uint256 duration = 30 days;
+
+        vm.prank(address(aliceWallet));
+        guardian.enterSafeMode(address(wallet), duration);
+
+        assertEq(wallet.safeModeBefore(), block.timestamp + duration);
+        assertTrue(wallet.safeModeUsed());
+    }
+
+    function test_EmergencyActionsRequireEligibleLoginOwner() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+
+        vm.prank(outsider);
+        vm.expectRevert(
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginNotEligible.selector, outsider, bytes32(0))
+        );
+        guardian.freezePrimary(address(wallet));
+
+        vm.prank(outsider);
+        vm.expectRevert(
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginNotEligible.selector, outsider, bytes32(0))
+        );
+        guardian.freezeBackup(address(wallet));
+
+        vm.prank(outsider);
+        vm.expectRevert(
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginNotEligible.selector, outsider, bytes32(0))
+        );
+        guardian.enterSafeMode(address(wallet), 30 days);
+    }
+
+    function test_EmergencyActionsRequireTargetWalletGuardianMatch() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+        BaseMERAWallet otherWallet = new BaseMERAWallet(primary, backup, emergency, address(0), address(0xBEEF));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.TargetWalletGuardianMismatch.selector);
+        guardian.freezePrimary(address(otherWallet));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.TargetWalletGuardianMismatch.selector);
+        guardian.freezeBackup(address(otherWallet));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.TargetWalletGuardianMismatch.selector);
+        guardian.enterSafeMode(address(otherWallet), 30 days);
+    }
+
+    function test_EmergencyActionsRejectZeroTargetWallet() public {
+        vm.prank(address(aliceWallet));
+        guardian.publishLoginList(loginHashes, _proofs(loginHashes));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
+        guardian.freezePrimary(address(0));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
+        guardian.freezeBackup(address(0));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
+        guardian.enterSafeMode(address(0), 30 days);
+    }
+
     function test_ActiveProposal_NotFoundReverts() public {
         bytes32 badId = keccak256("nonexistent");
         vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.ProposalNotFound.selector, badId));

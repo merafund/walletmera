@@ -164,11 +164,34 @@ contract MERAWalletLoginMerkleGuardian {
         emit ProposalExecuted(proposalId, msg.sender, proposal.newEmergency);
     }
 
+    function freezePrimary(address wallet_) external {
+        _requireEligibleLoginOwner(msg.sender);
+        _requireTargetWallet(wallet_);
+        IBaseMERAWallet(payable(wallet_)).setFrozenPrimary(true);
+    }
+
+    function freezeBackup(address wallet_) external {
+        _requireEligibleLoginOwner(msg.sender);
+        _requireTargetWallet(wallet_);
+        IBaseMERAWallet(payable(wallet_)).setFrozenBackup(true);
+    }
+
+    function enterSafeMode(address wallet_, uint256 duration) external {
+        _requireEligibleLoginOwner(msg.sender);
+        _requireTargetWallet(wallet_);
+        IBaseMERAWallet(payable(wallet_)).enterSafeMode(duration);
+    }
+
     function _requireEligibleLoginOwner(address owner) internal view returns (bytes32 loginHash) {
         require(loginListPublished, LoginListNotPublished());
 
         loginHash = LOGIN_REGISTRY.loginHashByWallet(owner);
         require(loginHash != bytes32(0) && publishedLoginHash[loginHash], LoginNotEligible(owner, loginHash));
+    }
+
+    function _requireTargetWallet(address wallet_) internal view {
+        require(wallet_ != address(0), InvalidWallet());
+        require(IBaseMERAWallet(payable(wallet_)).guardian() == address(this), TargetWalletGuardianMismatch());
     }
 
     function _activeProposal(bytes32 proposalId) internal view returns (Proposal storage proposal) {

@@ -142,12 +142,34 @@ contract MERAWalletThresholdGuardian {
         emit ProposalExecuted(proposalId, msg.sender, proposal.newEmergency);
     }
 
+    function freezePrimary() external {
+        _requireMember();
+        _requireWalletSet();
+        IBaseMERAWallet(payable(wallet)).setFrozenPrimary(true);
+    }
+
+    function freezeBackup() external {
+        _requireMember();
+        _requireWalletSet();
+        IBaseMERAWallet(payable(wallet)).setFrozenBackup(true);
+    }
+
+    function enterSafeMode(uint256 duration) external {
+        _requireMember();
+        _requireWalletSet();
+        IBaseMERAWallet(payable(wallet)).enterSafeMode(duration);
+    }
+
     function getMembers() external view returns (address[] memory) {
         return _members;
     }
 
     function _requireMember() internal view {
         require(isMember[msg.sender], NotMember());
+    }
+
+    function _requireWalletSet() internal view {
+        require(wallet != address(0), InvalidWallet());
     }
 
     function _activeProposal(bytes32 proposalId) internal view returns (Proposal storage proposal) {
