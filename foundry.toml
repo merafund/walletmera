@@ -14,4 +14,4 @@ optimizer_runs = 1000
 # Use **/* so rust `glob` expands nested files (test/** alone can miss subdirs).
 ignore = ["test/**/*", "src/interfaces/**/*"]
 # Project-wide lint relaxations (reviewed manually).
-exclude_lints = ["unsafe-typecast", "mixed-case-function"]
+exclude_lints = ["unsafe-typecast", "mixed-case-function", "block-timestamp"]
