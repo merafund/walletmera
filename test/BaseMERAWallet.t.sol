@@ -66,9 +66,18 @@ contract BaseMERAWalletHarness is BaseMERAWallet {
 }
 
 contract BaseMERAWalletTest is Test {
-    uint256 internal primaryPk = 0xA11CE;
-    uint256 internal backupPk = 0xB0B;
-    uint256 internal emergencyPk = 0xE911;
+    uint256 internal constant PRIMARY_PK = 0xA11CE;
+    uint256 internal constant BACKUP_PK = 0xB0B;
+    uint256 internal constant EMERGENCY_PK = 0xE911;
+    uint256 internal constant DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS = 100;
+    uint256 internal constant DEFAULT_MAX_ORACLE_STALE_SECONDS = 3600;
+    uint256 internal constant ROLE_TIMELOCK_PRIMARY_SALT = 7101;
+    uint256 internal constant ROLE_TIMELOCK_BACKUP_SALT = 7102;
+    uint256 internal constant ROLE_TIMELOCK_EMERGENCY_SALT = 7103;
+
+    uint256 internal primaryPk = PRIMARY_PK;
+    uint256 internal backupPk = BACKUP_PK;
+    uint256 internal emergencyPk = EMERGENCY_PK;
 
     address internal primary = vm.addr(primaryPk);
     address internal backup = vm.addr(backupPk);
@@ -164,7 +173,7 @@ contract BaseMERAWalletTest is Test {
     function test_SetPrimary_SelfCallRevertsDuringSafeMode() public {
         BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
         vm.prank(emergency);
-        h.enterSafeMode(30 days);
+        h.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
 
         MERAWalletTypes.Call memory callData = MERAWalletTypes.Call({
             target: address(h),
@@ -213,7 +222,7 @@ contract BaseMERAWalletTest is Test {
     function test_SetBackup_SelfCallRevertsDuringSafeMode() public {
         BaseMERAWalletHarness h = new BaseMERAWalletHarness(primary, backup, emergency, address(0), address(0));
         vm.prank(emergency);
-        h.enterSafeMode(30 days);
+        h.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
 
         MERAWalletTypes.Call memory callData = MERAWalletTypes.Call({
             target: address(h),
@@ -372,10 +381,10 @@ contract BaseMERAWalletTest is Test {
     function test_DefaultRoleTimelocksAndEmergencyAgentLifetime() public {
         BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), address(0));
 
-        assertEq(w.roleTimelock(MERAWalletTypes.Role.Primary), 24 hours);
-        assertEq(w.roleTimelock(MERAWalletTypes.Role.Backup), 12 hours);
-        assertEq(w.roleTimelock(MERAWalletTypes.Role.Emergency), 0);
-        assertEq(w.emergencyAgentLifetime(), 30 days);
+        assertEq(w.roleTimelock(MERAWalletTypes.Role.Primary), MERAWalletConstants.DEFAULT_PRIMARY_TIMELOCK);
+        assertEq(w.roleTimelock(MERAWalletTypes.Role.Backup), MERAWalletConstants.DEFAULT_BACKUP_TIMELOCK);
+        assertEq(w.roleTimelock(MERAWalletTypes.Role.Emergency), MERAWalletConstants.DEFAULT_EMERGENCY_TIMELOCK);
+        assertEq(w.emergencyAgentLifetime(), MERAWalletConstants.DEFAULT_EMERGENCY_AGENT_LIFETIME);
     }
 
     function test_DefaultAdminSelectorPolicies_EmergencyHasNoTimelock_PrimaryAndBackupForbidden() public view {
@@ -433,9 +442,9 @@ contract BaseMERAWalletTest is Test {
         BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
 
         // safeModeBefore is the timestamp when restrictions lift (entered + duration).
-        uint256 expectedExpiry = block.timestamp + 30 days;
+        uint256 expectedExpiry = block.timestamp + MERAWalletConstants.SAFE_MODE_MIN_DURATION;
         vm.prank(guardianAddr);
-        w.enterSafeMode(30 days);
+        w.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
         assertTrue(w.safeModeUsed());
         assertEq(w.safeModeBefore(), expectedExpiry);
 
@@ -459,7 +468,7 @@ contract BaseMERAWalletTest is Test {
         BaseMERAWallet w = new BaseMERAWallet(primary, backup, emergency, address(0), guardianAddr);
 
         vm.prank(guardianAddr);
-        w.enterSafeMode(30 days);
+        w.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
         vm.warp(w.safeModeBefore() + 1);
 
         vm.prank(emergency);
@@ -2286,8 +2295,9 @@ contract BaseMERAWalletTest is Test {
     }
 
     function test_SetOptionalChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
-        MERAWalletUniswapV2OracleSlippageChecker slip =
-            new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 3600, true);
+        MERAWalletUniswapV2OracleSlippageChecker slip = new MERAWalletUniswapV2OracleSlippageChecker(
+            emergency, DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS, DEFAULT_MAX_ORACLE_STALE_SECONDS, true
+        );
         MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =
             MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig({
@@ -2861,10 +2871,10 @@ contract BaseMERAWalletTest is Test {
 
     function test_ProposeWithRelay_RelayDeadlineBeforeTimelock_Reverts() public {
         vm.startPrank(emergency);
-        _setAllRoleTimelocks(1 days);
+        _setAllRoleTimelocks(MERAWalletConstants.DEFAULT_PRIMARY_TIMELOCK);
         vm.stopPrank();
 
-        uint64 badDeadline = uint64(block.timestamp + 12 hours);
+        uint64 badDeadline = uint64(block.timestamp + MERAWalletConstants.DEFAULT_PRIMARY_TIMELOCK / 2);
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
         MERAWalletTypes.RelayProposeConfig memory relayConfig =
@@ -2992,13 +3002,16 @@ contract BaseMERAWalletTest is Test {
 
     function _setAllRoleTimelocks(uint256 delay) internal {
         _executeWalletSelfCall(
-            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Primary, delay), 7101
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Primary, delay),
+            ROLE_TIMELOCK_PRIMARY_SALT
         );
         _executeWalletSelfCall(
-            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Backup, delay), 7102
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Backup, delay),
+            ROLE_TIMELOCK_BACKUP_SALT
         );
         _executeWalletSelfCall(
-            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Emergency, delay), 7103
+            abi.encodeWithSelector(wallet.setRoleTimelock.selector, MERAWalletTypes.Role.Emergency, delay),
+            ROLE_TIMELOCK_EMERGENCY_SALT
         );
     }
 
@@ -3344,7 +3357,7 @@ contract BaseMERAWalletTest is Test {
         address target = address(0x2222);
         vm.startPrank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31290);
-        wallet.enterSafeMode(30 days);
+        wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
         vm.stopPrank();
 
         MERAWalletTypes.Call[] memory calls =
@@ -3516,7 +3529,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 1);
     }
 
-    // Line 905: _setLifeController early-return when controller already has the desired state
+    // Coverage: _setLifeController early-return when controller already has the desired state
     function test_SetLifeControllers_NoopWhenAlreadyEnabled() public {
         assertTrue(wallet.isLifeController(emergency));
         address[] memory controllers = new address[](1);
@@ -3526,20 +3539,20 @@ contract BaseMERAWalletTest is Test {
         assertTrue(wallet.isLifeController(emergency)); // unchanged
     }
 
-    // Line 920: constructor reverts when an essential address is zero
+    // Coverage: constructor reverts when an essential address is zero
     function test_Constructor_ZeroPrimaryReverts() public {
         vm.expectRevert(IBaseMERAWalletErrors.InvalidAddress.selector);
         new BaseMERAWallet(address(0), backup, emergency, address(0), address(0));
     }
 
-    // Line 1099: _set1271Signer reverts when initialSigner is not address(0)/primary/backup/emergency
+    // Coverage: _set1271Signer reverts when initialSigner is not address(0)/primary/backup/emergency
     function test_Constructor_InvalidSignerReverts() public {
         address badSigner = address(0xBAD5163);
         vm.expectRevert(IBaseMERAWalletErrors.InvalidSigner.selector);
         new BaseMERAWallet(primary, backup, emergency, badSigner, address(0));
     }
 
-    // Line 100: setPrimary(address(0)) reverts
+    // Coverage: setPrimary(address(0)) reverts
     function test_SetPrimary_ZeroAddressReverts() public {
         vm.prank(primary);
         _expectWalletSelfCallRevert(
@@ -3549,7 +3562,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 107: eip1271Signer==previousPrimary → signer auto-updated on setPrimary
+    // Coverage: eip1271Signer==previousPrimary → signer auto-updated on setPrimary
     function test_SetPrimary_Updates1271SignerWhenSet() public {
         vm.prank(primary);
         _executeWalletSelfCall(
@@ -3562,7 +3575,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.eip1271Signer(), newPrimary);
     }
 
-    // Line 114: setBackup(address(0)) reverts
+    // Coverage: setBackup(address(0)) reverts
     function test_SetBackup_ZeroAddressReverts() public {
         vm.prank(backup);
         _expectWalletSelfCallRevert(
@@ -3572,7 +3585,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 126: eip1271Signer==previousBackup → signer auto-updated on setBackup
+    // Coverage: eip1271Signer==previousBackup → signer auto-updated on setBackup
     function test_SetBackup_Updates1271SignerWhenSet() public {
         vm.prank(backup);
         _executeWalletSelfCall(
@@ -3585,7 +3598,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.eip1271Signer(), newBackup);
     }
 
-    // Line 137: setEmergency(address(0)) reverts
+    // Coverage: setEmergency(address(0)) reverts
     function test_SetEmergency_ZeroAddressReverts() public {
         vm.prank(emergency);
         _expectWalletSelfCallRevert(
@@ -3595,7 +3608,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 148: eip1271Signer==previousEmergency → signer auto-updated on setEmergency
+    // Coverage: eip1271Signer==previousEmergency → signer auto-updated on setEmergency
     function test_SetEmergency_Updates1271SignerWhenSet() public {
         vm.startPrank(emergency);
         _executeEmergencyWalletSelfCallTimelocked(
@@ -3610,7 +3623,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.eip1271Signer(), newEmergency);
     }
 
-    // Line 166: setRoleTimelock(Role.None, ...) reverts
+    // Coverage: setRoleTimelock(Role.None, ...) reverts
     function test_SetRoleTimelock_NoneRoleReverts() public {
         vm.prank(emergency);
         _expectWalletSelfCallRevert(
@@ -3620,14 +3633,14 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 191: setLifeControl from non-emergency reverts
+    // Coverage: setLifeControl from non-emergency reverts
     function test_SetLifeControl_NotEmergencyReverts() public {
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotEmergency.selector);
         wallet.setLifeControl(true, 1 hours);
     }
 
-    // Line 206: setLifeControllers from non-emergency reverts
+    // Coverage: setLifeControllers from non-emergency reverts
     function test_SetLifeControllers_NotEmergencyReverts() public {
         address[] memory controllers = new address[](1);
         controllers[0] = outsider;
@@ -3636,7 +3649,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setLifeControllers(controllers, true);
     }
 
-    // Line 210: setLifeControllers with zero controller reverts
+    // Coverage: setLifeControllers with zero controller reverts
     function test_SetLifeControllers_ZeroControllerReverts() public {
         address[] memory controllers = new address[](1);
         controllers[0] = address(0);
@@ -3645,7 +3658,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setLifeControllers(controllers, true);
     }
 
-    // Line 212 branch + Line 215: setLifeControllers with enabled=false and controller==emergency reverts
+    // Coverage: setLifeControllers with enabled=false and controller==emergency reverts
     function test_SetLifeControllers_DisableEmergencyReverts() public {
         address[] memory controllers = new address[](1);
         controllers[0] = emergency;
@@ -3654,7 +3667,7 @@ contract BaseMERAWalletTest is Test {
         wallet.setLifeControllers(controllers, false);
     }
 
-    // Line 212 branch: setLifeControllers with enabled=false on a non-emergency controller (success)
+    // Coverage: branch: setLifeControllers with enabled=false on a non-emergency controller (success)
     function test_SetLifeControllers_DisableNonEmergencyController() public {
         address controller = address(0x1337);
         address[] memory enableList = new address[](1);
@@ -3667,14 +3680,14 @@ contract BaseMERAWalletTest is Test {
         assertFalse(wallet.isLifeController(controller));
     }
 
-    // Line 226: confirmAlive from non-life-controller reverts
+    // Coverage: confirmAlive from non-life-controller reverts
     function test_ConfirmAlive_NotLifeControllerReverts() public {
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.NotLifeController.selector);
         wallet.confirmAlive();
     }
 
-    // Line 238: setTargetCallPolicies with mismatched array lengths reverts
+    // Coverage: setTargetCallPolicies with mismatched array lengths reverts
     // Note: setTargetCallPolicies forbids primary/backup by default, must use emergency.
     function test_SetTargetCallPolicies_LengthMismatchReverts() public {
         address[] memory targets = new address[](2);
@@ -3696,7 +3709,7 @@ contract BaseMERAWalletTest is Test {
         vm.stopPrank();
     }
 
-    // Line 254: setSelectorCallPolicies with mismatched lengths reverts
+    // Coverage: setSelectorCallPolicies with mismatched lengths reverts
     function test_SetSelectorCallPolicies_LengthMismatchReverts() public {
         bytes4[] memory selectors = new bytes4[](2);
         selectors[0] = bytes4(0x12345678);
@@ -3717,7 +3730,7 @@ contract BaseMERAWalletTest is Test {
         vm.stopPrank();
     }
 
-    // Line 269/270: setTargetSelectorCallPolicies with mismatched lengths reverts
+    // Coverage: setTargetSelectorCallPolicies with mismatched lengths reverts
     function test_SetTargetSelectorCallPolicies_LengthMismatchReverts() public {
         address[] memory targets = new address[](2);
         targets[0] = address(receiver);
@@ -3740,7 +3753,7 @@ contract BaseMERAWalletTest is Test {
         vm.stopPrank();
     }
 
-    // Line 318: setAgents with mismatched array lengths reverts
+    // Coverage: setAgents with mismatched array lengths reverts
     function test_SetAgents_LengthMismatchReverts() public {
         address[] memory agentAddresses = new address[](2);
         agentAddresses[0] = address(0xA1);
@@ -3755,7 +3768,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 344: enterSafeMode reverts when safe mode already active (SafeModeAlreadyUsed)
+    // Coverage: enterSafeMode reverts when safe mode already active (SafeModeAlreadyUsed)
     function test_EnterSafeMode_AlreadyActivReverts() public {
         uint256 duration = MERAWalletConstants.SAFE_MODE_MIN_DURATION;
         vm.prank(emergency);
@@ -3765,7 +3778,7 @@ contract BaseMERAWalletTest is Test {
         wallet.enterSafeMode(duration);
     }
 
-    // Line 362: resetSafeMode reverts when safeModeUsed=false
+    // Coverage: resetSafeMode reverts when safeModeUsed=false
     function test_ResetSafeMode_NotUsedReverts() public {
         vm.prank(emergency);
         _expectWalletSelfCallRevert(
@@ -3775,7 +3788,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 363: resetSafeMode's SafeModeStillActive check is structurally unreachable —
+    // Coverage: resetSafeMode's SafeModeStillActive check is structurally unreachable —
     // _onlySelfAsEmergency calls _requireNotSafeMode() which guards the same condition first.
     function test_ResetSafeMode_AfterSafeModeExpiresSucceeds() public {
         vm.prank(emergency);
@@ -3790,7 +3803,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.safeModeBefore(), 0);
     }
 
-    // Line 409: executeMigrationTransaction from non-core-controller reverts
+    // Coverage: executeMigrationTransaction from non-core-controller reverts
     function test_ExecuteMigration_NonCoreControllerReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10126);
@@ -3801,7 +3814,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 10127);
     }
 
-    // Line 418: executeMigrationTransaction call fails (CallExecutionFailed)
+    // Coverage: executeMigrationTransaction call fails (CallExecutionFailed)
     function test_ExecuteMigration_CallFailsReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10128);
@@ -3834,7 +3847,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 101_419);
     }
 
-    // Line 479: vetoPending on non-pending operation reverts
+    // Coverage: vetoPending on non-pending operation reverts
     function test_VetoPending_NotPendingReverts() public {
         bytes32 fakeId = keccak256("nonexistent");
         vm.prank(emergency);
@@ -3842,7 +3855,7 @@ contract BaseMERAWalletTest is Test {
         wallet.vetoPending(fakeId);
     }
 
-    // Line 493: clearVeto on non-vetoed operation reverts
+    // Coverage: clearVeto on non-vetoed operation reverts
     function test_ClearVeto_NotVetoedReverts() public {
         bytes32 fakeId = keccak256("nonexistent");
         vm.prank(emergency);
@@ -3850,7 +3863,7 @@ contract BaseMERAWalletTest is Test {
         wallet.clearVeto(fakeId);
     }
 
-    // Line 1200: executeMigrationTransaction with empty calls reverts
+    // Coverage: executeMigrationTransaction with empty calls reverts
     function test_ExecuteMigration_EmptyCallsReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10130);
@@ -3860,7 +3873,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 10131);
     }
 
-    // Line 1252: validateCalls with empty calls in executeTransaction reverts
+    // Coverage: validateCalls with empty calls in executeTransaction reverts
     function test_ExecuteTransaction_EmptyCallsReverts() public {
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](0);
         vm.prank(primary);
@@ -3868,10 +3881,10 @@ contract BaseMERAWalletTest is Test {
         wallet.executeTransaction(calls, 10132);
     }
 
-    // Line 1372: _setFrozenRole with invalid role is structurally unreachable via the external API.
+    // Coverage: _setFrozenRole with invalid role is structurally unreachable via the external API.
     // setFrozenPrimary/setFrozenBackup hardcode Primary/Backup respectively, so InvalidRole cannot trigger.
 
-    // Line 1387: setFrozenBackup noop when already at same value (no state change → no emit)
+    // Coverage: setFrozenBackup noop when already at same value (no state change → no emit)
     function test_SetFrozenBackup_NoopWhenAlreadySameFrozen() public {
         assertFalse(wallet.frozenBackup());
         // Freeze backup first
@@ -3884,7 +3897,7 @@ contract BaseMERAWalletTest is Test {
         assertTrue(wallet.frozenBackup());
     }
 
-    // Line 528: set1271Signer when current signer is already set (current != address(0))
+    // Coverage: set1271Signer when current signer is already set (current != address(0))
     function test_Set1271Signer_WithExistingSigner_AllowsHigherRank() public {
         // Set backup as signer (lower rank)
         vm.prank(backup);
@@ -3901,7 +3914,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.eip1271Signer(), emergency);
     }
 
-    // Lines 534/536: set1271Signer with Role.None and Role.Primary
+    // Coverage: set1271Signer with Role.None and Role.Primary
     function test_Set1271Signer_NoneAndPrimaryPaths() public {
         // Role.Primary path (line 536)
         vm.prank(primary);
@@ -3915,7 +3928,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.eip1271Signer(), address(0));
     }
 
-    // Line 538 (Role.Emergency = else branch)
+    // Coverage: (Role.Emergency = else branch)
     function test_Set1271Signer_EmergencyPath() public {
         vm.startPrank(emergency);
         _executeEmergencyWalletSelfCallTimelocked(
@@ -3925,7 +3938,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(wallet.eip1271Signer(), emergency);
     }
 
-    // Line 612: isValidSignature when recovered == address(0) (invalid/malformed sig)
+    // Coverage: isValidSignature when recovered == address(0) (invalid/malformed sig)
     function test_IsValidSignature_InvalidSigReturnsInvalid() public view {
         bytes32 hash = keccak256("test");
         bytes memory badSig = abi.encodePacked(bytes32(0), bytes32(0), uint8(0));
@@ -3933,7 +3946,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(uint32(result), uint32(0xffffffff));
     }
 
-    // Line 1520: _extractSelectorFromCalldataBytes with data < 4 bytes returns bytes4(0)
+    // Coverage: _extractSelectorFromCalldataBytes with data < 4 bytes returns bytes4(0)
     // Covered indirectly by isValidSignature call with short selector data, but let's cover via proposeTransaction
     // with a call whose data is 0 bytes (will be validateCheckerWhitelist → selector == bytes4(0))
     function test_ProposeTransaction_ZeroByteDataAllowed() public {
@@ -3946,10 +3959,10 @@ contract BaseMERAWalletTest is Test {
         wallet.proposeTransaction(calls, 10145);
     }
 
-    // Line 1529: _recoverSigner with malformed sig → ECDSA error → returns address(0)
+    // Coverage: _recoverSigner with malformed sig → ECDSA error → returns address(0)
     // already covered by test_IsValidSignature_InvalidSigReturnsInvalid above (same code path via isValidSignature)
 
-    // Line 1550: relay config Anyone with non-zero designatedExecutor reverts
+    // Coverage: relay config Anyone with non-zero designatedExecutor reverts
     function test_ProposeWithRelay_AnyoneWithDesignatedExecutorReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -3968,7 +3981,7 @@ contract BaseMERAWalletTest is Test {
         wallet.proposeTransactionWithRelay{value: 1 ether}(calls, 10150, cfg);
     }
 
-    // Line 1557: relay config Designated with zero designatedExecutor reverts
+    // Coverage: relay config Designated with zero designatedExecutor reverts
     function test_ProposeWithRelay_DesignatedWithZeroExecutorReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -3987,7 +4000,7 @@ contract BaseMERAWalletTest is Test {
         wallet.proposeTransactionWithRelay{value: 1 ether}(calls, 10151, cfg);
     }
 
-    // Line 270: setTargetSelectorCallPolicies where targets.length==selectors.length but !=policies.length
+    // Coverage: setTargetSelectorCallPolicies where targets.length==selectors.length but !=policies.length
     function test_SetTargetSelectorCallPolicies_PoliciesLengthMismatchReverts() public {
         address[] memory targets = new address[](1);
         targets[0] = address(receiver);
@@ -4010,14 +4023,14 @@ contract BaseMERAWalletTest is Test {
         vm.stopPrank();
     }
 
-    // Line 338: enterSafeMode from outsider (not emergency/guardian/emergency-agent) reverts
+    // Coverage: enterSafeMode from outsider (not emergency/guardian/emergency-agent) reverts
     function test_EnterSafeMode_OutsiderReverts() public {
         vm.prank(outsider);
         vm.expectRevert(IBaseMERAWalletErrors.SafeModeNotAuthorized.selector);
         wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
     }
 
-    // Line 345: enterSafeMode with duration below minimum reverts
+    // Coverage: enterSafeMode with duration below minimum reverts
     function test_EnterSafeMode_DurationOutOfRangeReverts() public {
         vm.prank(emergency);
         vm.expectRevert(
@@ -4029,7 +4042,7 @@ contract BaseMERAWalletTest is Test {
         wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION - 1);
     }
 
-    // Line 418: executeMigrationTransaction with a failing inner call
+    // Coverage: executeMigrationTransaction with a failing inner call
     function test_ExecuteMigration_FailingCallReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10210);
@@ -4040,7 +4053,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 10211);
     }
 
-    // Line 507: cancelPending with non-existent operation (status == None, not Pending/Vetoed)
+    // Coverage: cancelPending with non-existent operation (status == None, not Pending/Vetoed)
     function test_CancelPending_NonExistentOperationReverts() public {
         bytes32 fakeId = keccak256("non-existent-cancel");
         vm.prank(primary);
@@ -4048,7 +4061,7 @@ contract BaseMERAWalletTest is Test {
         wallet.cancelPending(fakeId);
     }
 
-    // Line 530: set1271Signer when current signer is higher-rank than caller → Set1271SignerNotAuthorized
+    // Coverage: set1271Signer when current signer is higher-rank than caller → Set1271SignerNotAuthorized
     function test_Set1271Signer_LowerRankCallerCannotOverrideHigherRank() public {
         // First set emergency as the eip1271Signer (high rank)
         vm.startPrank(emergency);
@@ -4071,7 +4084,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 658: setRequiredCheckers with checker=address(0) reverts
+    // Coverage: setRequiredCheckers with checker=address(0) reverts
     function test_SetRequiredCheckers_ZeroCheckerReverts() public {
         MERAWalletTypes.RequiredCheckerUpdate[] memory updates = new MERAWalletTypes.RequiredCheckerUpdate[](1);
         updates[0] = MERAWalletTypes.RequiredCheckerUpdate({checker: address(0), enabled: true, config: ""});
@@ -4098,7 +4111,7 @@ contract BaseMERAWalletTest is Test {
         vm.stopPrank();
     }
 
-    // Line 662: setRequiredCheckers disabling an already-configured checker
+    // Coverage: setRequiredCheckers disabling an already-configured checker
     function test_SetRequiredCheckers_DisableConfiguredChecker() public {
         // Enable checkerBothHooks as a required checker first
         MERAWalletTypes.RequiredCheckerUpdate[] memory enableUpdates = new MERAWalletTypes.RequiredCheckerUpdate[](1);
@@ -4164,7 +4177,7 @@ contract BaseMERAWalletTest is Test {
         h.exposedSetAgent(agentAddr, MERAWalletTypes.Role.Primary);
     }
 
-    // Line 725: setAgents with agent=address(0) reverts
+    // Coverage: setAgents with agent=address(0) reverts
     function test_SetAgents_ZeroAgentReverts() public {
         address[] memory agents_ = new address[](1);
         agents_[0] = address(0);
@@ -4178,7 +4191,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 728: setAgents where roleLevel exceeds callerCore rank → AgentRemovalNotAuthorized
+    // Coverage: setAgents where roleLevel exceeds callerCore rank → AgentRemovalNotAuthorized
     function test_SetAgents_RoleTooHighReverts() public {
         address[] memory agents_ = new address[](1);
         agents_[0] = agentAddr;
@@ -4192,7 +4205,7 @@ contract BaseMERAWalletTest is Test {
         );
     }
 
-    // Line 745: proposeTransaction with zero required delay reverts (timelocks=0 in setUp)
+    // Coverage: proposeTransaction with zero required delay reverts (timelocks=0 in setUp)
     function test_ProposeTransaction_ZeroDelayReverts() public {
         MERAWalletTypes.Call[] memory calls =
             _singleCall(address(receiver), 0, abi.encodeWithSelector(ReceiverMock.setValue.selector, 1));
@@ -4201,7 +4214,7 @@ contract BaseMERAWalletTest is Test {
         wallet.proposeTransaction(calls, 10245);
     }
 
-    // Line 808: executePending with CoreExecute policy and non-empty executor whitelist reverts
+    // Coverage: executePending with CoreExecute policy and non-empty executor whitelist reverts
     function test_ExecutePending_CoreExecuteWithNonEmptyWhitelistReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -4223,7 +4236,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executePending(calls, 10246, nonEmptyList);
     }
 
-    // Line 873: TooManyRequiredCheckers — add MAX_REQUIRED_CHECKERS_PER_LIST+1 checkers
+    // Coverage: TooManyRequiredCheckers — add MAX_REQUIRED_CHECKERS_PER_LIST+1 checkers
     function test_SetRequiredCheckers_TooManyReverts() public {
         uint256 maxCheckers = MERAWalletConstants.MAX_REQUIRED_CHECKERS_PER_LIST;
         // Add maxCheckers checkers (each needs a unique address)
@@ -4248,7 +4261,7 @@ contract BaseMERAWalletTest is Test {
         vm.stopPrank();
     }
 
-    // Line 1247: SafeModeActive in _requireNotSafeMode — called via executeTransaction during active safe mode
+    // Coverage: SafeModeActive in _requireNotSafeMode — called via executeTransaction during active safe mode
     function test_ExecuteTransaction_DuringSafeModeReverts() public {
         uint256 dur = MERAWalletConstants.SAFE_MODE_MIN_DURATION;
         vm.prank(emergency);
@@ -4281,7 +4294,7 @@ contract BaseMERAWalletTest is Test {
         h.exposedSetFrozenRole(MERAWalletTypes.Role.None, true);
     }
 
-    // Line 1424: executePending with Anyone policy + non-empty whitelist → InvalidExecutorWhitelist
+    // Coverage: executePending with Anyone policy + non-empty whitelist → InvalidExecutorWhitelist
     function test_ExecutePending_AnyoneWithNonEmptyWhitelistReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -4304,7 +4317,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executePending(calls, 10270, nonEmpty);
     }
 
-    // Line 1429: executePending with Designated policy + non-empty whitelist → InvalidExecutorWhitelist
+    // Coverage: executePending with Designated policy + non-empty whitelist → InvalidExecutorWhitelist
     function test_ExecutePending_DesignatedWithNonEmptyWhitelistReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -4327,7 +4340,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executePending(calls, 10271, nonEmpty);
     }
 
-    // Line 1430 branch 1: Designated executor (a core controller) successfully executes
+    // Coverage: branch 1: Designated executor (a core controller) successfully executes
     function test_ExecutePending_DesignatedExecutorSucceeds() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -4347,7 +4360,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(receiver.value(), 44);
     }
 
-    // Line 1435: Whitelist policy with wrong hash → InvalidExecutorWhitelist
+    // Coverage: Whitelist policy with wrong hash → InvalidExecutorWhitelist
     function test_ExecutePending_WhitelistWrongHashReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -4376,7 +4389,7 @@ contract BaseMERAWalletTest is Test {
         wallet.executePending(calls, 10273, wrongList);
     }
 
-    // Line 1440: Whitelist executor found → successful execution
+    // Coverage: Whitelist executor found → successful execution
     function test_ExecutePending_WhitelistExecutorFoundSucceeds() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);
@@ -4403,7 +4416,7 @@ contract BaseMERAWalletTest is Test {
         assertEq(receiver.value(), 46);
     }
 
-    // Line 1564: relay config Whitelist with zero executorSetHash reverts
+    // Coverage: relay config Whitelist with zero executorSetHash reverts
     function test_ProposeWithRelay_WhitelistWithZeroExecutorSetHashReverts() public {
         vm.startPrank(emergency);
         _setAllRoleTimelocks(1 days);

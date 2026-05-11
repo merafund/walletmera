@@ -3,6 +3,7 @@ pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
+import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
 import {MERAWalletThresholdGuardian} from "../src/guardian/MERAWalletThresholdGuardian.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
 
@@ -138,7 +139,7 @@ contract MERAWalletThresholdGuardianTest is Test {
     }
 
     function test_MemberCanEnterSafeMode() public {
-        uint256 duration = 30 days;
+        uint256 duration = MERAWalletConstants.SAFE_MODE_MIN_DURATION;
 
         vm.prank(member1);
         guardian.enterSafeMode(duration);
@@ -158,7 +159,7 @@ contract MERAWalletThresholdGuardianTest is Test {
 
         vm.prank(outsider);
         vm.expectRevert(MERAWalletThresholdGuardian.NotMember.selector);
-        guardian.enterSafeMode(30 days);
+        guardian.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
     }
 
     function test_MemberCannotFreezeOrEnterSafeModeBeforeWalletSet() public {
@@ -176,7 +177,7 @@ contract MERAWalletThresholdGuardianTest is Test {
 
         vm.prank(member1);
         vm.expectRevert(MERAWalletThresholdGuardian.InvalidWallet.selector);
-        g.enterSafeMode(30 days);
+        g.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION);
     }
 
     function test_NonMember_CannotProposeOrApprove() public {

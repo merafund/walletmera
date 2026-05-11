@@ -439,7 +439,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     function test_registry_owner_controls_factories() public {
         address otherFactory = address(0xFAc70);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
         registry.addFactory(otherFactory);
 
         vm.prank(owner);
@@ -725,7 +725,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address predicted = fac.predictWallet(login, p);
         uint256 deadline = block.timestamp + 30 seconds;
         bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
-        skip(60 seconds);
+        vm.warp(deadline + 1);
 
         vm.expectRevert(MERALoginSignatureVerifier.AuthorizationExpired.selector);
         fac.deployWallet(login, p, secret, deadline, authorization, "");

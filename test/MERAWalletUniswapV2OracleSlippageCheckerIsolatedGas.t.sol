@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.34;
 
-import {Test} from "forge-std/Test.sol";
 import {MERAWalletTypes} from "../src/types/MERAWalletTypes.sol";
 import {MERAWalletUniswapV2OracleSlippageChecker} from "../src/checkers/MERAWalletUniswapV2OracleSlippageChecker.sol";
 import {MERAWalletAssetWhiteList} from "../src/checkers/whitelists/MERAWalletAssetWhiteList.sol";
@@ -9,6 +8,7 @@ import {IMERAWalletUniswapV2SlippageErrors} from "../src/checkers/errors/IMERAWa
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {MockUniV2Router02} from "./mocks/MockUniV2Router02.sol";
 import {MockAggregatorV3} from "./mocks/MockAggregatorV3.sol";
+import {MERAWalletTestBase} from "./helpers/MERAWalletTestBase.sol";
 
 contract IsolatedSlippageWallet {
     function approveToken(ERC20Mock token, address spender) external {
@@ -31,8 +31,8 @@ contract IsolatedSlippageWallet {
     }
 }
 
-contract MERAWalletUniswapV2OracleSlippageCheckerIsolatedGasTest is Test {
-    address private constant OWNER = address(0xA11CE);
+contract MERAWalletUniswapV2OracleSlippageCheckerIsolatedGasTest is MERAWalletTestBase {
+    address private constant OWNER = address(uint160(PRIMARY_PK));
     bytes32 private constant OPERATION_ID = keccak256("isolated-swap");
     uint256 private constant CALL_ID = 7;
     uint256 private constant AMOUNT_IN = 1 ether;
@@ -47,42 +47,30 @@ contract MERAWalletUniswapV2OracleSlippageCheckerIsolatedGasTest is Test {
     MERAWalletTypes.Call private swapCall;
 
     function setUp() public {
-        vm.warp(1_000_000);
+        vm.warp(DEFAULT_TEST_TIMESTAMP);
 
         tokenA = new ERC20Mock();
         tokenB = new ERC20Mock();
         weth = new ERC20Mock();
         router = new MockUniV2Router02(address(weth));
         wallet = new IsolatedSlippageWallet();
-        checker = new MERAWalletUniswapV2OracleSlippageChecker(OWNER, 100, 3600, true);
+        checker = new MERAWalletUniswapV2OracleSlippageChecker(
+            OWNER,
+            DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
+            DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            DEFAULT_REQUIRE_ROUTER_ALLOWLIST
+        );
 
         MockAggregatorV3 feedA = new MockAggregatorV3(1e8, 8);
         MockAggregatorV3 feedB = new MockAggregatorV3(1e8, 8);
         MERAWalletAssetWhiteList assetWhitelist = new MERAWalletAssetWhiteList(OWNER);
 
-        address[] memory routers = new address[](1);
-        routers[0] = address(router);
-        bool[] memory routerAllowed = new bool[](1);
-        routerAllowed[0] = true;
-
-        address[] memory assets = new address[](2);
-        assets[0] = address(tokenA);
-        assets[1] = address(tokenB);
-        bool[] memory assetsAllowed = new bool[](2);
-        assetsAllowed[0] = true;
-        assetsAllowed[1] = true;
-
-        address[] memory sourceAssets = new address[](2);
-        sourceAssets[0] = address(tokenA);
-        sourceAssets[1] = address(tokenB);
-        address[] memory feeds = new address[](2);
-        feeds[0] = address(feedA);
-        feeds[1] = address(feedB);
-
         vm.startPrank(OWNER);
-        checker.setAllowedRouters(routers, routerAllowed);
-        assetWhitelist.setAllowedAssets(assets, assetsAllowed);
-        assetWhitelist.setAssetSources(sourceAssets, feeds);
+        checker.setAllowedRouters(_oneAddress(address(router)), _oneBool(true));
+        assetWhitelist.setAllowedAssets(_twoAddresses(address(tokenA), address(tokenB)), _twoBools(true, true));
+        assetWhitelist.setAssetSources(
+            _twoAddresses(address(tokenA), address(tokenB)), _twoAddresses(address(feedA), address(feedB))
+        );
         checker.setDefaultAssetWhitelist(address(assetWhitelist));
         vm.stopPrank();
 
