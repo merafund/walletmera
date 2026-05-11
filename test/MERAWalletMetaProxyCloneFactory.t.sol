@@ -439,7 +439,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
     function test_registry_owner_controls_factories() public {
         address otherFactory = address(0xFAc70);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
         registry.addFactory(otherFactory);
 
         vm.prank(owner);
@@ -725,7 +725,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         address predicted = fac.predictWallet(login, p);
         uint256 deadline = block.timestamp + 30 seconds;
         bytes memory authorization = _signAuthorization(reg, fac, verifier, login, predicted, deadline);
-        skip(60 seconds);
+        vm.warp(deadline + 1);
 
         vm.expectRevert(MERALoginSignatureVerifier.AuthorizationExpired.selector);
         fac.deployWallet(login, p, secret, deadline, authorization, "");
@@ -943,7 +943,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.requestLoginMigration(login, "mig-b", address(0x5678));
     }
 
-    // Line 90 — WithdrawFailed: owner is a contract that rejects ETH
+    // WithdrawFailed: owner rejects ETH.
     function test_registry_withdrawEth_failedTransfer_reverts() public {
         NonPayableOwner nonPayable = new NonPayableOwner();
         MERAWalletLoginRegistry reg = new MERAWalletLoginRegistry(address(nonPayable), false);
@@ -953,7 +953,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         nonPayable.callWithdraw(reg);
     }
 
-    // Line 188 — LoginMigrationAlreadyPending
+    // LoginMigrationAlreadyPending.
     function test_registry_requestLoginMigration_already_pending_reverts() public {
         MERAWalletTypes.WalletInitParams memory p = _params();
         address aliceWallet = _deployCommitted("pnd-alice", p);
@@ -967,7 +967,7 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.requestLoginMigration("pnd-alice", "pnd-bob", bobWallet);
     }
 
-    // Line 213 — LoginMigrationStale: a second migration confirms first, making the first stale
+    // LoginMigrationStale after a newer migration is confirmed.
     function test_registry_confirmLoginMigration_stale_reverts() public {
         MERAWalletTypes.WalletInitParams memory p = _params();
         address aliceWallet = _deployCommitted("stl-alice", p);

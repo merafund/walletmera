@@ -3,6 +3,7 @@ pragma solidity 0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
+import {MERAWalletConstants} from "../src/constants/MERAWalletConstants.sol";
 import {MERAWalletLoginRegistryConstants} from "../src/constants/MERAWalletLoginRegistryConstants.sol";
 import {MERAWalletLoginRegistry} from "../src/MERAWalletLoginRegistry.sol";
 import {MERAWalletLoginMerkleGuardian} from "../src/guardian/MERAWalletLoginMerkleGuardian.sol";
@@ -22,7 +23,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     address internal outsider = vm.addr(0x4444);
     address internal guardianAddress = address(0xA11CEB0BCAFE);
 
-    uint64 internal constant PROPOSAL_LIFETIME = 3 days;
+    uint64 internal constant PROPOSAL_LIFETIME = 72 hours;
 
     BaseMERAWallet internal wallet;
     MERAWalletLoginRegistry internal registry;
@@ -238,7 +239,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
     function test_EligibleLoginOwnerCanEnterSafeMode() public {
         vm.prank(address(aliceWallet));
         guardian.publishLoginList(loginHashes, _proofs(loginHashes));
-        uint256 duration = 30 days;
+        uint256 duration = MERAWalletConstants.SAFE_MODE_MIN_DURATION;
 
         vm.prank(address(aliceWallet));
         guardian.enterSafeMode(address(wallet), duration);
@@ -267,7 +268,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.LoginNotEligible.selector, outsider, bytes32(0))
         );
-        guardian.enterSafeMode(address(wallet), 30 days);
+        guardian.enterSafeMode(address(wallet), MERAWalletConstants.SAFE_MODE_MIN_DURATION);
     }
 
     function test_EmergencyActionsRequireTargetWalletGuardianMatch() public {
@@ -285,7 +286,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
         vm.prank(address(aliceWallet));
         vm.expectRevert(MERAWalletLoginMerkleGuardian.TargetWalletGuardianMismatch.selector);
-        guardian.enterSafeMode(address(otherWallet), 30 days);
+        guardian.enterSafeMode(address(otherWallet), MERAWalletConstants.SAFE_MODE_MIN_DURATION);
     }
 
     function test_EmergencyActionsRejectZeroTargetWallet() public {
@@ -302,7 +303,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
 
         vm.prank(address(aliceWallet));
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidWallet.selector);
-        guardian.enterSafeMode(address(0), 30 days);
+        guardian.enterSafeMode(address(0), MERAWalletConstants.SAFE_MODE_MIN_DURATION);
     }
 
     function test_ActiveProposal_NotFoundReverts() public {
@@ -454,8 +455,9 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidProposalLifetime.selector);
         new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 1, 0);
 
+        uint64 tooShortLifetime = uint64(guardian.MIN_PROPOSAL_LIFETIME() - 1 hours);
         vm.expectRevert(MERAWalletLoginMerkleGuardian.InvalidProposalLifetime.selector);
-        new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 1, uint64(71 hours));
+        new MERAWalletLoginMerkleGuardian(address(registry), loginRoot, 1, tooShortLifetime);
     }
 
     function test_Propose_RevertsWhenTargetWalletIsZero() public {

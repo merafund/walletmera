@@ -18,3 +18,5 @@ lcov.info
 broadcast
 .DS_Store
 coverage/
+solidity-metrics-src.html
+solidity-metrics-src.md
