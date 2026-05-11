@@ -2,6 +2,7 @@
 pragma solidity 0.8.34;
 
 import {BaseMERAWallet} from "../src/BaseMERAWallet.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MERAWalletNative} from "../src/extensions/MERAWalletNative.sol";
 import {MERAWalletERC20} from "../src/extensions/token/ERC20/MERAWalletERC20.sol";
 import {IBaseMERAWalletErrors} from "../src/interfaces/IBaseMERAWalletErrors.sol";
@@ -50,6 +51,18 @@ contract MERAWalletExtensionsHarness is MERAWalletNative, MERAWalletERC20 {
     {
         MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
         _setSingleCallMemory(calls, target, value, "", address(0), "");
+        return _computeOperationIdMemory(calls, salt);
+    }
+
+    function exposedOperationIdForERC20Transfer(address token, address to, uint256 amount, uint256 salt)
+        external
+        view
+        returns (bytes32)
+    {
+        MERAWalletTypes.Call[] memory calls = new MERAWalletTypes.Call[](1);
+        _setSingleCallMemory(
+            calls, token, 0, abi.encodeWithSelector(IERC20.transfer.selector, to, amount), address(0), ""
+        );
         return _computeOperationIdMemory(calls, salt);
     }
 
@@ -169,7 +182,7 @@ contract MERAWalletExtensionsTest is MERAWalletTestBase {
 
     function test_CallExternal_FailedExternalCallReverts() public {
         vm.prank(primary);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CallExecutionFailed.selector, uint256(0), ""));
         wallet.callExternal(address(receiver), 0, hex"deadbeef", 1003);
     }
 
@@ -225,14 +238,18 @@ contract MERAWalletExtensionsTest is MERAWalletTestBase {
         vm.prank(primary);
         wallet.proposeTransferERC20(address(token), address(receiver), 1 ether, address(0), "", 1009);
 
+        bytes32 operationId =
+            wallet.exposedOperationIdForERC20Transfer(address(token), address(receiver), 1 ether, 1009);
         vm.prank(primary);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.OperationAlreadyUsed.selector, operationId));
         wallet.proposeTransferERC20(address(token), address(receiver), 1 ether, address(0), "", 1009);
     }
 
     function test_ExecutePendingTransferERC20_NotPendingReverts() public {
+        bytes32 operationId =
+            wallet.exposedOperationIdForERC20Transfer(address(token), address(receiver), 1 ether, 1010);
         vm.prank(primary);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.OperationNotPending.selector, operationId));
         wallet.executePendingTransferERC20(address(token), address(receiver), 1 ether, address(0), "", 1010);
     }
 
@@ -241,10 +258,14 @@ contract MERAWalletExtensionsTest is MERAWalletTestBase {
         _setRoleTimelock(MERAWalletTypes.Role.Primary, 1 days);
 
         vm.prank(primary);
-        wallet.proposeTransferERC20(address(token), address(receiver), 1 ether, address(0), "", 1011);
+        bytes32 operationId =
+            wallet.proposeTransferERC20(address(token), address(receiver), 1 ether, address(0), "", 1011);
+        (,,, uint64 executeAfter,,,,,,,) = wallet.operations(operationId);
 
         vm.prank(primary);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseMERAWalletErrors.TimelockNotExpired.selector, executeAfter, block.timestamp)
+        );
         wallet.executePendingTransferERC20(address(token), address(receiver), 1 ether, address(0), "", 1011);
     }
 

@@ -3814,15 +3814,14 @@ contract BaseMERAWalletTest is Test {
         wallet.executeMigrationTransaction(calls, 10127);
     }
 
-    // Coverage: executeMigrationTransaction call fails (CallExecutionFailed)
-    function test_ExecuteMigration_CallFailsReverts() public {
+    // Coverage: executeMigrationTransaction rejects calls outside the migration allowlist.
+    function test_ExecuteMigration_InvalidCallReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10128);
-        // Call that always reverts: send ETH to a non-payable address (zero address)
         MERAWalletTypes.Call[] memory calls = _singleCall(address(0), 1, "");
         vm.deal(address(wallet), 1);
         vm.prank(primary);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.MigrationCallNotAllowed.selector, uint256(0)));
         wallet.executeMigrationTransaction(calls, 10129);
     }
 
@@ -4042,14 +4041,13 @@ contract BaseMERAWalletTest is Test {
         wallet.enterSafeMode(MERAWalletConstants.SAFE_MODE_MIN_DURATION - 1);
     }
 
-    // Coverage: executeMigrationTransaction with a failing inner call
-    function test_ExecuteMigration_FailingCallReverts() public {
+    // Coverage: executeMigrationTransaction rejects unknown selectors.
+    function test_ExecuteMigration_UnknownSelectorReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10210);
-        // Call a non-existent function on receiver — no fallback, so it reverts
         MERAWalletTypes.Call[] memory calls = _singleCall(address(receiver), 0, hex"deadbeef00");
         vm.prank(primary);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.MigrationCallNotAllowed.selector, uint256(0)));
         wallet.executeMigrationTransaction(calls, 10211);
     }
 
