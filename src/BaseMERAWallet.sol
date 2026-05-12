@@ -1251,6 +1251,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(calls.length > 0, EmptyCalls());
         uint256 n = calls.length;
         for (uint256 i = 0; i < n;) {
+            if (calls[i].value != 0) revert MigrationCallValueNotAllowed(i);
             if (!_isMigrationCall(calls[i])) revert MigrationCallNotAllowed(i);
             unchecked {
                 ++i;

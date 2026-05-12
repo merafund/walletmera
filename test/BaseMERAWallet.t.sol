@@ -3389,6 +3389,23 @@ contract BaseMERAWalletTest is Test {
         assertEq(ext.owner(), target);
     }
 
+    // Reverts when a migration call forwards native value (Call.value must be zero).
+    function test_ExecuteMigration_NonZeroCallValueReverts() public {
+        OwnableMock ext = new OwnableMock();
+        address target = address(0x3334);
+
+        vm.prank(emergency);
+        _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, target), 31591);
+
+        MERAWalletTypes.Call[] memory calls =
+            _singleCall(address(ext), 1, abi.encodeWithSignature("transferOwnership(address)", target));
+
+        vm.deal(address(wallet), 1 ether);
+        vm.prank(primary);
+        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.MigrationCallValueNotAllowed.selector, uint256(0)));
+        wallet.executeMigrationTransaction(calls, 31592);
+    }
+
     function test_ExecuteMigration_TransferOwnership_Backup_Immediate() public {
         OwnableMock ext = new OwnableMock();
         address target = address(0x4444);
@@ -3818,7 +3835,7 @@ contract BaseMERAWalletTest is Test {
     function test_ExecuteMigration_InvalidCallReverts() public {
         vm.prank(emergency);
         _executeWalletSelfCall(abi.encodeWithSelector(wallet.setMigrationTarget.selector, address(receiver)), 10128);
-        MERAWalletTypes.Call[] memory calls = _singleCall(address(0), 1, "");
+        MERAWalletTypes.Call[] memory calls = _singleCall(address(0), 0, "");
         vm.deal(address(wallet), 1);
         vm.prank(primary);
         vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.MigrationCallNotAllowed.selector, uint256(0)));

@@ -132,4 +132,6 @@ interface IBaseMERAWalletErrors {
     error MigrationModeNotActive();
     /// @notice A migration call does not match allowed selectors or target.
     error MigrationCallNotAllowed(uint256 callIndex);
+    /// @notice Migration batch call must not forward native value.
+    error MigrationCallValueNotAllowed(uint256 callIndex);
 }
