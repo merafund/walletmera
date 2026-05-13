@@ -131,6 +131,7 @@ interface IBaseMERAWallet {
     /// @param salt User-chosen salt included in the operation id.
     function executeTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     /// @notice Execute migration calls (transferOwnership / grantRole to migrationTarget) immediately without timelock.
+    /// @dev Each call must use `value == 0`.
     function executeMigrationTransaction(MERAWalletTypes.Call[] calldata calls, uint256 salt) external payable;
     /// @notice Proposes a timelocked transaction batch.
     /// @param calls Calls to execute after the required delay.

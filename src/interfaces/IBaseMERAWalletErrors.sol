@@ -55,7 +55,7 @@ interface IBaseMERAWalletErrors {
     /// @notice Timelock has not expired.
     error TimelockNotExpired(uint256 executeAfter, uint256 currentTime);
     /// @notice Caller cannot cancel this operation.
-    error CannotCancelOperation(bytes32 operationId);
+    error CannotCancelOperation();
     /// @notice Caller cannot veto this operation.
     error CannotVetoOperation(bytes32 operationId);
     /// @notice Caller cannot clear this veto.
@@ -132,4 +132,6 @@ interface IBaseMERAWalletErrors {
     error MigrationModeNotActive();
     /// @notice A migration call does not match allowed selectors or target.
     error MigrationCallNotAllowed(uint256 callIndex);
+    /// @notice Migration batch call must not forward native value.
+    error MigrationCallValueNotAllowed(uint256 callIndex);
 }

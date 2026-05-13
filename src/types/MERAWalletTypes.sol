@@ -6,9 +6,11 @@ library MERAWalletTypes {
     /// @notice Per-role policy for one call path.
     struct RoleCallPolicy {
         /// @notice Required timelock delay before this role may execute the call path.
-        uint56 delay;
+        uint32 delay;
         /// @notice Whether this role is forbidden from using the call path.
         bool forbidden;
+        /// @notice Whether this policy may be used for calls that forward native ETH.
+        bool allowValue;
     }
 
     /// @notice Execution policy for a target, selector, or target-selector pair.
@@ -18,7 +20,7 @@ library MERAWalletTypes {
         /// @notice Policy applied to the backup role.
         RoleCallPolicy backup;
         /// @notice Required delay for the emergency role.
-        uint56 emergencyDelay;
+        uint32 emergencyDelay;
         /// @notice Whether a policy is explicitly configured.
         bool exists;
     }

@@ -556,8 +556,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             OperationNotPending(operationId)
         );
 
-        require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation(operationId));
-        require(_roleRank(callerRole) >= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
+        require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation());
+        require(_roleRank(callerRole) >= _roleRank(operation.creatorRole), CannotCancelOperation());
 
         // Zero relay reward slot; relay ETH stays on the wallet (no refund to the proposer on cancel).
         relayOperation.relayReward = 0;
@@ -988,9 +988,9 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _set1271Signer(initialSigner);
 
         MERAWalletTypes.CallPathPolicy memory ownershipAndGrantRolePolicy = MERAWalletTypes.CallPathPolicy({
-            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
-            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
-            emergencyDelay: uint56(MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY),
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            emergencyDelay: uint32(MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY),
             exists: true
         });
         _setSelectorCallPolicy(IMigrationCalls.transferOwnership.selector, ownershipAndGrantRolePolicy);
@@ -1002,8 +1002,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
         );
         MERAWalletTypes.CallPathPolicy memory adminNoTimelockPolicy = MERAWalletTypes.CallPathPolicy({
-            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
-            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true}),
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
             emergencyDelay: 0,
             exists: true
         });
@@ -1251,6 +1251,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         require(calls.length > 0, EmptyCalls());
         uint256 n = calls.length;
         for (uint256 i = 0; i < n;) {
+            if (calls[i].value != 0) revert MigrationCallValueNotAllowed(i);
             if (!_isMigrationCall(calls[i])) revert MigrationCallNotAllowed(i);
             unchecked {
                 ++i;
@@ -1343,25 +1344,28 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         view
         returns (uint256)
     {
-        return _getCallDelayForPolicyRole(callerRole, callData.target, callData.data);
+        return _getCallDelayForPolicyRole(callerRole, callData.target, callData.value, callData.data);
     }
 
     /// @notice Delay from role-level and call-path policies.
-    function _getCallDelayForPolicyRole(MERAWalletTypes.Role policyRole, address target, bytes calldata data)
-        internal
-        view
-        returns (uint256)
-    {
-        return _getCallDelayForPolicyRoleFromSelector(policyRole, target, _extractSelectorFromCalldataBytes(data));
+    function _getCallDelayForPolicyRole(
+        MERAWalletTypes.Role policyRole,
+        address target,
+        uint256 value,
+        bytes calldata data
+    ) internal view returns (uint256) {
+        bytes4 selector = _extractSelectorFromCalldataBytes(data);
+        return _getCallDelayForPolicyRoleFromSelector(policyRole, target, value, selector);
     }
 
-    function _getCallDelayForPolicyRoleFromSelector(MERAWalletTypes.Role policyRole, address target, bytes4 selector)
-        internal
-        view
-        returns (uint256)
-    {
+    function _getCallDelayForPolicyRoleFromSelector(
+        MERAWalletTypes.Role policyRole,
+        address target,
+        uint256 value,
+        bytes4 selector
+    ) internal view returns (uint256) {
         MERAWalletTypes.CallPathPolicy memory pairPolicy = callPolicyByTargetSelector[target][selector];
-        if (pairPolicy.exists) {
+        if (_policyMatchesValue(pairPolicy, policyRole, value)) {
             MERAWalletTypes.RoleCallPolicy memory pairRole = _rolePolicySlice(pairPolicy, policyRole);
             require(!pairRole.forbidden, CallPathForbiddenForRole(policyRole));
             return uint256(pairRole.delay);
@@ -1369,19 +1373,41 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         MERAWalletTypes.CallPathPolicy memory targetPolicy = callPolicyByTarget[target];
         MERAWalletTypes.CallPathPolicy memory selectorPolicy = callPolicyBySelector[selector];
+        bool targetMatches = _policyMatchesValue(targetPolicy, policyRole, value);
+        bool selectorMatches = _policyMatchesValue(selectorPolicy, policyRole, value);
 
-        if (!targetPolicy.exists && !selectorPolicy.exists) {
+        if (!targetMatches && !selectorMatches) {
             return roleTimelock[policyRole];
         }
 
-        MERAWalletTypes.RoleCallPolicy memory targetRole = _rolePolicySlice(targetPolicy, policyRole);
-        MERAWalletTypes.RoleCallPolicy memory selectorRole = _rolePolicySlice(selectorPolicy, policyRole);
+        uint256 a;
+        uint256 b;
+        if (targetMatches) {
+            MERAWalletTypes.RoleCallPolicy memory targetRole = _rolePolicySlice(targetPolicy, policyRole);
+            require(!targetRole.forbidden, CallPathForbiddenForRole(policyRole));
+            a = uint256(targetRole.delay);
+        }
+        if (selectorMatches) {
+            MERAWalletTypes.RoleCallPolicy memory selectorRole = _rolePolicySlice(selectorPolicy, policyRole);
+            require(!selectorRole.forbidden, CallPathForbiddenForRole(policyRole));
+            b = uint256(selectorRole.delay);
+        }
 
-        require(!targetRole.forbidden && !selectorRole.forbidden, CallPathForbiddenForRole(policyRole));
-
-        uint256 a = uint256(targetRole.delay);
-        uint256 b = uint256(selectorRole.delay);
         return a > b ? a : b;
+    }
+
+    function _policyMatchesValue(
+        MERAWalletTypes.CallPathPolicy memory policy,
+        MERAWalletTypes.Role policyRole,
+        uint256 value
+    ) internal pure returns (bool) {
+        if (!policy.exists) {
+            return false;
+        }
+        if (value == 0 || policyRole == MERAWalletTypes.Role.Emergency) {
+            return true;
+        }
+        return _rolePolicySlice(policy, policyRole).allowValue;
     }
 
     function _requireLifeAliveForStateChanges() internal view {
@@ -1527,7 +1553,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         returns (MERAWalletTypes.RoleCallPolicy memory)
     {
         if (callerRole == MERAWalletTypes.Role.Emergency) {
-            return MERAWalletTypes.RoleCallPolicy({delay: policy.emergencyDelay, forbidden: false});
+            return MERAWalletTypes.RoleCallPolicy({delay: policy.emergencyDelay, forbidden: false, allowValue: true});
         }
         if (callerRole == MERAWalletTypes.Role.Backup) {
             return policy.backup;

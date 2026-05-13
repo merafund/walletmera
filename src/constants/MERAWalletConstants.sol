@@ -25,7 +25,7 @@ library MERAWalletConstants {
     /// @notice Numeric rank for `Role.Emergency`.
     uint256 internal constant ROLE_RANK_EMERGENCY = 3;
 
-    // --- Timelock bounds (aligned with uint56 per-path delays in call policies) ---
+    // --- Timelock bounds (aligned with uint32 per-path delays in call policies) ---
     /// @notice Minimum allowed timelock delay.
     uint256 internal constant MIN_TIMELOCK_DELAY = 0;
     /// @notice Maximum allowed timelock delay.
