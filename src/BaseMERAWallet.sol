@@ -556,8 +556,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             OperationNotPending(operationId)
         );
 
-        require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation(operationId));
-        require(_roleRank(callerRole) >= _roleRank(operation.creatorRole), CannotCancelOperation(operationId));
+        require(operation.creatorRole != MERAWalletTypes.Role.Emergency, CannotCancelOperation());
+        require(_roleRank(callerRole) >= _roleRank(operation.creatorRole), CannotCancelOperation());
 
         // Zero relay reward slot; relay ETH stays on the wallet (no refund to the proposer on cancel).
         relayOperation.relayReward = 0;

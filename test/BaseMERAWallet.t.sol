@@ -1562,7 +1562,7 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(primary);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
+        vm.expectRevert(IBaseMERAWalletErrors.CannotCancelOperation.selector);
         wallet.cancelPending(operationId);
     }
 
@@ -1617,7 +1617,7 @@ contract BaseMERAWalletTest is Test {
         bytes32 operationId = wallet.proposeTransaction(calls, 1);
 
         vm.prank(backup);
-        vm.expectRevert(abi.encodeWithSelector(IBaseMERAWalletErrors.CannotCancelOperation.selector, operationId));
+        vm.expectRevert(IBaseMERAWalletErrors.CannotCancelOperation.selector);
         wallet.cancelPending(operationId);
     }
 
@@ -3042,14 +3042,10 @@ contract BaseMERAWalletTest is Test {
         bool backupAllowValue
     ) internal pure returns (MERAWalletTypes.CallPathPolicy memory p) {
         p.primary = MERAWalletTypes.RoleCallPolicy({
-            delay: primaryDelay,
-            forbidden: primaryForbidden,
-            allowValue: primaryAllowValue
+            delay: primaryDelay, forbidden: primaryForbidden, allowValue: primaryAllowValue
         });
         p.backup = MERAWalletTypes.RoleCallPolicy({
-            delay: backupDelay,
-            forbidden: backupForbidden,
-            allowValue: backupAllowValue
+            delay: backupDelay, forbidden: backupForbidden, allowValue: backupAllowValue
         });
         p.exists = true;
     }
