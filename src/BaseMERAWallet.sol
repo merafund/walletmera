@@ -988,8 +988,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _set1271Signer(initialSigner);
 
         MERAWalletTypes.CallPathPolicy memory ownershipAndGrantRolePolicy = MERAWalletTypes.CallPathPolicy({
-            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
-            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
             emergencyDelay: uint32(MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY),
             exists: true
         });
@@ -1002,8 +1002,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
         );
         MERAWalletTypes.CallPathPolicy memory adminNoTimelockPolicy = MERAWalletTypes.CallPathPolicy({
-            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
-            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
             emergencyDelay: 0,
             exists: true
         });
@@ -1353,11 +1353,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address target,
         uint256 value,
         bytes calldata data
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    ) internal view returns (uint256) {
         bytes4 selector = _extractSelectorFromCalldataBytes(data);
         return _getCallDelayForPolicyRoleFromSelector(policyRole, target, value, selector);
     }
@@ -1367,11 +1363,7 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         address target,
         uint256 value,
         bytes4 selector
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    ) internal view returns (uint256) {
         MERAWalletTypes.CallPathPolicy memory pairPolicy = callPolicyByTargetSelector[target][selector];
         if (_policyMatchesValue(pairPolicy, policyRole, value)) {
             MERAWalletTypes.RoleCallPolicy memory pairRole = _rolePolicySlice(pairPolicy, policyRole);
