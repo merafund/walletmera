@@ -22,9 +22,11 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
     function _getCallDelayForPolicyRoleFromMemoryData(
         MERAWalletTypes.Role policyRole,
         address target,
+        uint256 value,
         bytes memory data
     ) internal view returns (uint256) {
-        return _getCallDelayForPolicyRoleFromSelector(policyRole, target, _extractSelectorFromMemoryBytes(data));
+        bytes4 selector = _extractSelectorFromMemoryBytes(data);
+        return _getCallDelayForPolicyRoleFromSelector(policyRole, target, value, selector);
     }
 
     /// @notice Returns the call delay for a memory-built call.
@@ -33,7 +35,7 @@ abstract contract MERAWalletMemoryBatches is MERAWalletMemoryBatchExecution {
         view
         returns (uint256)
     {
-        return _getCallDelayForPolicyRoleFromMemoryData(callerRole, callData.target, callData.data);
+        return _getCallDelayForPolicyRoleFromMemoryData(callerRole, callData.target, callData.value, callData.data);
     }
 
     /// @notice Validates a memory-built call batch.
