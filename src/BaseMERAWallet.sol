@@ -988,8 +988,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         _set1271Signer(initialSigner);
 
         MERAWalletTypes.CallPathPolicy memory ownershipAndGrantRolePolicy = MERAWalletTypes.CallPathPolicy({
-            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
-            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
             emergencyDelay: uint32(MERAWalletConstants.OWNERSHIP_AND_ROLE_GRANT_SELECTOR_EMERGENCY_DELAY),
             exists: true
         });
@@ -1002,8 +1002,8 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
             IMERAWalletLoginRegistryMigration.confirmLoginMigration.selector, ownershipAndGrantRolePolicy
         );
         MERAWalletTypes.CallPathPolicy memory adminNoTimelockPolicy = MERAWalletTypes.CallPathPolicy({
-            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
-            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: false}),
+            primary: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
+            backup: MERAWalletTypes.RoleCallPolicy({delay: 0, forbidden: true, allowValue: true}),
             emergencyDelay: 0,
             exists: true
         });
