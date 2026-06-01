@@ -30,6 +30,24 @@ contract SlippageSnapshotHarness {
     }
 }
 
+contract SequencerUptimeFeedMock {
+    int256 private immutable _answer;
+    uint256 private immutable _startedAt;
+
+    constructor(int256 answer_, uint256 startedAt_) {
+        _answer = answer_;
+        _startedAt = startedAt_;
+    }
+
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
+    {
+        return (1, _answer, _startedAt, block.timestamp, 1);
+    }
+}
+
 contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixture {
     function setUp() public {
         _setUpSlippageFixture(
@@ -37,6 +55,8 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixtu
                 emergency,
                 DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
                 DEFAULT_MAX_ORACLE_STALE_SECONDS,
+                DEFAULT_SEQUENCER_UPTIME_FEED,
+                DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
                 DEFAULT_REQUIRE_ROUTER_ALLOWLIST
             )
         );
@@ -371,7 +391,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixtu
     /// @dev Router allowlist disabled at deploy: swap succeeds even when router is not in `allowedRouter`.
     function test_RequireRouterAllowlistFalse_SkipsRouterGate() public {
         MERAWalletUniswapV2OracleSlippageChecker looseChecker = new MERAWalletUniswapV2OracleSlippageChecker(
-            emergency, DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS, DEFAULT_MAX_ORACLE_STALE_SECONDS, false
+            emergency,
+            DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
+            DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
+            false
         );
         assertFalse(looseChecker.REQUIRE_ROUTER_ALLOWLIST());
 
@@ -429,6 +454,48 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixtu
         wallet.executeTransaction(calls, 1);
     }
 
+    function test_SequencerDown_RevertsBeforeOracleRead() public {
+        SequencerUptimeFeedMock sequencerFeed = new SequencerUptimeFeedMock(1, block.timestamp - 3601);
+        MERAWalletUniswapV2OracleSlippageChecker l2Checker = _deploySequencerChecker(address(sequencerFeed), 3600);
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SequencerDown.selector);
+        wallet.executeTransaction(_approveAndSwapCallsWith(address(l2Checker)), 91_001);
+    }
+
+    function test_SequencerInvalidStartedAt_RevertsBeforeOracleRead() public {
+        SequencerUptimeFeedMock sequencerFeed = new SequencerUptimeFeedMock(0, 0);
+        MERAWalletUniswapV2OracleSlippageChecker l2Checker = _deploySequencerChecker(address(sequencerFeed), 3600);
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SequencerUptimeFeedInvalid.selector);
+        wallet.executeTransaction(_approveAndSwapCallsWith(address(l2Checker)), 91_004);
+    }
+
+    function test_SequencerGracePeriodNotOver_RevertsBeforeOracleRead() public {
+        uint256 startedAt = block.timestamp - 10;
+        SequencerUptimeFeedMock sequencerFeed = new SequencerUptimeFeedMock(0, startedAt);
+        MERAWalletUniswapV2OracleSlippageChecker l2Checker = _deploySequencerChecker(address(sequencerFeed), 3600);
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        vm.expectRevert(
+            abi.encodeWithSelector(IMERAWalletUniswapV2SlippageErrors.SequencerGracePeriodNotOver.selector, startedAt)
+        );
+        wallet.executeTransaction(_approveAndSwapCallsWith(address(l2Checker)), 91_002);
+    }
+
+    function test_SequencerGracePeriodElapsed_AllowsOracleRead() public {
+        SequencerUptimeFeedMock sequencerFeed = new SequencerUptimeFeedMock(0, block.timestamp - 3601);
+        MERAWalletUniswapV2OracleSlippageChecker l2Checker = _deploySequencerChecker(address(sequencerFeed), 3600);
+
+        router.setBadRate(false);
+        vm.prank(primary);
+        wallet.executeTransaction(_approveAndSwapCallsWith(address(l2Checker)), 91_003);
+    }
+
     function test_PauseAgent_Pause_BlocksHooksWithEnforcedPause() public {
         vm.prank(pauseAgent);
         checker.pause();
@@ -457,7 +524,12 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixtu
         uint256 bps = checker.BPS();
         vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SlippageInvalidDeviationBps.selector);
         new MERAWalletUniswapV2OracleSlippageChecker(
-            emergency, bps, DEFAULT_MAX_ORACLE_STALE_SECONDS, DEFAULT_REQUIRE_ROUTER_ALLOWLIST
+            emergency,
+            bps,
+            DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
+            DEFAULT_REQUIRE_ROUTER_ALLOWLIST
         );
     }
 
@@ -475,7 +547,16 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixtu
 
     function test_Constructor_InvalidStaleReverts() public {
         vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.SlippageInvalidStaleSeconds.selector);
-        new MERAWalletUniswapV2OracleSlippageChecker(emergency, 100, 0, true);
+        new MERAWalletUniswapV2OracleSlippageChecker(
+            emergency, 100, 0, DEFAULT_SEQUENCER_UPTIME_FEED, DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS, true
+        );
+    }
+
+    function test_Constructor_InvalidSequencerGracePeriodReverts() public {
+        vm.expectRevert(IMERAWalletUniswapV2SlippageErrors.InvalidSequencerGracePeriod.selector);
+        new MERAWalletUniswapV2OracleSlippageChecker(
+            emergency, 100, DEFAULT_MAX_ORACLE_STALE_SECONDS, address(1), 0, true
+        );
     }
 
     function test_SetAllowedRouters_LengthMismatch_Reverts() public {
@@ -838,6 +919,26 @@ contract MERAWalletUniswapV2OracleSlippageCheckerTest is MERAWalletSlippageFixtu
         dwl.setAllowedAssets(newAssets, newAllowed);
         dwl.setAssetSources(newSrcAssets, newSrcFeeds);
         vm.stopPrank();
+    }
+
+    function _deploySequencerChecker(address sequencerFeed, uint256 gracePeriod)
+        private
+        returns (MERAWalletUniswapV2OracleSlippageChecker l2Checker)
+    {
+        l2Checker = new MERAWalletUniswapV2OracleSlippageChecker(
+            emergency,
+            DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
+            DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            sequencerFeed,
+            gracePeriod,
+            DEFAULT_REQUIRE_ROUTER_ALLOWLIST
+        );
+
+        vm.startPrank(emergency);
+        l2Checker.setAllowedRouters(_oneAddress(address(router)), _oneBool(true));
+        l2Checker.setDefaultAssetWhitelist(checker.defaultAssetWhitelist());
+        vm.stopPrank();
+        _setOptionalCheckers(_mkOptionalCheckerUpdate(address(l2Checker), true, ""));
     }
 
     function _ethInSwapCall() internal view returns (MERAWalletTypes.Call memory) {

@@ -44,6 +44,8 @@ contract MERAWalletCheckerFactoriesTest is Test {
 
     uint256 internal constant DEFAULT_MAX_NEG_BPS = 100;
     uint256 internal constant DEFAULT_MAX_STALE = 3600;
+    address internal constant DEFAULT_SEQUENCER_UPTIME_FEED = address(0);
+    uint256 internal constant DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS = 0;
     bool internal constant DEFAULT_REQUIRE_ROUTER = true;
 
     function test_AssetWhiteListFactory_DeploysAndEmits() public {
@@ -138,12 +140,20 @@ contract MERAWalletCheckerFactoriesTest is Test {
         vm.expectEmit(true, false, false, true);
         emit MERAWalletCheckerDataOracleSlippageCheckerFactory.Deployed(predicted);
 
-        MERAWalletCheckerDataOracleSlippageChecker deployed =
-            factory.deploy(initialOwner, DEFAULT_MAX_NEG_BPS, DEFAULT_MAX_STALE, DEFAULT_REQUIRE_ROUTER);
+        MERAWalletCheckerDataOracleSlippageChecker deployed = factory.deploy(
+            initialOwner,
+            DEFAULT_MAX_NEG_BPS,
+            DEFAULT_MAX_STALE,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
+            DEFAULT_REQUIRE_ROUTER
+        );
         assertEq(address(deployed), predicted);
         assertEq(deployed.owner(), initialOwner);
         assertEq(deployed.MAX_ORACLE_NEGATIVE_DEVIATION_BPS(), DEFAULT_MAX_NEG_BPS);
         assertEq(deployed.MAX_ORACLE_STALE_SECONDS(), DEFAULT_MAX_STALE);
+        assertEq(deployed.SEQUENCER_UPTIME_FEED(), DEFAULT_SEQUENCER_UPTIME_FEED);
+        assertEq(deployed.SEQUENCER_GRACE_PERIOD_SECONDS(), DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS);
         assertTrue(deployed.REQUIRE_ROUTER_ALLOWLIST());
     }
 
@@ -154,12 +164,20 @@ contract MERAWalletCheckerFactoriesTest is Test {
         vm.expectEmit(true, false, false, true);
         emit MERAWalletUniswapV2OracleSlippageCheckerFactory.Deployed(predicted);
 
-        MERAWalletUniswapV2OracleSlippageChecker deployed =
-            factory.deploy(initialOwner, DEFAULT_MAX_NEG_BPS, DEFAULT_MAX_STALE, DEFAULT_REQUIRE_ROUTER);
+        MERAWalletUniswapV2OracleSlippageChecker deployed = factory.deploy(
+            initialOwner,
+            DEFAULT_MAX_NEG_BPS,
+            DEFAULT_MAX_STALE,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
+            DEFAULT_REQUIRE_ROUTER
+        );
         assertEq(address(deployed), predicted);
         assertEq(deployed.owner(), initialOwner);
         assertEq(deployed.MAX_ORACLE_NEGATIVE_DEVIATION_BPS(), DEFAULT_MAX_NEG_BPS);
         assertEq(deployed.MAX_ORACLE_STALE_SECONDS(), DEFAULT_MAX_STALE);
+        assertEq(deployed.SEQUENCER_UPTIME_FEED(), DEFAULT_SEQUENCER_UPTIME_FEED);
+        assertEq(deployed.SEQUENCER_GRACE_PERIOD_SECONDS(), DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS);
         assertTrue(deployed.REQUIRE_ROUTER_ALLOWLIST());
     }
 }

@@ -21,6 +21,14 @@ interface IMERAWalletUniswapV2SlippageErrors {
     error StaleOraclePrice(address token, uint256 updatedAt);
     /// @notice Oracle answer is non-positive.
     error OracleAnswerInvalid(address token);
+    /// @notice Sequencer uptime feed grace period is invalid.
+    error InvalidSequencerGracePeriod();
+    /// @notice Sequencer uptime feed reports the sequencer is down.
+    error SequencerDown();
+    /// @notice Sequencer uptime feed data is invalid.
+    error SequencerUptimeFeedInvalid();
+    /// @notice Sequencer has recovered, but the grace period has not elapsed.
+    error SequencerGracePeriodNotOver(uint256 startedAt);
     /// @notice Measured balance deltas are zero or invalid.
     error InvalidMeasuredAmounts();
     /// @notice Swap output is worse than oracle-implied output beyond tolerance.

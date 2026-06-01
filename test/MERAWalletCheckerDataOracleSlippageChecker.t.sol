@@ -18,6 +18,8 @@ contract MERAWalletCheckerDataOracleSlippageCheckerTest is MERAWalletSlippageFix
                 emergency,
                 DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
                 DEFAULT_MAX_ORACLE_STALE_SECONDS,
+                DEFAULT_SEQUENCER_UPTIME_FEED,
+                DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
                 DEFAULT_REQUIRE_ROUTER_ALLOWLIST
             )
         );
@@ -159,7 +161,12 @@ contract MERAWalletCheckerDataOracleSlippageCheckerTest is MERAWalletSlippageFix
     /// @dev Router allowlist disabled at deploy: swap succeeds even when router is not in `allowedRouter`.
     function test_CheckerDataRequireRouterAllowlistFalse_SkipsRouterGate() public {
         MERAWalletCheckerDataOracleSlippageChecker looseChecker = new MERAWalletCheckerDataOracleSlippageChecker(
-            emergency, DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS, DEFAULT_MAX_ORACLE_STALE_SECONDS, false
+            emergency,
+            DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
+            DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
+            false
         );
         assertFalse(looseChecker.REQUIRE_ROUTER_ALLOWLIST());
 

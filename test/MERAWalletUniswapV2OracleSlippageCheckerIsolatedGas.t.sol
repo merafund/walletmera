@@ -58,6 +58,8 @@ contract MERAWalletUniswapV2OracleSlippageCheckerIsolatedGasTest is MERAWalletTe
             OWNER,
             DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
             DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
             DEFAULT_REQUIRE_ROUTER_ALLOWLIST
         );
 

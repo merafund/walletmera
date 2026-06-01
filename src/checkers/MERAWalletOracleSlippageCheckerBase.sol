@@ -38,6 +38,12 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     /// @notice Reject Chainlink answers older than this many seconds.
     uint256 public immutable MAX_ORACLE_STALE_SECONDS;
 
+    /// @notice Optional Chainlink L2 sequencer uptime feed; `address(0)` disables the check for L1 deployments.
+    address public immutable SEQUENCER_UPTIME_FEED;
+
+    /// @notice Grace period after sequencer recovery before asset oracle reads are accepted.
+    uint256 public immutable SEQUENCER_GRACE_PERIOD_SECONDS;
+
     /// @notice Whether router calls must target an explicitly allowed router.
     /// @dev When false, {allowedRouter} and {setAllowedRouters} are ignored; any `call.target` passes the router gate.
     /// Asset whitelist and oracle checks still apply; malicious routers are not blocked by allowlist.
@@ -58,17 +64,24 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
     /// @param initialOwner Admin for router allowlist when `requireRouterAllowlist` is true (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS` so `BPS - value` does not underflow.
     /// @param maxOracleStaleSeconds Max age of Chainlink `updatedAt`; must be `> 0`.
+    /// @param sequencerUptimeFeed Chainlink L2 sequencer uptime feed, or `address(0)` on L1/no-op deployments.
+    /// @param sequencerGracePeriodSeconds Delay after sequencer recovery before oracle reads are accepted; must be non-zero when a feed is set.
     /// @param requireRouterAllowlist If true, only routers in {allowedRouter} may be used; if false, router allowlist is not enforced.
     constructor(
         address initialOwner,
         uint256 maxOracleNegativeDeviationBps,
         uint256 maxOracleStaleSeconds,
+        address sequencerUptimeFeed,
+        uint256 sequencerGracePeriodSeconds,
         bool requireRouterAllowlist
     ) Ownable(initialOwner) {
         require(maxOracleNegativeDeviationBps < BPS, SlippageInvalidDeviationBps());
         require(maxOracleStaleSeconds != 0, SlippageInvalidStaleSeconds());
+        require(sequencerUptimeFeed == address(0) || sequencerGracePeriodSeconds != 0, InvalidSequencerGracePeriod());
         MAX_ORACLE_NEGATIVE_DEVIATION_BPS = maxOracleNegativeDeviationBps;
         MAX_ORACLE_STALE_SECONDS = maxOracleStaleSeconds;
+        SEQUENCER_UPTIME_FEED = sequencerUptimeFeed;
+        SEQUENCER_GRACE_PERIOD_SECONDS = sequencerGracePeriodSeconds;
         REQUIRE_ROUTER_ALLOWLIST = requireRouterAllowlist;
     }
 
@@ -259,6 +272,8 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         uint256 maxOracleNegativeDeviationBps = _effectiveMaxOracleNegativeDeviationBps(wallet);
         uint256 maxOracleStaleSeconds = _effectiveMaxOracleStaleSeconds(wallet);
 
+        _requireSequencerUp();
+
         (uint256 oracleAnswerIn, uint8 priceFeedDecimalsIn) =
             _readFeed(snapshot.tokenIn, snapshot.priceFeedTokenIn, maxOracleStaleSeconds);
         (uint256 oracleAnswerOut, uint8 priceFeedDecimalsOut) =
@@ -362,6 +377,23 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
             key := keccak256(freeMemoryPointer, 0x60)
             mstore(0x40, add(freeMemoryPointer, 0x60))
         }
+    }
+
+    /// @notice Reverts when the configured L2 sequencer is down or still within the post-recovery grace period.
+    function _requireSequencerUp() private view {
+        address sequencerUptimeFeed = SEQUENCER_UPTIME_FEED;
+        if (sequencerUptimeFeed == address(0)) {
+            return;
+        }
+
+        (, int256 sequencerStatus, uint256 startedAt,,) = IAggregatorV3(sequencerUptimeFeed).latestRoundData();
+        if (sequencerStatus != 0) {
+            revert SequencerDown();
+        }
+        if (startedAt == 0) {
+            revert SequencerUptimeFeedInvalid();
+        }
+        require(block.timestamp > startedAt + SEQUENCER_GRACE_PERIOD_SECONDS, SequencerGracePeriodNotOver(startedAt));
     }
 
     /// @notice Reads and validates the latest oracle answer for `token`.

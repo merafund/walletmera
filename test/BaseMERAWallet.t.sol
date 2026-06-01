@@ -71,6 +71,8 @@ contract BaseMERAWalletTest is Test {
     uint256 internal constant EMERGENCY_PK = 0xE911;
     uint256 internal constant DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS = 100;
     uint256 internal constant DEFAULT_MAX_ORACLE_STALE_SECONDS = 3600;
+    address internal constant DEFAULT_SEQUENCER_UPTIME_FEED = address(0);
+    uint256 internal constant DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS = 0;
     uint256 internal constant ROLE_TIMELOCK_PRIMARY_SALT = 7101;
     uint256 internal constant ROLE_TIMELOCK_BACKUP_SALT = 7102;
     uint256 internal constant ROLE_TIMELOCK_EMERGENCY_SALT = 7103;
@@ -2389,7 +2391,12 @@ contract BaseMERAWalletTest is Test {
 
     function test_SetOptionalChecker_AppliesSlippageCheckerAssetWhitelistConfig() public {
         MERAWalletUniswapV2OracleSlippageChecker slip = new MERAWalletUniswapV2OracleSlippageChecker(
-            emergency, DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS, DEFAULT_MAX_ORACLE_STALE_SECONDS, true
+            emergency,
+            DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS,
+            DEFAULT_MAX_ORACLE_STALE_SECONDS,
+            DEFAULT_SEQUENCER_UPTIME_FEED,
+            DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS,
+            true
         );
         MERAWalletAssetWhiteList aw = new MERAWalletAssetWhiteList(emergency);
         MERAWalletUniswapV2SlippageTypes.UniswapV2SlippageCheckerConfig memory cfg =

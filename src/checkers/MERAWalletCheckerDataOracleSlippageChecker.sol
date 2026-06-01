@@ -12,15 +12,24 @@ contract MERAWalletCheckerDataOracleSlippageChecker is MERAWalletOracleSlippageC
     /// @param initialOwner Admin for router allowlist when `requireRouterAllowlist` is true (see {Ownable}).
     /// @param maxOracleNegativeDeviationBps Max allowed oracle shortfall in BPS; must be `< BPS`.
     /// @param maxOracleStaleSeconds Max age of Chainlink `updatedAt`; must be `> 0`.
+    /// @param sequencerUptimeFeed Chainlink L2 sequencer uptime feed, or `address(0)` on L1/no-op deployments.
+    /// @param sequencerGracePeriodSeconds Delay after sequencer recovery before oracle reads are accepted.
     /// @param requireRouterAllowlist Enforce {MERAWalletOracleSlippageCheckerBase-allowedRouter} when true.
     constructor(
         address initialOwner,
         uint256 maxOracleNegativeDeviationBps,
         uint256 maxOracleStaleSeconds,
+        address sequencerUptimeFeed,
+        uint256 sequencerGracePeriodSeconds,
         bool requireRouterAllowlist
     )
         MERAWalletOracleSlippageCheckerBase(
-            initialOwner, maxOracleNegativeDeviationBps, maxOracleStaleSeconds, requireRouterAllowlist
+            initialOwner,
+            maxOracleNegativeDeviationBps,
+            maxOracleStaleSeconds,
+            sequencerUptimeFeed,
+            sequencerGracePeriodSeconds,
+            requireRouterAllowlist
         )
     {}
 

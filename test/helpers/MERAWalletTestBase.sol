@@ -17,6 +17,8 @@ abstract contract MERAWalletTestBase is Test {
     uint256 internal constant DEFAULT_TEST_TIMESTAMP = 1_000_000;
     uint256 internal constant DEFAULT_MAX_ORACLE_NEGATIVE_DEVIATION_BPS = 100;
     uint256 internal constant DEFAULT_MAX_ORACLE_STALE_SECONDS = 3600;
+    address internal constant DEFAULT_SEQUENCER_UPTIME_FEED = address(0);
+    uint256 internal constant DEFAULT_SEQUENCER_GRACE_PERIOD_SECONDS = 0;
     bool internal constant DEFAULT_REQUIRE_ROUTER_ALLOWLIST = true;
 
     bytes4 internal constant UNSUPPORTED_SELECTOR = 0xdeadbeef;
