@@ -109,6 +109,53 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         guardian.publishLoginList(carolOnly, proofs);
     }
 
+    function test_PublishLoginList_RejectsLegacySingleHashProof() public {
+        bytes32 legacyRoot = Hashes.commutativeKeccak256(
+            Hashes.commutativeKeccak256(_loginHash("alice"), _loginHash("bob")), _loginHash("carol")
+        );
+        MERAWalletLoginMerkleGuardian legacyRootGuardian =
+            new MERAWalletLoginMerkleGuardian(address(registry), legacyRoot, 2, PROPOSAL_LIFETIME);
+        bytes32[] memory aliceOnly = _singleHash(_loginHash("alice"));
+        bytes32[][] memory legacyProofs = new bytes32[][](1);
+        legacyProofs[0] = new bytes32[](2);
+        legacyProofs[0][0] = _loginHash("bob");
+        legacyProofs[0][1] = _loginHash("carol");
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(
+            abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.InvalidLoginProof.selector, _loginHash("alice"))
+        );
+        legacyRootGuardian.publishLoginList(aliceOnly, legacyProofs);
+    }
+
+    function test_PublishLoginList_RejectsInternalNodeAsLoginHash() public {
+        bytes32 internalNode = Hashes.commutativeKeccak256(_leaf(_loginHash("alice")), _leaf(_loginHash("bob")));
+        bytes32[] memory hashes = new bytes32[](2);
+        hashes[0] = _loginHash("alice");
+        hashes[1] = internalNode;
+        bytes32[][] memory proofs = new bytes32[][](2);
+        proofs[0] = _proofs(_singleHash(_loginHash("alice")))[0];
+        proofs[1] = new bytes32[](1);
+        proofs[1][0] = _leaf(_loginHash("carol"));
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.InvalidLoginProof.selector, internalNode));
+        guardian.publishLoginList(hashes, proofs);
+    }
+
+    function test_PublishLoginList_RejectsRootAsLoginHash() public {
+        bytes32[] memory hashes = new bytes32[](2);
+        hashes[0] = _loginHash("alice");
+        hashes[1] = loginRoot;
+        bytes32[][] memory proofs = new bytes32[][](2);
+        proofs[0] = _proofs(_singleHash(_loginHash("alice")))[0];
+        proofs[1] = new bytes32[](0);
+
+        vm.prank(address(aliceWallet));
+        vm.expectRevert(abi.encodeWithSelector(MERAWalletLoginMerkleGuardian.InvalidLoginProof.selector, loginRoot));
+        guardian.publishLoginList(hashes, proofs);
+    }
+
     function test_PublishLoginList_RejectsDuplicates() public {
         bytes32[] memory duplicates = new bytes32[](2);
         duplicates[0] = _loginHash("alice");
@@ -167,8 +214,10 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         _registerLogin("erin", address(erinWallet));
 
         bytes32 expectedRoot = Hashes.commutativeKeccak256(
-            Hashes.commutativeKeccak256(Hashes.commutativeKeccak256(fiveLogins[0], fiveLogins[1]), fiveLogins[4]),
-            Hashes.commutativeKeccak256(fiveLogins[2], fiveLogins[3])
+            Hashes.commutativeKeccak256(
+                Hashes.commutativeKeccak256(_leaf(fiveLogins[0]), _leaf(fiveLogins[1])), _leaf(fiveLogins[4])
+            ),
+            Hashes.commutativeKeccak256(_leaf(fiveLogins[2]), _leaf(fiveLogins[3]))
         );
         bytes32 ozCompatibleRoot = _computeRoot(fiveLogins);
         MERAWalletLoginMerkleGuardian fiveLoginGuardian =
@@ -510,6 +559,10 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         return keccak256(bytes(login));
     }
 
+    function _leaf(bytes32 loginHash) internal pure returns (bytes32) {
+        return keccak256(bytes.concat(keccak256(abi.encode(loginHash))));
+    }
+
     function _singleHash(bytes32 loginHash) internal pure returns (bytes32[] memory hashes) {
         hashes = new bytes32[](1);
         hashes[0] = loginHash;
@@ -542,7 +595,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         heap = new bytes32[](treeLength);
 
         for (uint256 i = internalCount; i < treeLength; ++i) {
-            heap[i] = hashes[treeLength - 1 - i];
+            heap[i] = _leaf(hashes[treeLength - 1 - i]);
         }
         for (uint256 i = internalCount; i > 0;) {
             unchecked {
@@ -591,7 +644,7 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
         uint256 leafCount = hashes.length;
         uint256 internalCount = leafCount - 1;
         if (internalCount == 0) {
-            return hashes[0];
+            return _leaf(hashes[0]);
         }
 
         bytes32[] memory nodes = new bytes32[](internalCount);
@@ -603,8 +656,8 @@ contract MERAWalletLoginMerkleGuardianTest is Test {
             }
             uint256 leftIndex = (i << 1) + 1;
             uint256 rightIndex = leftIndex + 1;
-            bytes32 left = leftIndex < internalCount ? nodes[leftIndex] : hashes[treeLength - 1 - leftIndex];
-            bytes32 right = rightIndex < internalCount ? nodes[rightIndex] : hashes[treeLength - 1 - rightIndex];
+            bytes32 left = leftIndex < internalCount ? nodes[leftIndex] : _leaf(hashes[treeLength - 1 - leftIndex]);
+            bytes32 right = rightIndex < internalCount ? nodes[rightIndex] : _leaf(hashes[treeLength - 1 - rightIndex]);
             nodes[i] = Hashes.commutativeKeccak256(left, right);
         }
 

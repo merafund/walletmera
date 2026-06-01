@@ -123,7 +123,8 @@ contract MERAWalletLoginMerkleGuardian {
         for (uint256 i = 0; i < loginCount;) {
             bytes32 loginHash = loginHashes[i];
             require(!publishedLoginHash[loginHash], DuplicateLoginHash(loginHash));
-            require(MerkleProof.verifyCalldata(proofs[i], LOGIN_ROOT, loginHash), InvalidLoginProof(loginHash));
+            bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(loginHash))));
+            require(MerkleProof.verifyCalldata(proofs[i], LOGIN_ROOT, leaf), InvalidLoginProof(loginHash));
             if (loginHash == senderLoginHash) {
                 senderCanPublish = true;
             }
