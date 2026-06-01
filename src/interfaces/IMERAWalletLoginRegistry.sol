@@ -24,6 +24,11 @@ interface IMERAWalletLoginRegistry is IMERAWalletLoginRegistryMigration {
         external
         view
         returns (address previousWallet, address newWallet, bytes32 newLoginHash);
+    /// @notice Expiry timestamp for a pending login migration; zero means absent.
+    function pendingLoginMigrationExpiresAtByOldLoginHash(bytes32 oldLoginHash)
+        external
+        view
+        returns (uint256 expiresAt);
     /// @notice Base paid-login price.
     function baseLoginPrice() external view returns (uint256);
     /// @notice Multiplier applied to shorter paid logins.

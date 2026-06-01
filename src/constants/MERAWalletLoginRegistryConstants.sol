@@ -7,6 +7,8 @@ library MERAWalletLoginRegistryConstants {
     uint256 internal constant MIN_COMMITMENT_AGE = 60 seconds;
     /// @notice Maximum age after which a login commitment expires.
     uint256 internal constant MAX_COMMITMENT_AGE = 1 hours;
+    /// @notice Maximum age before a pending login migration can be replaced.
+    uint256 internal constant LOGIN_MIGRATION_TTL = 1 days;
     /// @notice Minimum login length.
     uint256 internal constant MIN_LOGIN_LENGTH = 3;
     /// @notice Maximum login length.

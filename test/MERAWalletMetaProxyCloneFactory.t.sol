@@ -415,6 +415,110 @@ contract MERAWalletMetaProxyCloneFactoryTest is Test {
         registry.confirmLoginMigration(login);
     }
 
+    function test_registry_migration_cancel_by_requester_clears_pending_request() public {
+        string memory login = "cancel-a";
+        string memory newLogin = "cancel-b";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+        address newWallet = _deployCommitted(newLogin, p);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+
+        vm.expectEmit(true, true, true, true);
+        emit IMERAWalletLoginRegistryEvents.LoginMigrationCancelled(
+            keccak256(bytes(login)), login, keccak256(bytes(newLogin)), deployed, newWallet
+        );
+        vm.prank(deployed);
+        registry.cancelLoginMigration(login);
+
+        (address previousWallet, address confirmingWallet, bytes32 newLoginHash) =
+            registry.pendingLoginMigrationByOldLoginHash(keccak256(bytes(login)));
+        assertEq(previousWallet, address(0));
+        assertEq(confirmingWallet, address(0));
+        assertEq(newLoginHash, bytes32(0));
+        assertEq(registry.pendingLoginMigrationExpiresAtByOldLoginHash(keccak256(bytes(login))), 0);
+    }
+
+    function test_registry_migration_cancel_reverts_from_non_requester() public {
+        string memory login = "cancel-a";
+        string memory newLogin = "cancel-b";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+        address newWallet = _deployCommitted(newLogin, p);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+
+        vm.prank(newWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationNotRequester.selector);
+        registry.cancelLoginMigration(login);
+    }
+
+    function test_registry_migration_can_be_requested_again_after_cancel() public {
+        string memory login = "cancel-a";
+        string memory newLogin = "cancel-b";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+        address newWallet = _deployCommitted(newLogin, p);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+        vm.prank(deployed);
+        registry.cancelLoginMigration(login);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+
+        (address previousWallet, address confirmingWallet, bytes32 newLoginHash) =
+            registry.pendingLoginMigrationByOldLoginHash(keccak256(bytes(login)));
+        assertEq(previousWallet, deployed);
+        assertEq(confirmingWallet, newWallet);
+        assertEq(newLoginHash, keccak256(bytes(newLogin)));
+        assertGt(registry.pendingLoginMigrationExpiresAtByOldLoginHash(keccak256(bytes(login))), block.timestamp);
+    }
+
+    function test_registry_migration_confirm_reverts_after_expiry() public {
+        string memory login = "expire-a";
+        string memory newLogin = "expire-b";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+        address newWallet = _deployCommitted(newLogin, p);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+
+        skip(MERAWalletLoginRegistryConstants.LOGIN_MIGRATION_TTL + 1);
+
+        vm.prank(newWallet);
+        vm.expectRevert(IMERAWalletLoginRegistryErrors.LoginMigrationNotFound.selector);
+        registry.confirmLoginMigration(login);
+    }
+
+    function test_registry_migration_can_be_requested_again_after_expiry() public {
+        string memory login = "expire-a";
+        string memory newLogin = "expire-b";
+        MERAWalletTypes.WalletInitParams memory p = _params();
+        address deployed = _deployCommitted(login, p);
+        address newWallet = _deployCommitted(newLogin, p);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+        uint256 firstExpiresAt = registry.pendingLoginMigrationExpiresAtByOldLoginHash(keccak256(bytes(login)));
+
+        skip(MERAWalletLoginRegistryConstants.LOGIN_MIGRATION_TTL + 1);
+
+        vm.prank(deployed);
+        registry.requestLoginMigration(login, newLogin, newWallet);
+
+        (address previousWallet, address confirmingWallet, bytes32 newLoginHash) =
+            registry.pendingLoginMigrationByOldLoginHash(keccak256(bytes(login)));
+        assertEq(previousWallet, deployed);
+        assertEq(confirmingWallet, newWallet);
+        assertEq(newLoginHash, keccak256(bytes(newLogin)));
+        assertGt(registry.pendingLoginMigrationExpiresAtByOldLoginHash(keccak256(bytes(login))), firstExpiresAt);
+    }
+
     function test_registry_migration_reverts_when_guardian_emergency_differ() public {
         string memory oldLogin = "mig-old";
         string memory newLogin = "mig-new";

@@ -43,6 +43,8 @@ interface IMERAWalletLoginRegistryErrors {
     error LoginMigrationAlreadyPending();
     /// @notice Login migration was not found.
     error LoginMigrationNotFound();
+    /// @notice Caller is not the wallet that requested migration.
+    error LoginMigrationNotRequester();
     /// @notice Caller is not the wallet expected to confirm migration.
     error LoginMigrationNotConfirmingWallet();
     /// @notice Login migration state no longer matches registry ownership.

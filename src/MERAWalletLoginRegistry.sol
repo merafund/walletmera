@@ -36,6 +36,8 @@ contract MERAWalletLoginRegistry is
     mapping(bytes32 oldLoginHash => MERAWalletLoginRegistryTypes.PendingLoginMigration migration)
         public
         override pendingLoginMigrationByOldLoginHash;
+    /// @notice Expiry timestamp for each pending migration; zero means absent.
+    mapping(bytes32 oldLoginHash => uint256 expiresAt) public override pendingLoginMigrationExpiresAtByOldLoginHash;
     mapping(bytes32 loginHash => string login) private _loginByHash;
 
     /// @notice Base paid-login price.
@@ -202,8 +204,10 @@ contract MERAWalletLoginRegistry is
                 && loginHashByWallet[newWallet] == newLoginHash,
             LoginNotOwned()
         );
+        MERAWalletLoginRegistryTypes.PendingLoginMigration memory pendingMigration =
+            pendingLoginMigrationByOldLoginHash[oldLoginHash];
         require(
-            pendingLoginMigrationByOldLoginHash[oldLoginHash].previousWallet == address(0),
+            pendingMigration.previousWallet == address(0) || _isLoginMigrationExpired(oldLoginHash),
             LoginMigrationAlreadyPending()
         );
 
@@ -212,8 +216,25 @@ contract MERAWalletLoginRegistry is
         pendingLoginMigrationByOldLoginHash[oldLoginHash] = MERAWalletLoginRegistryTypes.PendingLoginMigration({
             previousWallet: msg.sender, newWallet: newWallet, newLoginHash: newLoginHash
         });
+        pendingLoginMigrationExpiresAtByOldLoginHash[oldLoginHash] =
+            block.timestamp + MERAWalletLoginRegistryConstants.LOGIN_MIGRATION_TTL;
 
         emit LoginMigrationRequested(oldLoginHash, oldLogin, newLoginHash, newLogin, msg.sender, newWallet);
+    }
+
+    /// @notice Cancels a pending login migration as the requesting wallet.
+    function cancelLoginMigration(string calldata oldLogin) external override {
+        bytes32 oldLoginHash = _requireLoginHash(oldLogin);
+        MERAWalletLoginRegistryTypes.PendingLoginMigration memory migration =
+            pendingLoginMigrationByOldLoginHash[oldLoginHash];
+        require(migration.previousWallet != address(0), LoginMigrationNotFound());
+        require(msg.sender == migration.previousWallet, LoginMigrationNotRequester());
+
+        _clearPendingLoginMigration(oldLoginHash);
+
+        emit LoginMigrationCancelled(
+            oldLoginHash, oldLogin, migration.newLoginHash, migration.previousWallet, migration.newWallet
+        );
     }
 
     /// @notice Confirms a pending login migration as the new wallet.
@@ -221,7 +242,9 @@ contract MERAWalletLoginRegistry is
         bytes32 oldLoginHash = _requireLoginHash(oldLogin);
         MERAWalletLoginRegistryTypes.PendingLoginMigration memory migration =
             pendingLoginMigrationByOldLoginHash[oldLoginHash];
-        require(migration.previousWallet != address(0), LoginMigrationNotFound());
+        require(
+            migration.previousWallet != address(0) && !_isLoginMigrationExpired(oldLoginHash), LoginMigrationNotFound()
+        );
         require(msg.sender == migration.newWallet, LoginMigrationNotConfirmingWallet());
 
         address previousWallet = migration.previousWallet;
@@ -242,7 +265,7 @@ contract MERAWalletLoginRegistry is
         walletByLoginHash[newLoginHash] = previousWallet;
         loginHashByWallet[previousWallet] = newLoginHash;
         loginHashByWallet[newWallet] = oldLoginHash;
-        delete pendingLoginMigrationByOldLoginHash[oldLoginHash];
+        _clearPendingLoginMigration(oldLoginHash);
 
         emit LoginMigrationConfirmed(oldLoginHash, oldLogin, newLoginHash, newLogin, previousWallet, newWallet);
         emit LoginTransferred(oldLoginHash, oldLogin, previousWallet, newWallet);
@@ -332,6 +355,16 @@ contract MERAWalletLoginRegistry is
 
     function _onlyFactory() private view {
         require(isFactory[msg.sender], UnauthorizedFactory());
+    }
+
+    function _isLoginMigrationExpired(bytes32 oldLoginHash) private view returns (bool) {
+        uint256 expiresAt = pendingLoginMigrationExpiresAtByOldLoginHash[oldLoginHash];
+        return expiresAt != 0 && block.timestamp > expiresAt;
+    }
+
+    function _clearPendingLoginMigration(bytes32 oldLoginHash) private {
+        delete pendingLoginMigrationByOldLoginHash[oldLoginHash];
+        delete pendingLoginMigrationExpiresAtByOldLoginHash[oldLoginHash];
     }
 
     /// @dev Ensures both wallets share the same guardian and emergency roles before login migration.

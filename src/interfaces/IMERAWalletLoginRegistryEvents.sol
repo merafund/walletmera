@@ -26,6 +26,14 @@ interface IMERAWalletLoginRegistryEvents {
         address indexed previousWallet,
         address newWallet
     );
+    /// @notice Emitted when login migration is cancelled.
+    event LoginMigrationCancelled(
+        bytes32 indexed oldLoginHash,
+        string oldLogin,
+        bytes32 indexed newLoginHash,
+        address indexed previousWallet,
+        address newWallet
+    );
     /// @notice Emitted when login migration is confirmed.
     event LoginMigrationConfirmed(
         bytes32 indexed oldLoginHash,
