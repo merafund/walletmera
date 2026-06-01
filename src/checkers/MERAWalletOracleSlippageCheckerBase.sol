@@ -374,7 +374,7 @@ abstract contract MERAWalletOracleSlippageCheckerBase is
         feedDecimals = feed.decimals();
         (, int256 signedLatestRoundAnswer,, uint256 updatedAt,) = feed.latestRoundData();
         require(signedLatestRoundAnswer > 0, OracleAnswerInvalid(token));
-        require(block.timestamp - updatedAt <= maxOracleStaleSeconds, StaleOraclePrice(token, updatedAt));
+        require(block.timestamp <= updatedAt + maxOracleStaleSeconds, StaleOraclePrice(token, updatedAt));
         answer = uint256(signedLatestRoundAnswer);
     }
 }
