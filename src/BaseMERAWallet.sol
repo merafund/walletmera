@@ -1076,76 +1076,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
         IMERAWalletTransactionChecker(checker).checkAfter(callData, operationId, callId);
     }
 
-    function _invokeBeforeRequiredCheckersWithCallMemory(
-        MERAWalletTypes.Call memory callData,
-        bytes32 operationId,
-        uint256 callId
-    ) internal {
-        if (callData.target == address(this)) {
-            return;
-        }
-        uint256 checkersLength = requiredBeforeCheckers.length;
-        if (checkersLength == 0) {
-            return;
-        }
-        for (uint256 i = 0; i < checkersLength;) {
-            IMERAWalletTransactionChecker(requiredBeforeCheckers[i]).checkBefore(callData, operationId, callId);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _invokeAfterRequiredCheckersWithCallMemory(
-        MERAWalletTypes.Call memory callData,
-        bytes32 operationId,
-        uint256 callId
-    ) internal {
-        if (callData.target == address(this)) {
-            return;
-        }
-        uint256 checkersLength = requiredAfterCheckers.length;
-        if (checkersLength == 0) {
-            return;
-        }
-        for (uint256 i = 0; i < checkersLength;) {
-            IMERAWalletTransactionChecker(requiredAfterCheckers[i]).checkAfter(callData, operationId, callId);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _invokeBeforeOptionalCheckerWithCallMemory(
-        MERAWalletTypes.Call memory callData,
-        bytes32 operationId,
-        uint256 callId
-    ) internal {
-        if (callData.target == address(this)) {
-            return;
-        }
-        address checker = callData.checker;
-        if (checker == address(0) || !whitelistOptionalChecker[checker].enableBefore) {
-            return;
-        }
-        IMERAWalletTransactionChecker(checker).checkBefore(callData, operationId, callId);
-    }
-
-    function _invokeAfterOptionalCheckerWithCallMemory(
-        MERAWalletTypes.Call memory callData,
-        bytes32 operationId,
-        uint256 callId
-    ) internal {
-        if (callData.target == address(this)) {
-            return;
-        }
-        address checker = callData.checker;
-        if (checker == address(0) || !whitelistOptionalChecker[checker].enableAfter) {
-            return;
-        }
-        IMERAWalletTransactionChecker(checker).checkAfter(callData, operationId, callId);
-    }
-
     function _set1271Signer(address signer) internal {
         require(signer == address(0) || signer == primary || signer == backup || signer == emergency, InvalidSigner());
 
@@ -1526,10 +1456,6 @@ contract BaseMERAWallet is IBaseMERAWallet, IBaseMERAWalletEvents, IBaseMERAWall
 
         // Defensive fallback: unreachable while the enum has exactly 3 non-CoreExecute values.
         revert InvalidRelayConfig(); // LCOV_EXCL_LINE
-    }
-
-    function _isCoreController(address account) internal view returns (bool) {
-        return _coreRole(account) != MERAWalletTypes.Role.None;
     }
 
     /// @dev Role from the wallet's fixed controller addresses only (ignores controller agent mapping).

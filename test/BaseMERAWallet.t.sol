@@ -56,13 +56,6 @@ contract BaseMERAWalletHarness is BaseMERAWallet {
     {
         return _rolePolicySlice(policy, role);
     }
-
-    function exposedValidateRelayConfig(MERAWalletTypes.RelayProposeConfig calldata relayConfig, uint256 reward)
-        external
-        pure
-    {
-        _validateRelayConfig(relayConfig, reward);
-    }
 }
 
 contract BaseMERAWalletTest is Test {
